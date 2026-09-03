@@ -493,13 +493,25 @@ type combinedPublisher struct {
 	kafka  *fkafka.Producer
 }
 
-// Publish forwards to both channels. Kafka errors log but don't abort the
-// in-proc dispatch (real-time UI updates still fire).
+// Publish forwards synchronously to the in-proc bus (fast; the WebSocket
+// bridge needs it) and asynchronously to Kafka. Kafka is the durable
+// cross-node log — publishing must never block the caller's request path,
+// because a missing topic causes franz-go to retry for 15+ seconds and
+// pin REST handlers open. Errors are logged; callers never see them.
 func (c combinedPublisher) Publish(ctx context.Context, evt devents.Envelope) error {
 	if c.kafka != nil {
-		if err := c.kafka.Publish(ctx, evt); err != nil {
-			slog.Default().Warn("kafka publish failed", slog.Any("err", err), slog.String("type", string(evt.Type)))
-		}
+		go func(e devents.Envelope) {
+			// Detach from the request ctx (short-lived); cap our own
+			// timeout so a wedged broker never leaks goroutines.
+			pctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			if err := c.kafka.Publish(pctx, e); err != nil {
+				slog.Default().Warn("kafka publish failed",
+					slog.Any("err", err),
+					slog.String("type", string(e.Type)),
+				)
+			}
+		}(evt)
 	}
 	return c.inproc.Publish(ctx, evt)
 }
