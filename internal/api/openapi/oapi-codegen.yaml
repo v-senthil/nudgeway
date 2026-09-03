@@ -1,0 +1,9 @@
+# Config for oapi-codegen. `make gen-api` reads this.
+package: gen
+output: internal/api/openapi/gen/api.gen.go
+generate:
+  models: true
+  strict-server: true
+  embedded-spec: true
+output-options:
+  skip-prune: false

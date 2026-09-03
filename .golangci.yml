@@ -1,0 +1,70 @@
+# golangci-lint config for fullWA.
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  exclude-dirs:
+    - internal/infrastructure/mysql/gen
+    - internal/api/openapi/gen
+    - web
+  exclude-rules:
+    - path: _test\.go
+      linters: [gosec, funlen, dupl, gocyclo]
+    - path: cmd/
+      linters: [funlen]
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - typecheck
+    - gosec
+    - revive
+    - gocritic
+    - gocyclo
+    - funlen
+    - dupl
+    - misspell
+    - sqlclosecheck
+    - rowserrcheck
+    - contextcheck
+    - nilerr
+    - wastedassign
+    - bodyclose
+    - errorlint
+    - noctx
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  funlen:
+    lines: 80
+    statements: 60
+  gosec:
+    excludes:
+      - G404   # non-crypto rand OK in tests / IDs
+  revive:
+    rules:
+      - name: exported
+      - name: package-comments
+      - name: var-naming
+      - name: error-return
+      - name: error-strings
+      - name: error-naming
+      - name: unexported-return
+      - name: increment-decrement
+      - name: range
+      - name: superfluous-else
+      - name: unused-parameter
+      - name: unreachable-code
+      - name: redefines-builtin-id

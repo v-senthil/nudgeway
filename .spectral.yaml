@@ -1,0 +1,26 @@
+# Spectral ruleset for fullWA OpenAPI 3.1 spec.
+extends:
+  - spectral:oas
+rules:
+  oas3-api-servers: warn
+  operation-tag-defined: error
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-description: warn
+  operation-summary: error
+  operation-tags: error
+  info-contact: off
+  contact-properties: off
+  path-declarations-must-exist: error
+  path-keys-no-trailing-slash: error
+  no-$ref-siblings: error
+  # Custom: every 4xx/5xx response must reference the shared Problem schema.
+  problem-details-for-errors:
+    description: 4xx and 5xx responses must use application/problem+json referencing #/components/schemas/Problem
+    severity: error
+    given: "$.paths.*.*.responses[?(@property.match(/^[45]/))]"
+    then:
+      field: content['application/problem+json'].schema.$ref
+      function: pattern
+      functionOptions:
+        match: "^#/components/schemas/Problem$"

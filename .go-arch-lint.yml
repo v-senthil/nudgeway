@@ -1,0 +1,71 @@
+# .go-arch-lint.yml — enforces the layered dependency rule.
+#
+# domain         -> stdlib + domain siblings + events only
+# application    -> domain + ports
+# infrastructure -> ports + drivers
+# providers      -> ports + provider SDKs
+# api            -> application + ports + generated openapi types
+# cmd            -> wires everything
+
+version: 3
+workdir: .
+allow:
+  depOnAnyVendor: true
+
+exclude:
+  - internal/infrastructure/mysql/gen
+  - internal/api/openapi/gen
+
+commonComponents:
+  - $stdlib
+  - $vendor
+
+commonVendors: []
+
+components:
+  domain:
+    in: internal/domain/**
+  events:
+    in: internal/events/**
+  application:
+    in: internal/application/**
+  ports:
+    in: internal/ports/**
+  infrastructure:
+    in: internal/infrastructure/**
+  providers:
+    in: internal/providers/**
+  workers:
+    in: internal/workers/**
+  scheduler:
+    in: internal/scheduler/**
+  webhook:
+    in: internal/webhook/**
+  api:
+    in: internal/api/**
+  cmd:
+    in: cmd/**
+
+deps:
+  domain:
+    mayDependOn: [domain]
+  ports:
+    mayDependOn: [domain]
+  application:
+    mayDependOn: [domain, ports, events]
+  events:
+    mayDependOn: [domain]
+  infrastructure:
+    mayDependOn: [domain, ports, events]
+  providers:
+    mayDependOn: [domain, ports, events]
+  workers:
+    mayDependOn: [domain, ports, application, events]
+  scheduler:
+    mayDependOn: [domain, ports, application, events]
+  webhook:
+    mayDependOn: [domain, ports, application, events]
+  api:
+    mayDependOn: [domain, ports, application, events]
+  cmd:
+    mayDependOn: [domain, ports, application, events, infrastructure, providers, workers, scheduler, webhook, api]

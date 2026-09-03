@@ -1,0 +1,133 @@
+openapi: 3.1.0
+info:
+  title: fullWA API
+  version: 0.1.0-phase0
+  summary: Multi-tenant customer communication platform API.
+  description: |
+    Every request is scoped to an organization determined from the
+    authenticated principal (session cookie or API key). Errors follow
+    RFC 7807 (`application/problem+json`).
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: local dev
+
+tags:
+  - name: system
+    description: Health and readiness probes.
+  - name: auth
+    description: Session lifecycle.
+  - name: contacts
+    description: Contact CRUD and 360.
+  - name: conversations
+    description: Conversation list, thread, assignment.
+  - name: messages
+    description: Send and read messages.
+  - name: integrations
+    description: Provider integrations (WhatsApp, Zoho, …).
+  - name: webhooks
+    description: Provider webhook ingress endpoints.
+
+paths:
+  /healthz:
+    get:
+      tags: [system]
+      operationId: getHealthz
+      summary: Liveness probe.
+      description: Returns 200 as long as the process is alive.
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+  /readyz:
+    get:
+      tags: [system]
+      operationId: getReadyz
+      summary: Readiness probe.
+      description: |
+        Returns 200 only when downstream dependencies (MySQL, Redis, HBase)
+        are reachable. Returns 503 otherwise.
+      security: []
+      responses:
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthStatus' }
+        '503':
+          description: Not ready
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: fullwa_session
+      description: Signed session cookie.
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Programmatic access with per-org scoped key.
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          examples: ['ok', 'ready']
+
+    Problem:
+      type: object
+      description: RFC 7807 problem details.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI reference identifying the problem type.
+          examples: ['https://fullwa.dev/errors/validation']
+        title:
+          type: string
+          examples: ['validation failed']
+        status:
+          type: integer
+          format: int32
+          minimum: 400
+          maximum: 599
+          examples: [400]
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        request_id:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+security:
+  - sessionCookie: []
+  - apiKey: []

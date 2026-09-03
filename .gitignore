@@ -1,0 +1,43 @@
+# binaries
+/bin/
+/dist/
+fullwa
+fullwa-cli
+
+# go
+*.test
+*.out
+coverage.out
+coverage.html
+vendor/
+
+# node / frontend
+node_modules/
+web/dist/
+.pnpm-store/
+web/coverage/
+
+# local config & secrets
+config/local.yaml
+config/*.local.yaml
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# tooling
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# test artefacts
+/tmp/
+/test-output/
+playwright-report/
+test-results/
+
+# generated (kept in tree only when explicitly checked in)
+internal/infrastructure/mysql/gen/*.tmp

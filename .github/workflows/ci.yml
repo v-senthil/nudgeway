@@ -1,0 +1,75 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: backend (go)
+    runs-on: ubuntu-latest
+    # Services are installed natively on the runner (no Docker in the dev/CI workflow).
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: fullwa
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: 'stable', cache: true }
+      - name: Install dev tools
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+          go install github.com/fe3dback/go-arch-lint@latest
+      - name: go vet
+        run: go vet ./...
+      - name: golangci-lint
+        run: $(go env GOPATH)/bin/golangci-lint run ./...
+      - name: go-arch-lint
+        run: $(go env GOPATH)/bin/go-arch-lint check --project-path .
+      - name: unit tests + coverage
+        run: |
+          go test -race -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out | tail -1
+
+  openapi:
+    name: openapi (spectral)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Spectral lint
+        run: npx --yes @stoplight/spectral-cli lint internal/api/openapi/openapi.yaml --ruleset .spectral.yaml
+
+  frontend:
+    name: frontend (vite)
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: web }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: install
+        run: npm install
+      - name: typecheck
+        run: npm run typecheck
+      - name: build
+        run: npm run build

@@ -1,0 +1,104 @@
+# fullWA configuration template.
+# Copy to config/local.yaml and edit for your machine. Never commit local.yaml.
+#
+# Precedence: CLI flags > env vars (FULLWA_*) > config file > defaults.
+# Env-var override examples:
+#   FULLWA_HTTP_ADDR=:9090
+#   FULLWA_MYSQL_DSN=root:pw@tcp(127.0.0.1:3306)/fullwa?parseTime=true&multiStatements=true
+
+env: local                     # local | dev | staging | prod
+
+http:
+  addr: :8080
+  read_timeout: 15s
+  write_timeout: 30s
+  idle_timeout: 60s
+  shutdown_timeout: 20s
+  cors:
+    allowed_origins: ["http://localhost:5173"]  # Vite dev server
+    allowed_headers: ["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"]
+
+auth:
+  session_cookie_name: fullwa_session
+  session_ttl: 720h            # 30 days sliding
+  csrf_cookie_name: fullwa_csrf
+  argon2:
+    memory_kib: 65536
+    iterations: 3
+    parallelism: 2
+    salt_bytes: 16
+    key_bytes: 32
+  # 32-byte hex string used as the KEK for integration credential envelope encryption.
+  # Generate with: openssl rand -hex 32
+  credential_kek_hex: "REPLACE_ME_WITH_32_BYTES_HEX"
+
+mysql:
+  dsn: "root:@tcp(127.0.0.1:3306)/fullwa?parseTime=true&multiStatements=true&charset=utf8mb4,utf8&collation=utf8mb4_0900_ai_ci"
+  max_open_conns: 32
+  max_idle_conns: 8
+  conn_max_lifetime: 30m
+
+redis:
+  addr: 127.0.0.1:6379
+  db: 0
+  password: ""
+  pool_size: 32
+  min_idle_conns: 4
+  streams:
+    consumer_group: fullwa
+    consumer_name_prefix: worker-
+
+hbase:
+  # Native Java client via Zookeeper quorum, or Thrift.
+  zookeeper_quorum: ["127.0.0.1:2181"]
+  zookeeper_znode_parent: /hbase
+  namespace: fullwa
+  # If your HBase is running via Thrift instead, set thrift_addr and leave zookeeper_quorum empty.
+  thrift_addr: ""
+
+log:
+  level: info                  # debug | info | warn | error
+  format: json                 # json | text
+  add_source: false
+
+metrics:
+  enabled: true
+  path: /metrics
+
+tracing:
+  enabled: false
+  service_name: fullwa
+  otlp_endpoint: "http://127.0.0.1:4318"
+
+websocket:
+  ping_interval: 20s
+  write_timeout: 10s
+  max_message_size: 262144
+
+workers:
+  message_send:
+    concurrency: 16
+    max_retries: 8
+    initial_backoff: 500ms
+  webhook_process:
+    concurrency: 32
+    max_retries: 10
+    initial_backoff: 250ms
+  ticket_sync:
+    concurrency: 8
+    max_retries: 12
+    initial_backoff: 2s
+  campaign_job:
+    concurrency: 32
+    max_retries: 6
+    initial_backoff: 1s
+  ai_invoke:
+    concurrency: 8
+    max_retries: 4
+    initial_backoff: 1s
+
+# Frontend embedding — set true when serving the embedded build; false during `make dev`
+# (which proxies to the Vite dev server).
+frontend:
+  serve_embedded: false
+  vite_dev_proxy: http://127.0.0.1:5173
