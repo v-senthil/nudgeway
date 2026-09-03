@@ -124,6 +124,7 @@ func run() error {
 			CSRFCookie:    cfg.Auth.CSRFCookieName,
 			Logger:        logger,
 			Orgs:          orgs,
+			Users:         users,
 		},
 		PermissionResolver: perms,
 		Logger:             logger,

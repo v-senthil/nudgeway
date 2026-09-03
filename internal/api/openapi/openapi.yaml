@@ -216,11 +216,13 @@ components:
 
     Me:
       type: object
-      required: [user_id, org_id, org_name, permissions]
+      required: [user_id, org_id, org_name, email, display_name, permissions]
       properties:
         user_id: { type: string }
         org_id: { type: string }
         org_name: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
         permissions:
           type: array
           items: { type: string }

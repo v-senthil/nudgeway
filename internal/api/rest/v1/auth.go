@@ -18,6 +18,11 @@ type OrgLookup interface {
 	Name(ctx context.Context, orgID string) (string, error)
 }
 
+// UserLookup fetches the email + display_name for a platform user by ULID.
+type UserLookup interface {
+	GetProfile(ctx context.Context, userID string) (email, displayName string, err error)
+}
+
 // AuthDeps bundles the dependencies of the auth handlers.
 type AuthDeps struct {
 	Service       *appauth.Service
@@ -28,6 +33,7 @@ type AuthDeps struct {
 	CSRFCookie    string
 	Logger        *slog.Logger
 	Orgs          OrgLookup
+	Users         UserLookup
 }
 
 // LoginRequest is the JSON body of POST /api/v1/auth/login.
@@ -49,6 +55,8 @@ type Me struct {
 	UserID      string   `json:"user_id"`
 	OrgID       string   `json:"org_id"`
 	OrgName     string   `json:"org_name"`
+	Email       string   `json:"email"`
+	DisplayName string   `json:"display_name"`
 	Permissions []string `json:"permissions"`
 }
 
@@ -142,6 +150,13 @@ func (h *authHandler) me(w http.ResponseWriter, r *http.Request) {
 			orgName = n
 		}
 	}
+	email, displayName := "", ""
+	if h.d.Users != nil {
+		e, dn, err := h.d.Users.GetProfile(r.Context(), pr.UserID)
+		if err == nil {
+			email, displayName = e, dn
+		}
+	}
 	perms := make([]string, 0, len(pr.Permissions))
 	for p := range pr.Permissions {
 		perms = append(perms, string(p))
@@ -149,7 +164,8 @@ func (h *authHandler) me(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(Me{
-		UserID: pr.UserID, OrgID: pr.OrgID, OrgName: orgName, Permissions: perms,
+		UserID: pr.UserID, OrgID: pr.OrgID, OrgName: orgName,
+		Email: email, DisplayName: displayName, Permissions: perms,
 	})
 }
 

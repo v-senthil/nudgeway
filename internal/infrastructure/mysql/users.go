@@ -75,6 +75,23 @@ func (u *Users) FindByEmail(ctx context.Context, email string) (dusr.User, error
 	return out, nil
 }
 
+// GetProfile returns the email and display_name for a user by canonical ULID.
+// Used by the /me endpoint to enrich the current principal.
+func (u *Users) GetProfile(ctx context.Context, userID string) (email, displayName string, err error) {
+	idBytes, err := ulidToBytes(userID)
+	if err != nil {
+		return "", "", fmt.Errorf("bad user id: %w", err)
+	}
+	const q = `SELECT email, display_name FROM users WHERE id = ? LIMIT 1`
+	if err := u.db.QueryRowContext(ctx, q, idBytes).Scan(&email, &displayName); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", "", ErrUserNotFound
+		}
+		return "", "", fmt.Errorf("users profile select: %w", err)
+	}
+	return email, displayName, nil
+}
+
 // ulidFromBytes decodes a 16-byte ULID/UUID into its canonical string form.
 func ulidFromBytes(b []byte) (string, error) {
 	if len(b) != 16 {
