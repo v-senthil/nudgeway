@@ -2,6 +2,24 @@
 
 Every change to `internal/api/openapi/openapi.yaml` gets an entry here.
 
+## 0.2.1-phase1 — 2026-09-04
+
+- Added `GET /api/v1/integrations` — list every integration for the current org (`integrations.manage`).
+- Added `POST /api/v1/integrations` — create + envelope-encrypt secrets; also upserts a `business_endpoints` row for channel-kind providers. Auth + CSRF + `integrations.manage`.
+- Added `GET /api/v1/integrations/{id}` — fetch one; secrets are stripped.
+- Added `POST /api/v1/integrations/{id}/test` — resolves the provider adapter, runs `HealthCheck`, updates `Status` + `Health`. Auth + CSRF + `integrations.manage`.
+- Added `DELETE /api/v1/integrations/{id}` — soft-disconnects (row remains for the Phase 4 audit trail). Auth + CSRF + `integrations.manage`.
+- Added `Integration`, `IntegrationList`, `CreateIntegrationRequest`, `TestIntegrationResponse` schemas.
+
+## 0.2.0-phase1 — 2026-09-04
+
+- Added `GET /webhooks/{provider}/{integration_id}` — Meta subscription verification handshake. Unauthenticated (`security: []`). Query params `hub.mode`, `hub.verify_token`, `hub.challenge`. Returns 200 `text/plain` with the challenge on match, 403 problem+json on mismatch.
+- Added `POST /webhooks/{provider}/{integration_id}` — provider webhook ingress. Unauthenticated at the HTTP layer (`security: []`); authenticity is enforced per-provider by signature verification inside the ingress helper. Returns 200 with an empty body on accepted or duplicate delivery, 401 problem+json on signature failure, 413 problem+json on bodies larger than 1 MiB.
+- Added `POST /api/v1/messages` — enqueues an outbound send. Auth + CSRF. Returns `202 {message_id, status:"queued"}`. Errors: `400 validation` (bad payload), `404 conversation_not_found`, `424 integration_missing` when the conversation's endpoint has no configured integration.
+- Added `GET /api/v1/conversations/{id}/messages` — cursor-paginated message list for a conversation, newest first. Query params `cursor`, `limit` (1..200, default 50). Auth.
+- Added `GET /api/v1/conversations` — Phase 1 placeholder empty list; the full impl lands under Phase 1 Task 4. Auth.
+- Added schemas: `SendMessageRequest`, `SendMessageAccepted`, `Message`, `MessageList`, `Conversation`, `ConversationList`.
+
 ## 0.1.1 — 2026-09-04
 
 - **`Me` schema** now includes required `email` and `display_name`. Fixes a frontend inbox crash where the initials helper called `.trim()` on undefined. (`3bc7132`)

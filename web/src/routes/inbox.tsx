@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { createRoute, useNavigate } from '@tanstack/react-router';
+import { createRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { rootRoute } from './__root';
 import { useMe } from '../lib/auth';
 import { Header } from '../features/inbox/Header';
@@ -7,10 +7,19 @@ import { ConversationList } from '../features/inbox/ConversationList';
 import { Thread } from '../features/inbox/Thread';
 import { ContactPanel } from '../features/inbox/ContactPanel';
 import { Spinner } from '../components/Spinner';
+import { useInboxSocket } from '../lib/ws';
+
+type InboxSearch = {
+  c?: string;
+};
 
 function InboxPage() {
   const me = useMe();
   const navigate = useNavigate();
+  const search = useSearch({ from: inboxRoute.id });
+  const selected = search.c ?? null;
+
+  useInboxSocket(me.data?.org_id ?? null);
 
   useEffect(() => {
     if (!me.isPending && (me.data === null || me.data === undefined)) {
@@ -34,9 +43,9 @@ function InboxPage() {
     <div className="flex h-screen flex-col">
       <Header me={me.data} />
       <div className="flex flex-1 overflow-hidden">
-        <ConversationList />
-        <Thread />
-        <ContactPanel />
+        <ConversationList selectedID={selected} />
+        <Thread conversationID={selected} orgID={me.data.org_id} />
+        <ContactPanel conversationID={selected} />
       </div>
     </div>
   );
@@ -46,4 +55,8 @@ export const inboxRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/inbox',
   component: InboxPage,
+  validateSearch: (raw: Record<string, unknown>): InboxSearch => {
+    const c = raw['c'];
+    return typeof c === 'string' && c.length > 0 ? { c } : {};
+  },
 });

@@ -48,6 +48,13 @@ redis:
     consumer_group: fullwa
     consumer_name_prefix: worker-
 
+kafka:
+  brokers: ["127.0.0.1:9092"]
+  client_id: fullwa
+  topics_prefix: fullwa
+  replication_factor: 1
+  default_partitions: 6
+
 hbase:
   # Native Java client via Zookeeper quorum, or Thrift.
   zookeeper_quorum: ["127.0.0.1:2181"]

@@ -3,6 +3,7 @@ package mysql
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -12,17 +13,26 @@ import (
 	"github.com/fullwa/fullwa/internal/domain/rbac"
 	dusr "github.com/fullwa/fullwa/internal/domain/user"
 	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
+	"github.com/fullwa/fullwa/internal/infrastructure/crypto"
 )
 
 // Bootstrap wraps the CLI's admin-provisioning operations.
 type Bootstrap struct {
 	db  *sql.DB
 	arg infauth.Argon2Params
+	env *crypto.Envelope
 }
 
 // NewBootstrap constructs a Bootstrap helper.
 func NewBootstrap(db *sql.DB, arg infauth.Argon2Params) *Bootstrap {
 	return &Bootstrap{db: db, arg: arg}
+}
+
+// WithEnvelope attaches an envelope-crypto helper used by EnsureIntegration
+// to seal secret material. Read-only Bootstrap calls do not need it.
+func (b *Bootstrap) WithEnvelope(env *crypto.Envelope) *Bootstrap {
+	b.env = env
+	return b
 }
 
 // CreateOrg inserts an organization row. Returns the canonical ULID string.
@@ -107,6 +117,102 @@ func (b *Bootstrap) EnsureAdminRole(ctx context.Context, orgID string) (string, 
 		}
 	}
 	return id.String(), nil
+}
+
+// EnsureIntegration idempotently seeds an Integration row (matched on
+// (org, provider, name)) with envelope-encrypted secrets and — for
+// channel-kind providers — a matching business_endpoints row. Returns
+// the integration ID (whether newly-created or already-present).
+//
+// Called from the fullwa-cli `integration create` subcommand so an
+// operator can wire a WhatsApp phone number without the UI. Requires
+// WithEnvelope(env) to have been called first.
+func (b *Bootstrap) EnsureIntegration(
+	ctx context.Context,
+	orgID, providerKey, name string,
+	cfg map[string]any,
+	secrets map[string]string,
+) (string, error) {
+	if b.env == nil {
+		return "", errors.New("bootstrap: envelope not configured (call WithEnvelope)")
+	}
+	if orgID == "" || providerKey == "" || name == "" {
+		return "", errors.New("bootstrap: org, provider, name required")
+	}
+	orgBytes, err := ulidToBytes(orgID)
+	if err != nil {
+		return "", err
+	}
+	var existing []byte
+	err = b.db.QueryRowContext(ctx,
+		`SELECT id FROM integrations WHERE org_id = ? AND provider = ? AND name = ? LIMIT 1`,
+		orgBytes, providerKey, name,
+	).Scan(&existing)
+	var integID ulid.ULID
+	switch {
+	case err == nil:
+		copy(integID[:], existing)
+	case errors.Is(err, sql.ErrNoRows):
+		integID = newULID()
+		itype := integrationTypeForProvider(providerKey)
+		cfgJSON, err := json.Marshal(cfg)
+		if err != nil {
+			return "", fmt.Errorf("bootstrap integration cfg: %w", err)
+		}
+		if _, err := b.db.ExecContext(ctx,
+			`INSERT INTO integrations
+			   (id, org_id, type, provider, name, status, config, capabilities, health)
+			 VALUES (?, ?, ?, ?, ?, 'pending', ?, JSON_OBJECT(), JSON_OBJECT())`,
+			integID[:], orgBytes, itype, providerKey, name, cfgJSON,
+		); err != nil {
+			return "", fmt.Errorf("bootstrap integration insert: %w", err)
+		}
+	default:
+		return "", fmt.Errorf("bootstrap integration lookup: %w", err)
+	}
+
+	secJSON, err := json.Marshal(secrets)
+	if err != nil {
+		return "", fmt.Errorf("bootstrap secrets marshal: %w", err)
+	}
+	ct, err := b.env.Encrypt(secJSON)
+	if err != nil {
+		return "", fmt.Errorf("bootstrap secrets encrypt: %w", err)
+	}
+	credID := newULID()
+	if _, err := b.db.ExecContext(ctx,
+		`INSERT INTO integration_credentials (id, org_id, integration_id, ciphertext, kek_ref)
+		 VALUES (?, ?, ?, ?, 'auth.credential_kek_hex')
+		 ON DUPLICATE KEY UPDATE ciphertext = VALUES(ciphertext)`,
+		credID[:], orgBytes, integID[:], ct,
+	); err != nil {
+		return "", fmt.Errorf("bootstrap credentials upsert: %w", err)
+	}
+
+	if externalID, ok := cfg["phone_number_id"].(string); ok && externalID != "" && providerKey == "whatsapp" {
+		epID := newULID()
+		if _, err := b.db.ExecContext(ctx,
+			`INSERT INTO business_endpoints
+			   (id, org_id, channel, provider, integration_id, external_id, display, metadata)
+			 VALUES (?, ?, 'whatsapp', ?, ?, ?, ?, JSON_OBJECT())
+			 ON DUPLICATE KEY UPDATE integration_id = VALUES(integration_id), display = VALUES(display)`,
+			epID[:], orgBytes, providerKey, integID[:], externalID, name,
+		); err != nil {
+			return "", fmt.Errorf("bootstrap endpoint upsert: %w", err)
+		}
+	}
+	return integID.String(), nil
+}
+
+// integrationTypeForProvider maps a provider key to the "type" column
+// stored on integrations. Extend as new provider families land.
+func integrationTypeForProvider(providerKey string) string {
+	switch providerKey {
+	case "whatsapp":
+		return "channel"
+	default:
+		return "channel"
+	}
 }
 
 // AssignRole binds a role to a user (idempotent).

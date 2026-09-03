@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: fullWA API
-  version: 0.1.0-phase0
+  version: 0.2.0-phase1
   summary: Multi-tenant customer communication platform API.
   description: |
     Every request is scoped to an organization determined from the
@@ -143,6 +143,129 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /webhooks/{provider}/{integration_id}:
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        description: |
+          Registry key of the target provider (e.g. `whatsapp`). Must match
+          the `provider` column of the integration row identified by
+          `integration_id`; a mismatch returns 404.
+        schema:
+          type: string
+          examples: ['whatsapp']
+      - name: integration_id
+        in: path
+        required: true
+        description: ULID of the target Integration row.
+        schema:
+          type: string
+    get:
+      tags: [webhooks]
+      operationId: getWebhookVerify
+      summary: Provider subscription verification handshake.
+      description: |
+        Meta's WhatsApp Cloud API (and other providers following the same
+        pattern) issue a `GET` with `hub.mode=subscribe`,
+        `hub.verify_token=<shared secret>`, and `hub.challenge=<nonce>` when
+        the tenant registers their webhook URL. The server echoes
+        `hub.challenge` verbatim as `text/plain` on a matching verify
+        token, and returns 403 otherwise.
+
+        Unauthenticated at the HTTP layer — no session cookie or CSRF token
+        is required. The `verify_token` shared secret proves the caller
+        possesses configuration the tenant provided to the provider.
+      security: []
+      parameters:
+        - name: hub.mode
+          in: query
+          required: true
+          description: Must equal `subscribe`.
+          schema:
+            type: string
+            examples: ['subscribe']
+        - name: hub.verify_token
+          in: query
+          required: true
+          description: Shared secret configured on the Integration.
+          schema:
+            type: string
+        - name: hub.challenge
+          in: query
+          required: true
+          description: Random nonce the provider expects echoed back on success.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verify token matched; challenge echoed.
+          content:
+            text/plain:
+              schema:
+                type: string
+                examples: ['1580694962']
+        '403':
+          description: Verify token mismatch, unknown integration, or bad hub.mode.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    post:
+      tags: [webhooks]
+      operationId: postWebhookIngress
+      summary: Provider webhook ingress.
+      description: |
+        Provider-agnostic webhook receiver. The request body MUST be the
+        exact bytes the provider signed (do not re-serialise); signature
+        verification is performed on the raw body against the per-provider
+        shared secret configured on the Integration before any parsing.
+
+        Unauthenticated at the HTTP layer — external providers cannot
+        present our session cookie or CSRF token. Authenticity is enforced
+        via signature verification inside the ingress helper (e.g. Meta's
+        `X-Hub-Signature-256` HMAC-SHA256 over the raw body).
+
+        Idempotency is enforced by a UNIQUE index on
+        `webhook_events(integration_id, external_event_id)`; duplicate
+        deliveries return 200 without re-enqueuing. The raw body is
+        persisted before the 200 ACK so replay + debugging never require
+        re-fetching from the provider.
+
+        Body size is capped at 1 MiB; larger requests return 413.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Provider-specific payload; see docs/providers/*.md.
+      responses:
+        '200':
+          description: |
+            Delivery accepted (or a duplicate replay absorbed). Empty body;
+            providers expect a fast ACK.
+        '401':
+          description: Signature verification failed.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Unknown integration, or provider does not match the integration row.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '413':
+          description: Body exceeds the 1 MiB cap.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '500':
+          description: Internal error persisting the delivery.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /api/v1/auth/me:
     get:
       tags: [auth]
@@ -157,6 +280,303 @@ paths:
               schema: { $ref: '#/components/schemas/Me' }
         '401':
           description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations:
+    get:
+      tags: [integrations]
+      operationId: listIntegrations
+      summary: List all integrations for the current org.
+      description: |
+        Returns every Integration owned by the caller's organization.
+        Requires the `integrations.manage` permission. Secret credential
+        material is never included in the response.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The current integrations.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/IntegrationList' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    post:
+      tags: [integrations]
+      operationId: createIntegration
+      summary: Create a new integration.
+      description: |
+        Validates the provided config + secrets against the target
+        provider's schema, envelope-encrypts the secrets, and inserts a
+        matching business endpoint row. For channel-kind providers
+        (WhatsApp), the response's `webhook_url` is the URL the operator
+        pastes into the provider console. Requires the
+        `integrations.manage` permission and a matching CSRF token.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateIntegrationRequest' }
+      responses:
+        '201':
+          description: Integration created.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Integration' }
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Validation failure (missing config keys, unknown provider, ...)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegration
+      summary: Fetch one integration by id.
+      description: Requires the `integrations.manage` permission. Secrets are stripped.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The integration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Integration' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [integrations]
+      operationId: deleteIntegration
+      summary: Soft-disconnect an integration.
+      description: |
+        Flips the integration's status to `disconnected` so downstream
+        workers stop picking it up. The row and encrypted credentials
+        remain in the audit trail for Phase 4. Requires CSRF and
+        `integrations.manage`.
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: Disconnected.
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    post:
+      tags: [integrations]
+      operationId: testIntegration
+      summary: Test an integration's connection.
+      description: |
+        Resolves the provider adapter for the integration, runs
+        `HealthCheck`, updates the integration's `Status` + `Health`
+        fields, and returns the outcome. Requires CSRF and
+        `integrations.manage`.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Health-check outcome.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TestIntegrationResponse' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/messages:
+    post:
+      tags: [messages]
+      operationId: postMessagesSend
+      summary: Enqueue an outbound message.
+      description: |
+        Persists the message as `queued`, enqueues a job on the
+        `message.send` lane, and returns 202. The provider adapter is
+        invoked asynchronously by the send worker; status transitions
+        (`sent`, `delivered`, `read`, `failed`) arrive later via
+        `MessageSent` / `MessageDelivered` / `MessageRead` / `MessageFailed`
+        events and provider status webhooks.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '202':
+          description: Message queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendMessageAccepted' }
+        '400':
+          description: Invalid request body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Conversation not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: The conversation has no configured integration.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/conversations:
+    get:
+      tags: [conversations]
+      operationId: getConversations
+      summary: List conversations for the caller's org.
+      description: |
+        Phase 1 placeholder — returns an empty list. Replaced with the full
+        list implementation in Phase 1 Task 4.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: A (possibly empty) page of conversations.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationList' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/conversations/{id}/messages:
+    get:
+      tags: [messages]
+      operationId: getConversationMessages
+      summary: List messages in a conversation, newest first.
+      description: |
+        Cursor-based pagination. The `next_cursor` returned in the response
+        should be echoed back as the `cursor` query parameter on the next
+        page. Absent `next_cursor` means the caller reached the end.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Conversation ULID.
+        - in: query
+          name: cursor
+          required: false
+          schema: { type: string }
+          description: Opaque cursor returned by a prior page.
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: A page of messages.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MessageList' }
+        '400':
+          description: Bad request.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -226,6 +646,245 @@ components:
         permissions:
           type: array
           items: { type: string }
+
+    SendMessageRequest:
+      type: object
+      required: [conversation_id, type]
+      description: |
+        Payload for POST /api/v1/messages. `type` selects the canonical
+        message shape; the corresponding sub-object (`text`, `template`,
+        `media`, `interactive`, `location`, `reaction`) must be populated.
+        Everything is provider-neutral — the channel adapter interprets it.
+      properties:
+        conversation_id:
+          type: string
+          description: ULID of the target conversation.
+        type:
+          type: string
+          enum: [text, template, image, video, audio, document, sticker, interactive, location, reaction]
+        text:
+          type: object
+          description: Present when type=text.
+          required: [body]
+          properties:
+            body: { type: string }
+            preview_url: { type: boolean }
+        template:
+          type: object
+          description: Present when type=template.
+          required: [name, language]
+          properties:
+            name: { type: string }
+            language: { type: string, description: 'BCP47 or Meta locale.' }
+            namespace: { type: string }
+            components:
+              type: array
+              items:
+                type: object
+        media:
+          type: object
+          description: Present when type is one of image/video/audio/document/sticker.
+          properties:
+            kind: { type: string }
+            media_id: { type: string }
+            url: { type: string, format: uri }
+            mime_type: { type: string }
+            caption: { type: string }
+            file_name: { type: string }
+        interactive:
+          type: object
+          description: Present when type=interactive; forwarded verbatim.
+        location:
+          type: object
+          description: Present when type=location.
+          required: [latitude, longitude]
+          properties:
+            latitude: { type: number, format: double }
+            longitude: { type: number, format: double }
+            name: { type: string }
+            address: { type: string }
+        reaction:
+          type: object
+          description: Present when type=reaction.
+          required: [message_id]
+          properties:
+            message_id: { type: string }
+            emoji: { type: string }
+        idempotency_key:
+          type: string
+          description: |
+            Optional client-supplied key echoed to the provider (e.g. Meta's
+            `biz_opaque_callback_data`). When absent the server uses the
+            message ID.
+
+    SendMessageAccepted:
+      type: object
+      required: [message_id, status]
+      properties:
+        message_id:
+          type: string
+          description: ULID of the newly-created message row.
+        status:
+          type: string
+          enum: [queued]
+
+    Message:
+      type: object
+      required:
+        - id
+        - conversation_id
+        - session_id
+        - contact_id
+        - channel
+        - provider
+        - direction
+        - type
+        - status
+        - sender
+        - recipient
+        - created_at
+      properties:
+        id: { type: string }
+        conversation_id: { type: string }
+        session_id: { type: string }
+        contact_id: { type: string }
+        channel: { type: string }
+        provider: { type: string }
+        direction:
+          type: string
+          enum: [inbound, outbound]
+        type: { type: string }
+        status:
+          type: string
+          enum: [queued, sent, delivered, read, failed]
+        sender: { type: string }
+        recipient: { type: string }
+        provider_message_id: { type: string }
+        created_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time }
+        delivered_at: { type: string, format: date-time }
+        read_at: { type: string, format: date-time }
+
+    MessageList:
+      type: object
+      required: [messages]
+      properties:
+        messages:
+          type: array
+          items: { $ref: '#/components/schemas/Message' }
+        next_cursor:
+          type: string
+          description: Opaque cursor for the next page; absent when done.
+
+    Conversation:
+      type: object
+      required: [id, status, created_at]
+      properties:
+        id: { type: string }
+        session_id: { type: string }
+        contact_id: { type: string }
+        status:
+          type: string
+          enum: [open, pending, resolved, reopened]
+        assigned_user_id: { type: string }
+        assigned_team_id: { type: string }
+        priority:
+          type: string
+          enum: [low, normal, high, urgent]
+        unread_count: { type: integer }
+        last_message_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+
+    ConversationList:
+      type: object
+      required: [conversations]
+      properties:
+        conversations:
+          type: array
+          items: { $ref: '#/components/schemas/Conversation' }
+        next_cursor:
+          type: string
+          description: Opaque cursor for the next page; absent when done.
+
+    Integration:
+      type: object
+      description: |
+        A provider integration owned by the current organization.
+        Credential material is NEVER included in this schema; the
+        `webhook_url` is the tenant-facing URL for provider consoles.
+      required: [id, org_id, type, provider, name, status, config, capabilities, created_at, updated_at]
+      properties:
+        id: { type: string }
+        org_id: { type: string }
+        type:
+          type: string
+          enum: [channel, ticketing, bot, ai, calling]
+        provider:
+          type: string
+          examples: ['whatsapp', 'zoho_desk']
+        name: { type: string }
+        status:
+          type: string
+          enum: [connected, disconnected, degraded, auth_failed, rate_limited]
+        config:
+          type: object
+          additionalProperties: true
+          description: Non-secret provider configuration. Never contains credentials.
+        capabilities:
+          type: object
+          additionalProperties: { type: boolean }
+        health:
+          type: object
+          additionalProperties: true
+        webhook_url:
+          type: string
+          description: URL to paste into the provider's webhook console.
+          examples: ['https://app.example.com/webhooks/whatsapp/01H…']
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    IntegrationList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Integration' }
+
+    CreateIntegrationRequest:
+      type: object
+      required: [provider, name, config, secrets]
+      properties:
+        type:
+          type: string
+          enum: [channel, ticketing, bot, ai, calling]
+          description: Optional; validated against the provider's registered kind.
+        provider:
+          type: string
+          examples: ['whatsapp']
+        name:
+          type: string
+          examples: ['Acme Support Line']
+        config:
+          type: object
+          additionalProperties: true
+          description: |
+            Non-secret provider configuration. For WhatsApp:
+            `phone_number_id`, `waba_id`.
+        secrets:
+          type: object
+          additionalProperties: { type: string }
+          description: |
+            Envelope-encrypted at rest; never returned in any response.
+            For WhatsApp: `access_token`, `app_secret`, `verify_token`.
+
+    TestIntegrationResponse:
+      type: object
+      required: [ok, message, checked_at]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        checked_at: { type: string, format: date-time }
 
     Problem:
       type: object

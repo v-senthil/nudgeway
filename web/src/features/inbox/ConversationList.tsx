@@ -1,14 +1,73 @@
+import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { EmptyState } from '../../components/EmptyState';
 import { Button } from '../../components/Button';
+import { Spinner } from '../../components/Spinner';
+import { useConversations } from '../../lib/messages';
+import type { Conversation } from '../../lib/messages';
+import { useIntegrations } from '../../lib/integrations';
+import { ApiError } from '../../lib/api';
 
-export function ConversationList() {
+type Props = {
+  selectedID: string | null;
+};
+
+function formatTime(iso: string | undefined): string {
+  if (iso === undefined) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  if (sameDay) {
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+function initials(name: string | undefined): string {
+  if (name === undefined || name.length === 0) return '?';
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0];
+  const second = parts[1];
+  if (first !== undefined && second !== undefined) return `${first[0] ?? ''}${second[0] ?? ''}`.toUpperCase();
+  if (first !== undefined) return first.slice(0, 2).toUpperCase();
+  return '?';
+}
+
+export function ConversationList({ selectedID }: Props) {
+  const [query, setQuery] = useState('');
+  const conversations = useConversations();
+  const integrations = useIntegrations();
   const navigate = useNavigate();
 
+  const filtered = useMemo<Conversation[]>(() => {
+    const items = conversations.data ?? [];
+    if (query.trim().length === 0) return items;
+    const q = query.trim().toLowerCase();
+    return items.filter((c) => {
+      const name = c.contact_name?.toLowerCase() ?? '';
+      const preview = c.last_message_preview?.toLowerCase() ?? '';
+      return name.includes(q) || preview.includes(q);
+    });
+  }, [conversations.data, query]);
+
+  const selectConversation = (id: string) => {
+    void navigate({ to: '/inbox', search: { c: id } });
+  };
+
+  const isPermDenied = conversations.error instanceof ApiError && conversations.error.status === 403;
+  const isOffline = conversations.isError && typeof navigator !== 'undefined' && !navigator.onLine;
+  const hasIntegration = (integrations.data ?? []).length > 0;
+
   return (
-    <aside className="flex w-[280px] flex-shrink-0 flex-col border-r border-slate-200 bg-white">
+    <aside className="flex w-[300px] flex-shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <h2 className="text-sm font-semibold text-slate-900">Conversations</h2>
+        {conversations.data !== undefined && (
+          <span className="text-xs text-slate-500" aria-label={`${filtered.length} conversations`}>
+            {filtered.length}
+          </span>
+        )}
       </div>
       <div className="border-b border-slate-200 px-3 py-2">
         <label htmlFor="conv-search" className="sr-only">
@@ -17,40 +76,104 @@ export function ConversationList() {
         <input
           id="conv-search"
           type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           placeholder="Search conversations…"
           className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
         />
       </div>
       <div className="flex-1 overflow-y-auto">
-        <EmptyState
-          icon={
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              className="h-6 w-6"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M7.5 8.25h9m-9 3.75h6M4.5 6A2.25 2.25 0 016.75 3.75h10.5A2.25 2.25 0 0119.5 6v9a2.25 2.25 0 01-2.25 2.25H12l-4.5 3v-3H6.75A2.25 2.25 0 014.5 15V6z"
-              />
-            </svg>
-          }
-          title="No conversations yet"
-          description="Connect a channel to get started."
-          action={
-            <Button
-              variant="primary"
-              onClick={() => void navigate({ to: '/settings/integrations' })}
-            >
-              Connect an integration
-            </Button>
-          }
-        />
+        {conversations.isPending && (
+          <div className="flex items-center justify-center py-10">
+            <Spinner className="h-5 w-5 text-slate-500" label="Loading conversations" />
+          </div>
+        )}
+
+        {conversations.isError && (
+          <div role="alert" className="m-3 rounded-lg bg-rose-50 p-3 text-xs text-rose-700 ring-1 ring-inset ring-rose-200">
+            {isPermDenied
+              ? "You don't have permission to view conversations."
+              : isOffline
+                ? "You're offline. Reconnect to see conversations."
+                : 'Could not load conversations.'}
+            {!isPermDenied && (
+              <button
+                type="button"
+                onClick={() => void conversations.refetch()}
+                className="mt-2 block rounded-md bg-white px-2 py-1 text-xs font-medium text-rose-700 ring-1 ring-inset ring-rose-200 hover:bg-rose-100"
+              >
+                Retry
+              </button>
+            )}
+          </div>
+        )}
+
+        {conversations.data !== undefined && filtered.length === 0 && query.length > 0 && (
+          <EmptyState title="No matches" description={`Nothing matches “${query}”.`} />
+        )}
+
+        {conversations.data !== undefined && conversations.data.length === 0 && (
+          <EmptyState
+            title="No conversations yet"
+            description={
+              hasIntegration
+                ? 'Once contacts message your WhatsApp number they will appear here.'
+                : 'Connect WhatsApp to start receiving conversations.'
+            }
+            action={
+              !hasIntegration ? (
+                <Button variant="primary" onClick={() => void navigate({ to: '/settings/integrations' })}>
+                  Go to integrations
+                </Button>
+              ) : undefined
+            }
+          />
+        )}
+
+        {conversations.data !== undefined && filtered.length > 0 && (
+          <ul role="listbox" aria-label="Conversations" className="divide-y divide-slate-100">
+            {filtered.map((c) => {
+              const active = c.id === selectedID;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => selectConversation(c.id)}
+                    className={
+                      'flex w-full items-start gap-3 px-3 py-2.5 text-left transition ' +
+                      (active ? 'bg-emerald-50' : 'hover:bg-slate-50')
+                    }
+                  >
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
+                      {initials(c.contact_name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className={'truncate text-sm ' + (active ? 'font-semibold text-emerald-900' : 'font-medium text-slate-900')}>
+                          {c.contact_name ?? 'Unknown contact'}
+                        </p>
+                        <span className="flex-shrink-0 text-[11px] text-slate-500">{formatTime(c.last_message_at)}</span>
+                      </div>
+                      <p className="truncate text-xs text-slate-500">
+                        {c.last_message_preview ?? 'No messages yet'}
+                      </p>
+                    </div>
+                    {c.unread_count !== undefined && c.unread_count > 0 && (
+                      <span
+                        aria-label={`${c.unread_count} unread`}
+                        className="ml-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[11px] font-semibold text-white"
+                      >
+                        {c.unread_count}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     </aside>
   );

@@ -31,6 +31,60 @@ type Config struct {
 	Tracing   TracingConfig
 	WebSocket WebSocketConfig
 	Frontend  FrontendConfig
+	Kafka     KafkaConfig
+	Workers   WorkersConfig
+}
+
+// WorkersConfig groups the tunables for every background worker pool. Each
+// lane has its own concurrency + retry policy so operators can dial hot
+// paths independently. Zero values fall back to a sensible default
+// (concurrency=8) so a partial config never silently disables a worker.
+type WorkersConfig struct {
+	// MessageSend drives the outbound send worker (queue lane "message.send").
+	MessageSend WorkerConfig
+	// WebhookProcess drives the inbound webhook worker (queue lane
+	// "webhook.process").
+	WebhookProcess WorkerConfig
+	// TicketSync is reserved for the Zoho Desk sync worker landing in Phase 2.
+	TicketSync WorkerConfig
+	// CampaignJob is reserved for the campaign dispatcher landing in Phase 2.
+	CampaignJob WorkerConfig
+	// AIInvoke is reserved for the AI orchestrator worker landing in Phase 3.
+	AIInvoke WorkerConfig
+}
+
+// WorkerConfig configures a single worker pool.
+type WorkerConfig struct {
+	// Concurrency is the number of goroutines the pool spawns. Zero or
+	// negative means "use the default" (8).
+	Concurrency int
+	// MaxRetries caps the redelivery attempts before the job is deadlettered.
+	MaxRetries int
+	// InitialBackoff is the initial retry delay used by the queue consumer.
+	InitialBackoff time.Duration
+}
+
+// EffectiveConcurrency returns Concurrency if positive, else the default
+// worker concurrency (8). Kept as a method so wire-up code does not scatter
+// the default constant across the tree.
+func (w WorkerConfig) EffectiveConcurrency() int {
+	if w.Concurrency > 0 {
+		return w.Concurrency
+	}
+	return 8
+}
+
+// KafkaConfig configures the durable event log + job queue backend.
+// Brokers list is the bootstrap set; TopicsPrefix namespaces every topic
+// (default "fullwa") so multiple deploys can share a cluster without
+// colliding. ReplicationFactor and DefaultPartitions are applied when
+// EnsureTopics creates a missing topic.
+type KafkaConfig struct {
+	Brokers           []string
+	ClientID          string
+	TopicsPrefix      string
+	ReplicationFactor int16
+	DefaultPartitions int32
 }
 
 // HTTPConfig configures the public HTTP server.
@@ -154,6 +208,13 @@ func defaults() Config {
 			MaxMessageSize: 262144,
 		},
 		Frontend: FrontendConfig{ViteDevProxy: "http://127.0.0.1:5173"},
+		Kafka: KafkaConfig{
+			Brokers:           []string{"127.0.0.1:9092"},
+			ClientID:          "fullwa",
+			TopicsPrefix:      "fullwa",
+			ReplicationFactor: 1,
+			DefaultPartitions: 6,
+		},
 	}
 }
 
@@ -342,6 +403,51 @@ func setScalar(cfg *Config, section, key, val string) error {
 		case "vite_dev_proxy":
 			cfg.Frontend.ViteDevProxy = val
 		}
+	case "kafka":
+		switch key {
+		case "brokers":
+			cfg.Kafka.Brokers = parseList(val)
+		case "client_id":
+			cfg.Kafka.ClientID = val
+		case "topics_prefix":
+			cfg.Kafka.TopicsPrefix = val
+		case "replication_factor":
+			n, err := strconv.Atoi(val)
+			if err != nil {
+				return fmt.Errorf("bad int %q: %w", val, err)
+			}
+			cfg.Kafka.ReplicationFactor = int16(n)
+		case "default_partitions":
+			n, err := strconv.Atoi(val)
+			if err != nil {
+				return fmt.Errorf("bad int %q: %w", val, err)
+			}
+			cfg.Kafka.DefaultPartitions = int32(n)
+		}
+	case "workers":
+		// Flat schema to stay compatible with the two-level parser:
+		// each per-lane setting is a single key with underscore-joined
+		// components, e.g. `message_send_concurrency: 16`.
+		switch key {
+		case "message_send_concurrency":
+			return intp(&cfg.Workers.MessageSend.Concurrency, val)
+		case "message_send_max_retries":
+			return intp(&cfg.Workers.MessageSend.MaxRetries, val)
+		case "message_send_initial_backoff":
+			return dur(&cfg.Workers.MessageSend.InitialBackoff, val)
+		case "webhook_process_concurrency":
+			return intp(&cfg.Workers.WebhookProcess.Concurrency, val)
+		case "webhook_process_max_retries":
+			return intp(&cfg.Workers.WebhookProcess.MaxRetries, val)
+		case "webhook_process_initial_backoff":
+			return dur(&cfg.Workers.WebhookProcess.InitialBackoff, val)
+		case "ticket_sync_concurrency":
+			return intp(&cfg.Workers.TicketSync.Concurrency, val)
+		case "campaign_job_concurrency":
+			return intp(&cfg.Workers.CampaignJob.Concurrency, val)
+		case "ai_invoke_concurrency":
+			return intp(&cfg.Workers.AIInvoke.Concurrency, val)
+		}
 	}
 	return nil
 }
@@ -398,6 +504,19 @@ func applyEnv(cfg *Config) {
 	}
 	if v := os.Getenv("FULLWA_ENV"); v != "" {
 		cfg.Env = v
+	}
+	if v := os.Getenv("FULLWA_KAFKA_BROKERS"); v != "" {
+		parts := strings.Split(v, ",")
+		out := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				out = append(out, p)
+			}
+		}
+		if len(out) > 0 {
+			cfg.Kafka.Brokers = out
+		}
 	}
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/check-infra.sh — verify the user's local MySQL, Redis, and HBase are reachable
+# scripts/check-infra.sh — verify the user's local MySQL, Redis, HBase, and Kafka are reachable
 # per config/local.yaml. Prints a red/green summary and exits non-zero on any failure.
 #
 # Usage:
@@ -112,6 +112,31 @@ elif [[ -n "$thrift_addr" ]]; then
   fi
 else
   echo "${YEL}[skip]${RST} HBase — no zookeeper_quorum or thrift_addr in $CFG"
+fi
+
+# --- Kafka ------------------------------------------------------------------
+# Prefer the inline `kafka.brokers` list (["host:port", ...]); fall back to a
+# scalar `kafka.brokers` value if the config file uses that single-broker form.
+k_line="$(awk '/^kafka:/,/^[a-zA-Z_]+:/' "$CFG" | grep -E 'brokers:' || true)"
+k_targets=()
+if [[ -n "$k_line" ]]; then
+  while read -r hp; do k_targets+=("$hp"); done < <(echo "$k_line" | grep -oE '[a-zA-Z0-9._-]+:[0-9]+' || true)
+fi
+
+if [[ ${#k_targets[@]} -gt 0 ]]; then
+  k_ok=0
+  for hp in "${k_targets[@]}"; do
+    kh="${hp%:*}"; kp="${hp##*:}"
+    if (echo > /dev/tcp/"$kh"/"$kp") 2>/dev/null; then
+      echo "${GRN}[ok]${RST}  Kafka  broker reachable at $hp"
+      k_ok=1
+    else
+      echo "${RED}[fail]${RST} Kafka  broker not reachable at $hp"
+    fi
+  done
+  [[ $k_ok -eq 1 ]] || fail=1
+else
+  echo "${YEL}[skip]${RST} Kafka — no kafka.brokers in $CFG"
 fi
 
 if [[ $fail -ne 0 ]]; then

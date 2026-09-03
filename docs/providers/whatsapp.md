@@ -16,6 +16,49 @@ Source of truth: `~/Documents/whatsapp_doc_tracker/docs/` (local mirror of Meta 
 | Calls | ❌ | Phase 3. |
 | Flows | ✅ (send) | Interactive payloads pass through; NFM inbound responses land under `interactive.nfm_reply` — preserved as raw for now. |
 
+## Provisioning
+
+Operators can wire a WhatsApp phone number in one of two ways: the settings UI or the CLI. Both paths ultimately land the same rows: one in `integrations`, one envelope-encrypted blob in `integration_credentials`, and one in `business_endpoints` keyed by the WhatsApp `phone_number_id`.
+
+### CLI (headless / bootstrap / CI)
+
+```bash
+fullwa-cli integration create \
+  --org-slug acme --provider whatsapp --name "Acme Support" \
+  --phone-number-id 106540352242922 \
+  --waba-id 102290129340398 \
+  --access-token EAAJ... \
+  --app-secret 3f5ab9... \
+  --verify-token my-webhook-verify-token
+```
+
+The command is idempotent on `(org, provider, name)` — rerunning with the same name updates the ciphertext but keeps the same integration id (and therefore the same webhook URL). On success it prints:
+
+```
+integration created: id=01H..., webhook_url=/webhooks/whatsapp/01H...
+```
+
+Paste that path (with the app's public origin prepended) into the Meta app's Webhooks configuration, along with the same `--verify-token` value.
+
+### Settings UI (`/settings/integrations`)
+
+The form collects the same six fields:
+
+| Field | Where it goes | Kind |
+|-------|----------------|------|
+| Name | `integrations.name` | non-secret |
+| Phone number id | `integrations.config.phone_number_id` + `business_endpoints.external_id` | non-secret |
+| WABA id | `integrations.config.waba_id` | non-secret |
+| Access token | `integration_credentials.ciphertext[access_token]` | envelope-encrypted |
+| App secret | `integration_credentials.ciphertext[app_secret]` | envelope-encrypted |
+| Verify token | `integration_credentials.ciphertext[verify_token]` | envelope-encrypted |
+
+The REST create endpoint (`POST /api/v1/integrations`) rejects secrets in the `config` object (validation error) — they must be sent in the `secrets` object so the service can envelope-encrypt them before writing.
+
+### Health check
+
+`POST /api/v1/integrations/{id}/test` resolves the adapter via the runtime `ProviderResolver` (wired in `cmd/server`) and calls `channel.Provider.HealthCheck`. The WhatsApp adapter reports the last-known outbound health flag rather than issuing a Graph ping — Meta rate-limits app-review pings and day-to-day sends are the truest signal. The service persists `Status` = `connected` on `OK`, else `degraded`, and stashes `{ok, message, checked_at}` on `Health` for the UI.
+
 ## Config
 
 ```go

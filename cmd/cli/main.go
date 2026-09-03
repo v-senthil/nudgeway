@@ -5,6 +5,10 @@
 //	tenant create --slug --name                       — create an organization
 //	user create   --org-slug --email --password [--admin]
 //	                                                  — create a platform user
+//	integration create --org-slug --provider --name
+//	                   --phone-number-id --waba-id
+//	                   --access-token --app-secret --verify-token
+//	                                                  — seed a provider integration
 //	migrate up|down|status [--steps N]                — run schema migrations
 //	                                                  (shells out to the `migrate` binary)
 //	version                                           — print version
@@ -22,6 +26,7 @@ import (
 	appauth "github.com/fullwa/fullwa/internal/application/auth"
 	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
 	"github.com/fullwa/fullwa/internal/infrastructure/config"
+	"github.com/fullwa/fullwa/internal/infrastructure/crypto"
 	fmysql "github.com/fullwa/fullwa/internal/infrastructure/mysql"
 )
 
@@ -42,6 +47,8 @@ func dispatch(cmd string, args []string) error {
 		return runTenant(args)
 	case "user":
 		return runUser(args)
+	case "integration":
+		return runIntegration(args)
 	case "migrate":
 		return runMigrate(args)
 	case "version":
@@ -66,6 +73,10 @@ subcommands:
   tenant create --slug S --name N            create an organization
   user   create --org-slug S --email E --password P [--admin]
                                              create a platform user
+  integration create --org-slug S --provider whatsapp --name N \
+                     --phone-number-id P --waba-id W \
+                     --access-token T --app-secret A --verify-token V
+                                             seed a provider integration
   migrate up|down|status [--steps N]         run schema migrations
   version                                    print version
   help                                       show this message`)
@@ -177,6 +188,82 @@ func runUser(args []string) error {
 		return nil
 	default:
 		return fmt.Errorf("user: unknown action %q", action)
+	}
+}
+
+// --- integration -------------------------------------------------------------
+
+// runIntegration handles the `integration` subcommand.
+func runIntegration(args []string) error {
+	if len(args) == 0 {
+		return errors.New("integration: missing action (create)")
+	}
+	action, rest := args[0], args[1:]
+	switch action {
+	case "create":
+		fs := flag.NewFlagSet("integration create", flag.ExitOnError)
+		orgSlug := fs.String("org-slug", "", "organization slug")
+		provider := fs.String("provider", "whatsapp", "provider registry key (e.g. whatsapp)")
+		name := fs.String("name", "", "operator-facing label")
+		phoneNumberID := fs.String("phone-number-id", "", "WhatsApp phone_number_id")
+		wabaID := fs.String("waba-id", "", "WhatsApp Business Account id")
+		accessToken := fs.String("access-token", "", "system/business token")
+		appSecret := fs.String("app-secret", "", "app secret used for X-Hub-Signature-256")
+		verifyToken := fs.String("verify-token", "", "verify token echoed on GET /webhooks/whatsapp/:id")
+		if err := fs.Parse(rest); err != nil {
+			return err
+		}
+		if *orgSlug == "" || *name == "" {
+			return errors.New("--org-slug and --name required")
+		}
+		if *provider == "whatsapp" {
+			if *phoneNumberID == "" || *wabaID == "" || *accessToken == "" || *appSecret == "" || *verifyToken == "" {
+				return errors.New("whatsapp: --phone-number-id, --waba-id, --access-token, --app-secret, --verify-token required")
+			}
+		}
+		cfg, err := loadConfig()
+		if err != nil {
+			return err
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		db, err := fmysql.Open(ctx, cfg.MySQL)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = db.Close() }()
+
+		kek, err := crypto.ParseKEKHex(cfg.Auth.CredentialKEKHex)
+		if err != nil {
+			return fmt.Errorf("parse KEK: %w", err)
+		}
+		env, err := crypto.NewEnvelope(kek)
+		if err != nil {
+			return fmt.Errorf("envelope: %w", err)
+		}
+
+		b := fmysql.NewBootstrap(db, argonParamsFromConfig(cfg.Auth)).WithEnvelope(env)
+		orgID, err := b.LookupOrgBySlug(ctx, *orgSlug)
+		if err != nil {
+			return err
+		}
+		integCfg := map[string]any{
+			"phone_number_id": *phoneNumberID,
+			"waba_id":         *wabaID,
+		}
+		secrets := map[string]string{
+			"access_token": *accessToken,
+			"app_secret":   *appSecret,
+			"verify_token": *verifyToken,
+		}
+		id, err := b.EnsureIntegration(ctx, orgID, *provider, *name, integCfg, secrets)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("integration created: id=%s, webhook_url=/webhooks/%s/%s\n", id, *provider, id)
+		return nil
+	default:
+		return fmt.Errorf("integration: unknown action %q", action)
 	}
 }
 

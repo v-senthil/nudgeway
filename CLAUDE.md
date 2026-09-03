@@ -71,7 +71,9 @@ If you catch yourself importing `internal/providers/whatsapp` from `internal/app
 
 ## 5. How to run
 
-Prereqs (local, native, **no Docker**): MySQL 8+, Redis 7+, HBase 2+ running on your machine.
+Prereqs (local, native, **no Docker**): MySQL 8+, Redis 7+, HBase 2+, **Kafka 3+** running on your machine.
+
+Kafka is used for durable event log + cross-node fan-out and job queues (per-conversation ordering via partition key). Redis stays for cache, distributed locks, rate limiters, idempotency, and short-lived state.
 
 ```bash
 cp config/example.yaml config/local.yaml   # edit to point at your local services
@@ -214,13 +216,20 @@ A feature is not done until *all* of these ship together:
 - WebSocket wire-up for real-time updates where applicable.
 - Vitest unit tests + at least one component test.
 
-**Docs**
-- `docs/phases/phase-N.md` note.
+**Docs (MANDATORY — no code change is complete without them)**
+- `CHANGELOG.md` at repo root — one entry per commit that changes behaviour. Human-readable "why + what shipped".
+- `docs/phases/phase-N.md` — every commit that advances a phase updates the "What shipped in Task X" section here.
 - `docs/domain/<entity>.md` if a new domain entity or invariant.
 - `docs/flows/<flow>.md` if a new async flow.
 - `docs/providers/<provider>.md` if a new provider.
-- `docs/api/CHANGELOG.md` entry.
+- `docs/api/CHANGELOG.md` entry for every OpenAPI change (bump the version line).
 - ADR if a non-trivial choice.
+- **Claude memory update** in `~/.claude/projects/-Users-senthil-11424-Documents-fullWA/memory/`:
+  - `project_fullwa_state.md` — current phase, seeded state, live services, next planned batch.
+  - `reference_repo_and_docs.md` — if a new code entry point or docs location was added.
+  - New `feedback_*.md` if a user preference or correction was discovered.
+
+The rule is simple: **if a git diff changes runtime behaviour, at least three files land in the same commit — the code change, the CHANGELOG entry, and the phase doc update.** No exceptions except pure typo fixes.
 
 ---
 

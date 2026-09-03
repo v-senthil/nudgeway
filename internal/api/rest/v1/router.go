@@ -5,15 +5,28 @@ import (
 	"net/http"
 	"time"
 
+	wsapi "github.com/fullwa/fullwa/internal/api/ws"
 	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
+	fws "github.com/fullwa/fullwa/internal/infrastructure/websocket"
 )
 
 // Deps bundles everything required to mount the v1 REST API.
 type Deps struct {
 	Auth               AuthDeps
+	Webhook            WebhookDeps
+	Integrations       IntegrationsDeps
+	Messages           MessagesDeps
 	PermissionResolver middleware.PermissionResolver
 	Logger             *slog.Logger
 	SlideEvery         time.Duration
+	// Hub is the shared per-node WebSocket fan-out. When non-nil, Mount also
+	// installs /ws/inbox on the same mux. The endpoint sits directly on the
+	// mux (not under /api/v1/*) because the Vite dev proxy handles /ws
+	// separately from the REST prefix.
+	Hub *fws.Hub
+	// WSAllowedOrigins overrides the default set of origins accepted during
+	// the WebSocket upgrade. Leave nil to use wsapi.DefaultAllowedOrigins.
+	WSAllowedOrigins []string
 }
 
 // Registrar is the minimal surface Mount needs to install patterns. It is
@@ -23,7 +36,9 @@ type Registrar interface {
 }
 
 // Mount registers every /api/v1/* route on mux, wrapping each with the
-// standard fullWA middleware chain.
+// standard fullWA middleware chain, and installs the provider-agnostic
+// /webhooks/* ingress routes with a minimal middleware chain (no auth, no
+// CSRF — external providers cannot present our cookies).
 //
 // Middleware order (outermost → innermost):
 //
@@ -66,4 +81,46 @@ func Mount(mux Registrar, deps Deps) {
 	mux.Handle("POST /api/v1/auth/logout", authed(http.HandlerFunc(h.logout)))
 	// GET /me — CSRF is a no-op on safe methods, but we still gate on auth.
 	mux.Handle("GET /api/v1/auth/me", base(middleware.RequireAuth(http.HandlerFunc(h.me))))
+
+	// Webhook ingress lives outside /api/v1/* and is intentionally
+	// UNAUTHENTICATED at the HTTP layer — external providers cannot
+	// present our session cookie or CSRF token. Authenticity is enforced
+	// per-provider via signature verification inside the ingress helper.
+	webhookBase := func(next http.Handler) http.Handler {
+		return middleware.RequestID(
+			middleware.Recover(deps.Logger)(
+				middleware.Logger(deps.Logger)(next),
+			),
+		)
+	}
+	mountWebhooks(mux, webhookBase, deps.Webhook)
+
+	// Integrations REST — auth + integrations.manage; writes also require CSRF.
+	if deps.Integrations.Service != nil {
+		mountIntegrations(mux, base, authed, deps.Integrations)
+	}
+
+	// Messages + conversations REST. POST /messages is auth + CSRF; GETs are
+	// auth-only (CSRF is a no-op on safe methods). A conversations index
+	// stub is installed only when no peer package has provided the full
+	// implementation yet — checked by the wire-up (cmd/server) via the
+	// dedicated flag on MessagesDeps.
+	authedGET := func(next http.Handler) http.Handler {
+		return base(middleware.RequireAuth(next))
+	}
+	mountMessages(mux, authed, authedGET, deps.Messages, deps.Messages.IncludeConversationsIndex)
+
+	// /ws/inbox — WebSocket real-time endpoint. Reuses the same session-auth
+	// middleware chain as REST so the upgrade sees a Principal on the
+	// request context. It is mounted OUTSIDE /api/v1/* so the Vite dev
+	// server can proxy /ws separately from the REST prefix.
+	if deps.Hub != nil {
+		inbox := &wsapi.InboxHandler{
+			Hub:            deps.Hub,
+			Logger:         deps.Logger,
+			AllowedOrigins: deps.WSAllowedOrigins,
+		}
+		wsChain := base(middleware.RequireAuth(inbox))
+		mux.Handle("GET /ws/inbox", wsChain)
+	}
 }
