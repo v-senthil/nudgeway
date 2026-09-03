@@ -2,6 +2,12 @@
 
 Every change to `internal/api/openapi/openapi.yaml` gets an entry here.
 
+## 0.2.2-phase1 — 2026-09-04
+
+- Added `GET /api/v1/media/{key}` — streams a stored media blob keyed by SHA-256 hex. Auth-gated (`sessionCookie`), response served as `application/octet-stream` with the persisted `Content-Type`, `Cache-Control: private, max-age=86400`. Errors: `401`, `404` (unknown key).
+- Added `HEAD /api/v1/media/{key}` — headers-only companion for prefetch / existence checks.
+- Extended `Message` schema with `text` (body / caption), `media_url` (same-origin `/api/v1/media/{key}` for downloaded inbound media, provider-native URL as fallback), and `content_type`.
+
 ## 0.2.1-phase1 — 2026-09-04
 
 - Added `GET /api/v1/integrations` — list every integration for the current org (`integrations.manage`).

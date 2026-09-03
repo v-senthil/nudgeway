@@ -7,6 +7,10 @@ import (
 )
 
 // Media is the metadata returned by a media lookup, plus the download stream.
+// Retained for callers that want the fuller Meta metadata surface (SHA-256,
+// filesize) alongside the byte stream. Prefer Provider.DownloadMedia for the
+// common inbound path — it returns the leaner (io.ReadCloser, contentType)
+// tuple that the InboundService consumes.
 type Media struct {
 	ID          string
 	URL         string
@@ -17,11 +21,14 @@ type Media struct {
 	ContentType string
 }
 
-// DownloadMedia resolves a Meta media ID to a short-lived download URL, then
-// streams the bytes. Caller MUST close Body.
-func (p *Provider) DownloadMedia(ctx context.Context, mediaID string) (*Media, error) {
+// DownloadMediaMetadata resolves a Meta media ID to a short-lived download
+// URL, then streams the bytes. Caller MUST close Body. Use this when the
+// caller needs the full Meta metadata (SHA-256, filesize) alongside the
+// stream — the inbound pipeline uses the leaner Provider.DownloadMedia
+// wrapper instead.
+func (p *Provider) DownloadMediaMetadata(ctx context.Context, mediaID string) (*Media, error) {
 	if mediaID == "" {
-		return nil, fmt.Errorf("whatsapp: DownloadMedia: mediaID required")
+		return nil, fmt.Errorf("whatsapp: DownloadMediaMetadata: mediaID required")
 	}
 	lookup, err := p.client.getMediaURL(ctx, mediaID)
 	if err != nil {

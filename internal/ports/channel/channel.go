@@ -53,4 +53,9 @@ type Provider interface {
 	ParseWebhook(ctx context.Context, headers map[string][]string, body []byte) ([]events.Envelope, error)
 	Capabilities() Capabilities
 	HealthCheck(ctx context.Context) HealthStatus
+	// MarkAsRead asks the provider to signal to the customer that the
+	// business has read the inbound message identified by providerMessageID
+	// (e.g. Meta's wamid). Adapters that do not support a read receipt
+	// return a nil error — the caller treats absence of support as a no-op.
+	MarkAsRead(ctx context.Context, providerMessageID string) error
 }

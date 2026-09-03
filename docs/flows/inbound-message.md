@@ -49,6 +49,12 @@ sequenceDiagram
             end
             App->>DB: SessionRepo.FindOrCreateActive(org, endpoint, contact)
             App->>DB: ConversationRepo.FindOrCreateOpen(org, session, contact)
+            opt media envelope (image/video/audio/document/sticker)
+                App->>WA: Downloader.Download(provider, integration, media_id)
+                WA-->>App: io.ReadCloser + content-type
+                App->>App: attachments.Store.Put → sha256 key
+                note over App: metadata.attachment_key / content_type / file_size stamped
+            end
             App->>DB: MessageRepo.Create (UNIQUE(org, provider_message_id))
             note over App,DB: Duplicate-key on Create → swallowed as success (idempotency)
             App->>Bus: Publish MessageReceived envelope
@@ -116,3 +122,68 @@ sequenceDiagram
   string key via `webhook.ProviderLookup`.
 - Persistence is per-envelope; **no DB transaction spans the provider
   call**, honouring the prime directive in `CLAUDE.md` §2.
+
+## Media persistence
+
+Meta only carries a `media_id` handle in the webhook — the raw bytes
+live behind a short-lived signed URL that must be fetched with the
+integration's access token before it expires. The `InboundService`
+handles this via the `AttachmentDownloader` port so no provider package
+is imported at the application layer:
+
+1. On each `MessageReceived` whose `Payload` is a `MediaPayload` with a
+   non-empty `MediaID`, the service calls
+   `Downloader.Download(ctx, providerKey, integrationID, mediaID)`.
+2. The returned `io.ReadCloser` is streamed into
+   `attachments.Store.Put(ctx, contentType, r)`. The dev implementation
+   (`internal/infrastructure/attachments.LocalFS`) is content-addressed
+   by SHA-256, sharded 2/2 under `Config.Root`, with a `.contenttype`
+   sidecar file recording the MIME string.
+3. The resulting key + content-type + size are stamped on
+   `msg.metadata` as `attachment_key`, `content_type`, `file_size`.
+   The REST `MessageDTO.MediaURL` becomes `/api/v1/media/<key>` for
+   downloaded media and falls back to the provider-native URL only
+   when the download was skipped or failed.
+4. Download / store failures WARN-log and swallow — the message row
+   still commits, and the browser renders "Attachment unavailable"
+   instead of blocking the thread.
+
+`GET /api/v1/media/{key}` (and `HEAD`) streams the bytes back with
+`Cache-Control: private, max-age=86400`. The route is auth-gated so
+downloaded media stays inside the tenant boundary even if the
+content-addressed key leaks.
+
+## Mark-as-read callback
+
+Operators triggering "message read" on the business side (the blue-tick on
+the customer's phone) drives:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant UI as web/Thread.tsx
+    participant Hook as useMarkConversationRead
+    participant REST as POST /conversations/{id}/read
+    participant App as application/message.ReadService
+    participant DB as MySQL
+    participant WA as internal/providers/whatsapp
+    participant Meta as Meta Cloud API
+
+    UI->>Hook: open conversation w/ unread inbound (throttled 5s)
+    Hook->>REST: POST /api/v1/conversations/{id}/read
+    REST->>App: ReadService.MarkConversationRead(org, conv, cap=50)
+    App->>DB: MessageRepo.ListByConversation(org, conv, limit=50)
+    loop each inbound with wamid and read_at IS NULL
+        App->>DB: Conversations/Sessions/Endpoints/Integrations.Get*
+        App->>WA: provider.MarkAsRead(ctx, wamid)
+        WA->>Meta: POST /{phone_number_id}/messages<br/>{messaging_product, status:"read", message_id}
+        Meta-->>WA: {"success": true}
+        App->>DB: MessageRepo.UpdateStatus(read, now)
+    end
+    REST-->>UI: 204
+```
+
+Meta does not deliver a status callback back to us for a business-side
+read — the read event exists only on the customer's client. `ReadService`
+therefore stamps `messages.read_at` locally so the row's status is
+authoritative for the inbox unread-count.

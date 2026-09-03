@@ -9,6 +9,7 @@ package whatsapp
 import (
 	"context"
 	"fmt"
+	"io"
 	"sync/atomic"
 	"time"
 
@@ -89,6 +90,52 @@ func (p *Provider) SendMessage(ctx context.Context, req channel.SendRequest) (ch
 func (p *Provider) ParseWebhook(ctx context.Context, headers map[string][]string, body []byte) ([]events.Envelope, error) {
 	_ = ctx // parsing is CPU-only; ctx kept for interface parity.
 	return ParseWebhook(body, p.resolver)
+}
+
+// MarkAsRead flips a received message to "read" on the customer's device
+// (Meta shows the blue double-tick). providerMessageID is Meta's wamid from
+// the inbound webhook. Meta must be called within 30 days of receipt.
+func (p *Provider) MarkAsRead(ctx context.Context, providerMessageID string) error {
+	if providerMessageID == "" {
+		return fmt.Errorf("whatsapp: MarkAsRead: provider_message_id required")
+	}
+	if err := p.client.markAsRead(ctx, providerMessageID); err != nil {
+		if apiErr := AsAPIError(err); apiErr != nil && apiErr.Class == ClassAuth {
+			p.healthy.Store(false)
+		}
+		return err
+	}
+	p.healthy.Store(true)
+	return nil
+}
+
+// DownloadMedia resolves a Meta media ID to a short-lived download URL,
+// then streams the bytes back to the caller. It is the two-step Meta
+// pattern (GET /<media_id> → JSON with a `url` field, then GET on that
+// url with the Bearer token) packaged as a single streaming call.
+//
+// The returned io.ReadCloser MUST be closed by the caller. The second
+// return value is the Content-Type Meta served the bytes with — the
+// InboundService persists it as the attachment sidecar so the browser
+// can render <img>/<video>/<audio> without re-sniffing.
+func (p *Provider) DownloadMedia(ctx context.Context, mediaID string) (io.ReadCloser, string, error) {
+	if mediaID == "" {
+		return nil, "", fmt.Errorf("whatsapp: DownloadMedia: mediaID required")
+	}
+	lookup, err := p.client.getMediaURL(ctx, mediaID)
+	if err != nil {
+		return nil, "", fmt.Errorf("whatsapp: lookup media url: %w", err)
+	}
+	body, ctype, err := p.client.downloadMedia(ctx, lookup.URL)
+	if err != nil {
+		return nil, "", fmt.Errorf("whatsapp: download media bytes: %w", err)
+	}
+	// Fall back to the lookup's reported MIME type when the transport
+	// didn't set Content-Type (mock servers occasionally omit it).
+	if ctype == "" {
+		ctype = lookup.MimeType
+	}
+	return body, ctype, nil
 }
 
 // HealthCheck reports the last-known outbound health. A dedicated ping call

@@ -109,3 +109,10 @@ workers:
 frontend:
   serve_embedded: false
   vite_dev_proxy: http://127.0.0.1:5173
+
+# Attachment / media blob store. In dev, media downloaded from provider
+# webhooks (Meta WhatsApp images/videos/audio/documents/stickers) is written
+# to this directory, content-addressed by SHA-256. Production swaps for
+# HBase / S3 behind the attachments.Store port.
+attachments:
+  root: "./attachments"

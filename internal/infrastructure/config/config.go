@@ -33,6 +33,18 @@ type Config struct {
 	Frontend  FrontendConfig
 	Kafka     KafkaConfig
 	Workers   WorkersConfig
+	// Attachments configures the media/attachment blob store. In dev this
+	// is a local filesystem directory; production deployments swap the
+	// impl behind attachments.Store.
+	Attachments AttachmentsConfig
+}
+
+// AttachmentsConfig configures the attachment blob store.
+type AttachmentsConfig struct {
+	// Root is the on-disk directory used by the local filesystem store.
+	// Defaults to "./attachments" relative to the process working
+	// directory when unset.
+	Root string
 }
 
 // WorkersConfig groups the tunables for every background worker pool. Each
@@ -207,7 +219,8 @@ func defaults() Config {
 			WriteTimeout:   10 * time.Second,
 			MaxMessageSize: 262144,
 		},
-		Frontend: FrontendConfig{ViteDevProxy: "http://127.0.0.1:5173"},
+		Frontend:    FrontendConfig{ViteDevProxy: "http://127.0.0.1:5173"},
+		Attachments: AttachmentsConfig{Root: "./attachments"},
 		Kafka: KafkaConfig{
 			Brokers:           []string{"127.0.0.1:9092"},
 			ClientID:          "fullwa",
@@ -447,6 +460,11 @@ func setScalar(cfg *Config, section, key, val string) error {
 			return intp(&cfg.Workers.CampaignJob.Concurrency, val)
 		case "ai_invoke_concurrency":
 			return intp(&cfg.Workers.AIInvoke.Concurrency, val)
+		}
+	case "attachments":
+		switch key {
+		case "root":
+			cfg.Attachments.Root = val
 		}
 	}
 	return nil

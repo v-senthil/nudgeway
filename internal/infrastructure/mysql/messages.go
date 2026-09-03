@@ -138,6 +138,26 @@ func (m *Messages) UpdateStatus(ctx context.Context, orgID organization.ID, id m
 	return nil
 }
 
+// Get returns a single message row by (org, id). Returns ErrNotFound when
+// the row does not exist.
+func (m *Messages) Get(ctx context.Context, orgID organization.ID, id message.ID) (message.Message, error) {
+	orgBytes, err := ulidToBytes(string(orgID))
+	if err != nil {
+		return message.Message{}, fmt.Errorf("messages org: %w", err)
+	}
+	idBytes, err := ulidToBytes(string(id))
+	if err != nil {
+		return message.Message{}, fmt.Errorf("messages id: %w", err)
+	}
+	q := "SELECT " + messageCols + " FROM messages WHERE org_id = ? AND id = ? LIMIT 1"
+	row := m.db.QueryRowContext(ctx, q, orgBytes, idBytes)
+	msg, err := scanMessage(row.Scan)
+	if err != nil {
+		return message.Message{}, err
+	}
+	return msg, nil
+}
+
 // ListByConversation returns metadata rows for a conversation newest-first.
 func (m *Messages) ListByConversation(ctx context.Context, orgID organization.ID, convID conversation.ID, filter repository.MessageListFilter) (repository.MessagePage, error) {
 	orgBytes, err := ulidToBytes(string(orgID))

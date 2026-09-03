@@ -2,15 +2,33 @@ package message
 
 import (
 	"context"
+	"io"
 	"time"
 
 	"github.com/fullwa/fullwa/internal/domain/integration"
 	"github.com/fullwa/fullwa/internal/domain/message"
 	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/fullwa/fullwa/internal/ports/attachments"
 	"github.com/fullwa/fullwa/internal/ports/channel"
 	"github.com/fullwa/fullwa/internal/ports/eventbus"
 	"github.com/fullwa/fullwa/internal/ports/repository"
 )
+
+// AttachmentDownloader resolves a provider-native media handle to a byte
+// stream + content-type. The InboundService uses it to pull media from
+// provider CDNs (e.g. Meta lookup-URL flow) without importing any
+// provider package directly — implementations live in cmd/server and
+// close over concrete adapters.
+//
+// providerKey selects the adapter; integrationID names the tenant's
+// credentials the download must be signed with; mediaID is the
+// provider-native handle carried on MediaPayload.MediaID.
+//
+// The returned stream MUST be closed by the caller. contentType is the
+// MIME string the provider reported (empty when unknown).
+type AttachmentDownloader interface {
+	Download(ctx context.Context, providerKey string, integrationID integration.ID, mediaID string) (io.ReadCloser, string, error)
+}
 
 // IntegrationSecretsRepo is the subset of the integration repository that
 // the inbound service needs — the "read the integration row plus its
@@ -92,4 +110,13 @@ type Deps struct {
 	NewID IDGen
 	// Now returns the current instant. Nil defaults to time.Now().UTC().
 	Now func() time.Time
+	// Attachments is the blob store used to persist downloaded media.
+	// Optional: when nil, inbound media is not downloaded and the DTO
+	// falls back to the (short-lived) provider URL if the parser
+	// surfaced one. Log-once WARN is emitted at boot in that mode.
+	Attachments attachments.Store
+	// Downloader resolves provider-native media handles to byte streams.
+	// Optional in the same way as Attachments — both must be non-nil for
+	// media to be persisted and served through /api/v1/media/{key}.
+	Downloader AttachmentDownloader
 }

@@ -5,6 +5,9 @@
 export const InboxEvent = {
   MessageReceived: 'message.received',
   MessageSent: 'message.sent',
+  MessageDelivered: 'message.delivered',
+  MessageRead: 'message.read',
+  MessageFailed: 'message.failed',
   MessageStatus: 'message.status',
   ConversationCreated: 'conversation.created',
   ConversationUpdated: 'conversation.updated',

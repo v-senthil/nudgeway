@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: fullWA API
-  version: 0.2.0-phase1
+  version: 0.2.3-phase1
   summary: Multi-tenant customer communication platform API.
   description: |
     Every request is scoped to an organization determined from the
@@ -512,6 +512,119 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /api/v1/attachments:
+    post:
+      tags: [messages]
+      operationId: postAttachmentsUpload
+      summary: Upload a media attachment.
+      description: |
+        Accepts a single `file` field via `multipart/form-data`, streams it
+        into the content-addressed attachments store, and returns the
+        externally-reachable `media_url` the caller can hand back on a
+        subsequent `POST /api/v1/messages` under `media.url` for
+        image/video/audio/document/sticker types. Maximum size is 16 MiB;
+        larger blobs require the resumable upload API (not yet supported).
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: The media asset to upload.
+      responses:
+        '201':
+          description: Attachment stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AttachmentUploadResponse' }
+        '400':
+          description: Missing or malformed multipart body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '413':
+          description: Attachment exceeds 16 MiB cap.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/media/{key}:
+    get:
+      tags: [messages]
+      operationId: getMedia
+      summary: Stream a stored media blob.
+      description: |
+        Serves the bytes for a media attachment keyed by SHA-256 hex. The
+        key is the same string surfaced on `Message.media_url` for inbound
+        messages once the ingress pipeline has downloaded them, and on
+        `AttachmentUploadResponse.attachment_id` for outbound uploads.
+        Auth-gated; the response is `private, max-age=86400`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+          description: Content-addressed SHA-256 hex (64 chars).
+      responses:
+        '200':
+          description: The blob bytes with the persisted Content-Type.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Unknown media key.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    head:
+      tags: [messages]
+      operationId: headMedia
+      summary: Fetch headers for a stored media blob.
+      description: |
+        Same semantics as `GET /api/v1/media/{key}` but returns only
+        headers — useful for prefetching Content-Type or verifying the
+        blob's existence without pulling the payload.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Blob exists.
+        '401':
+          description: Not authenticated.
+        '404':
+          description: Unknown media key.
+
   /api/v1/conversations:
     get:
       tags: [conversations]
@@ -530,6 +643,92 @@ paths:
               schema: { $ref: '#/components/schemas/ConversationList' }
         '401':
           description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/messages/{id}/read:
+    post:
+      tags: [messages]
+      operationId: postMessageMarkRead
+      summary: Mark a single inbound message as read to the provider.
+      description: |
+        Calls the channel adapter's mark-as-read API (Meta shows the blue
+        double-tick on the customer's phone) and stamps `read_at` locally.
+        Idempotent — outbound messages, messages without a
+        `provider_message_id`, and messages already stamped as read return
+        204 without side-effects.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Message ULID.
+      responses:
+        '204':
+          description: Mark-as-read accepted.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Message not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: The message's integration cannot be resolved.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: The upstream provider rejected the mark-as-read call.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/conversations/{id}/read:
+    post:
+      tags: [conversations]
+      operationId: postConversationMarkRead
+      summary: Mark the newest unread inbound messages in a conversation as read.
+      description: |
+        Batch variant of `POST /api/v1/messages/{id}/read`. Iterates over
+        the newest 50 messages in the conversation and calls the provider's
+        mark-as-read for every inbound row with a `provider_message_id`
+        that is not already stamped `read_at`. Partial failures are
+        recorded server-side; the caller can retry.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Conversation ULID.
+      responses:
+        '204':
+          description: Batch mark-as-read accepted.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Upstream provider rejected one or more calls.
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
@@ -717,6 +916,20 @@ components:
             `biz_opaque_callback_data`). When absent the server uses the
             message ID.
 
+    AttachmentUploadResponse:
+      type: object
+      required: [attachment_id, media_url, size, content_type]
+      description: |
+        Result of POST /api/v1/attachments. `attachment_id` is the
+        content-addressed SHA-256 key; `media_url` is the fully-qualified
+        URL the send worker hands to the provider under `media.url`.
+      properties:
+        attachment_id: { type: string }
+        media_url: { type: string, format: uri }
+        size: { type: integer, format: int64 }
+        content_type: { type: string }
+        filename: { type: string }
+
     SendMessageAccepted:
       type: object
       required: [message_id, status]
@@ -760,6 +973,68 @@ components:
         sender: { type: string }
         recipient: { type: string }
         provider_message_id: { type: string }
+        text: { type: string }
+        media_url:
+          type: string
+          format: uri
+          description: |
+            Same-origin URL to fetch the media bytes. When the ingress
+            pipeline has downloaded the provider's copy this is
+            `/api/v1/media/{key}`; otherwise it may be a short-lived
+            provider-native URL (Meta CDN, etc.).
+        content_type:
+          type: string
+          description: MIME type persisted alongside the media bytes.
+        location:
+          type: object
+          description: |
+            Populated when `type == "location"`. Latitude/longitude are
+            always present; name/address/url are optional.
+          properties:
+            latitude: { type: number, format: double }
+            longitude: { type: number, format: double }
+            name: { type: string }
+            address: { type: string }
+            url: { type: string, format: uri }
+        contacts:
+          type: array
+          description: Populated when `type == "contacts"`. One entry per shared vCard.
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              phones:
+                type: array
+                items: { type: string }
+              emails:
+                type: array
+                items: { type: string, format: email }
+        reaction:
+          type: object
+          description: |
+            Populated when `type == "reaction"`. `message_id` is the
+            provider-native id (e.g. wamid) of the reacted-to message.
+            Empty `emoji` means the reaction was removed.
+          properties:
+            emoji: { type: string }
+            message_id: { type: string }
+        interactive:
+          type: object
+          description: |
+            Populated when `type == "interactive"` (or `type == "button"` for
+            template quick replies). Kind mirrors Meta's discriminator —
+            `button_reply`, `list_reply`, `button`, `cta_url`, `flow`, …
+          properties:
+            kind: { type: string }
+            id: { type: string }
+            title: { type: string }
+            description: { type: string }
+        reply_to_provider_message_id:
+          type: string
+          description: |
+            Provider-native id (e.g. wamid) of the message this one replies
+            to. Frontends use it to attach reactions to the referenced
+            bubble or render a "replying to" chip.
         created_at: { type: string, format: date-time }
         sent_at: { type: string, format: date-time }
         delivered_at: { type: string, format: date-time }

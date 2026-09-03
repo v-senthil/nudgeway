@@ -33,6 +33,11 @@ type MessageRepo interface {
 	// error must be distinguishable as a duplicate by the caller.
 	Create(ctx context.Context, m message.Message) error
 
+	// Get returns a single message row by (org, id). Implementations return
+	// a not-found error when the row does not exist. Payloads live in
+	// HBase and are fetched separately.
+	Get(ctx context.Context, orgID organization.ID, id message.ID) (message.Message, error)
+
 	// UpdateStatus advances the message's Status + timestamps. When a
 	// terminal status has already been recorded, implementations return
 	// nil (idempotent no-op) rather than an error.

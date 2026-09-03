@@ -42,6 +42,9 @@ type ConversationsLister interface {
 type MessagesDeps struct {
 	// Send is the outbound send use-case. Nil disables POST /messages.
 	Send *appmsg.SendService
+	// Read is the mark-as-read use-case. Nil disables the two
+	// POST /messages/{id}/read and POST /conversations/{id}/read routes.
+	Read *appmsg.ReadService
 	// Messages powers GET /conversations/{id}/messages listings.
 	Messages repository.MessageRepo
 	// Conversations powers GET /api/v1/conversations. Nil falls back to
@@ -80,24 +83,30 @@ type SendMessageAccepted struct {
 
 // MessageDTO is the JSON representation of a persisted message row.
 type MessageDTO struct {
-	ID                string  `json:"id"`
-	ConversationID    string  `json:"conversation_id"`
-	SessionID         string  `json:"session_id"`
-	ContactID         string  `json:"contact_id"`
-	Channel           string  `json:"channel"`
-	Provider          string  `json:"provider"`
-	Direction         string  `json:"direction"`
-	Type              string  `json:"type"`
-	Status            string  `json:"status"`
-	Sender            string  `json:"sender"`
-	Recipient         string  `json:"recipient"`
-	ProviderMessageID string  `json:"provider_message_id,omitempty"`
-	Text              string  `json:"text,omitempty"`
-	MediaURL          string  `json:"media_url,omitempty"`
-	CreatedAt         string  `json:"created_at"`
-	SentAt            *string `json:"sent_at,omitempty"`
-	DeliveredAt       *string `json:"delivered_at,omitempty"`
-	ReadAt            *string `json:"read_at,omitempty"`
+	ID                       string           `json:"id"`
+	ConversationID           string           `json:"conversation_id"`
+	SessionID                string           `json:"session_id"`
+	ContactID                string           `json:"contact_id"`
+	Channel                  string           `json:"channel"`
+	Provider                 string           `json:"provider"`
+	Direction                string           `json:"direction"`
+	Type                     string           `json:"type"`
+	Status                   string           `json:"status"`
+	Sender                   string           `json:"sender"`
+	Recipient                string           `json:"recipient"`
+	ProviderMessageID        string           `json:"provider_message_id,omitempty"`
+	Text                     string           `json:"text,omitempty"`
+	MediaURL                 string           `json:"media_url,omitempty"`
+	ContentType              string           `json:"content_type,omitempty"`
+	Location                 map[string]any   `json:"location,omitempty"`
+	Contacts                 []map[string]any `json:"contacts,omitempty"`
+	Reaction                 map[string]any   `json:"reaction,omitempty"`
+	Interactive              map[string]any   `json:"interactive,omitempty"`
+	ReplyToProviderMessageID string           `json:"reply_to_provider_message_id,omitempty"`
+	CreatedAt                string           `json:"created_at"`
+	SentAt                   *string          `json:"sent_at,omitempty"`
+	DeliveredAt              *string          `json:"delivered_at,omitempty"`
+	ReadAt                   *string          `json:"read_at,omitempty"`
 }
 
 // MessageListResponse is the 200 body of GET /api/v1/conversations/{id}/messages.
@@ -135,6 +144,10 @@ func mountMessages(
 	}
 	if deps.Messages != nil {
 		mux.Handle("GET /api/v1/conversations/{id}/messages", authedGET(http.HandlerFunc(h.listByConversation)))
+	}
+	if deps.Read != nil {
+		mux.Handle("POST /api/v1/messages/{id}/read", authed(http.HandlerFunc(h.markMessageRead)))
+		mux.Handle("POST /api/v1/conversations/{id}/read", authed(http.HandlerFunc(h.markConversationRead)))
 	}
 	// Placeholder empty-list conversation index so the frontend does not
 	// 404 while Phase 1 Task 4 lands the real implementation.
@@ -258,6 +271,71 @@ func (h *messagesHandler) listByConversation(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(dto)
 }
 
+// markMessageRead handles POST /api/v1/messages/{id}/read. It resolves the
+// message, calls the channel adapter's MarkAsRead (Meta's blue-tick), and
+// stamps read_at locally. Idempotent — a second call is a no-op.
+func (h *messagesHandler) markMessageRead(w http.ResponseWriter, r *http.Request) {
+	pr, ok := middleware.PrincipalFrom(r.Context())
+	if !ok {
+		writeProblem(w, r, http.StatusUnauthorized, "unauthenticated", "session required")
+		return
+	}
+	id := r.PathValue("id")
+	if id == "" {
+		writeProblem(w, r, http.StatusBadRequest, "bad_request", "message id required")
+		return
+	}
+	err := h.d.Read.MarkRead(r.Context(), organization.ID(pr.OrgID), msgdom.ID(id))
+	if err != nil {
+		switch {
+		case errors.Is(err, appmsg.ErrMessageNotFound):
+			writeProblem(w, r, http.StatusNotFound, "message_not_found", err.Error())
+		case errors.Is(err, appmsg.ErrReadIntegrationMissing):
+			writeProblem(w, r, http.StatusFailedDependency, "integration_missing", err.Error())
+		default:
+			h.logger().Warn("message.mark_read failed",
+				slog.String("request_id", middleware.RequestIDFrom(r.Context())),
+				slog.String("org_id", pr.OrgID),
+				slog.String("message_id", id),
+				slog.Any("err", err),
+			)
+			writeProblem(w, r, http.StatusBadGateway, "provider_error", "mark-as-read failed")
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// markConversationRead handles POST /api/v1/conversations/{id}/read. Marks
+// the newest inbound-with-wamid unread messages in the conversation as
+// read, capped at 50 per call.
+func (h *messagesHandler) markConversationRead(w http.ResponseWriter, r *http.Request) {
+	pr, ok := middleware.PrincipalFrom(r.Context())
+	if !ok {
+		writeProblem(w, r, http.StatusUnauthorized, "unauthenticated", "session required")
+		return
+	}
+	convID := r.PathValue("id")
+	if convID == "" {
+		writeProblem(w, r, http.StatusBadRequest, "bad_request", "conversation id required")
+		return
+	}
+	_, err := h.d.Read.MarkConversationRead(r.Context(), organization.ID(pr.OrgID), conversation.ID(convID), 50)
+	if err != nil {
+		// Batch: log + surface as 502 without leaking internals. Partial
+		// successes are already committed; the caller can retry.
+		h.logger().Warn("conversation.mark_read partial failure",
+			slog.String("request_id", middleware.RequestIDFrom(r.Context())),
+			slog.String("org_id", pr.OrgID),
+			slog.String("conversation_id", convID),
+			slog.Any("err", err),
+		)
+		writeProblem(w, r, http.StatusBadGateway, "provider_error", "mark-as-read partial failure")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // listConversationsStub calls into MessagesDeps.Conversations when provided
 // and falls back to an empty list otherwise. Response shape uses `items` to
 // match the frontend's ListResponse convention.
@@ -379,8 +457,44 @@ func toMessageDTO(m msgdom.Message) MessageDTO {
 		if v, ok := m.Metadata["text"].(string); ok {
 			dto.Text = v
 		}
-		if v, ok := m.Metadata["media_url"].(string); ok {
+		// Prefer the self-hosted attachment URL when the inbound pipeline
+		// downloaded the media into our own store. This is served through
+		// GET /api/v1/media/{key} which is auth-gated + long-lived, so
+		// browsers can safely cache it. When we didn't download (older
+		// rows, download failure), fall back to the provider-native
+		// (short-lived) URL surfaced by the parser.
+		if k, ok := m.Metadata["attachment_key"].(string); ok && k != "" {
+			dto.MediaURL = "/api/v1/media/" + k
+		} else if v, ok := m.Metadata["media_url"].(string); ok {
 			dto.MediaURL = v
+		}
+		if v, ok := m.Metadata["content_type"].(string); ok {
+			dto.ContentType = v
+		}
+		if v, ok := m.Metadata["location"].(map[string]any); ok {
+			dto.Location = v
+		}
+		if v, ok := m.Metadata["contacts"].([]map[string]any); ok {
+			dto.Contacts = v
+		} else if raw, ok := m.Metadata["contacts"].([]any); ok {
+			cards := make([]map[string]any, 0, len(raw))
+			for _, r := range raw {
+				if mm, ok := r.(map[string]any); ok {
+					cards = append(cards, mm)
+				}
+			}
+			if len(cards) > 0 {
+				dto.Contacts = cards
+			}
+		}
+		if v, ok := m.Metadata["reaction"].(map[string]any); ok {
+			dto.Reaction = v
+		}
+		if v, ok := m.Metadata["interactive"].(map[string]any); ok {
+			dto.Interactive = v
+		}
+		if v, ok := m.Metadata["reply_to_wamid"].(string); ok {
+			dto.ReplyToProviderMessageID = v
 		}
 	}
 	return dto

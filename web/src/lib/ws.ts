@@ -87,10 +87,20 @@ function handleFrame(raw: string): void {
   switch (parsed.type) {
     case InboxEvent.MessageReceived:
     case InboxEvent.MessageSent:
-    case InboxEvent.MessageStatus: {
+    case InboxEvent.MessageStatus:
+    case InboxEvent.MessageDelivered:
+    case InboxEvent.MessageRead:
+    case InboxEvent.MessageFailed: {
+      // Status envelopes from the backend WebSocket bridge do not carry a
+      // conversation_id (the domain MessageStatusPayload is keyed on
+      // provider_message_id). Invalidate every open messages cache — the
+      // TanStack Query set is at most one per rendered thread, so this
+      // stays cheap and guarantees the tick flips without a refresh.
       const convID = typeof parsed.payload['conversation_id'] === 'string' ? parsed.payload['conversation_id'] : null;
       if (convID !== null) {
         void qc.invalidateQueries({ queryKey: ['messages', convID] });
+      } else {
+        void qc.invalidateQueries({ queryKey: ['messages'] });
       }
       void qc.invalidateQueries({ queryKey: ['conversations'] });
       break;

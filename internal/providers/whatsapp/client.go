@@ -31,6 +31,27 @@ func (c *client) sendMessage(ctx context.Context, body []byte) (metaSendResponse
 	return resp, nil
 }
 
+// markAsRead POSTs a mark-as-read status update to /messages. Meta returns
+// {"success":true} on success; the body is not otherwise interesting to us.
+//
+// Reference: ~/Documents/whatsapp_doc_tracker/docs/messages/mark-message-as-read.md.
+func (c *client) markAsRead(ctx context.Context, providerMessageID string) error {
+	url := fmt.Sprintf("%s/%s/%s/messages", c.cfg.baseURL(), c.cfg.version(), c.cfg.PhoneNumberID)
+	body, err := json.Marshal(map[string]string{
+		"messaging_product": "whatsapp",
+		"status":            "read",
+		"message_id":        providerMessageID,
+	})
+	if err != nil {
+		return fmt.Errorf("whatsapp: encode mark-as-read: %w", err)
+	}
+	var resp map[string]any
+	if err := c.doJSON(ctx, http.MethodPost, url, body, &resp); err != nil {
+		return err
+	}
+	return nil
+}
+
 // getMediaURL resolves a Meta media ID to a short-lived download URL.
 // See /messages/audio-messages.md, /image-messages.md, etc. — the pattern
 // is GET /<media_id> returning a JSON object with a `url` field.

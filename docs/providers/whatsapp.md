@@ -109,6 +109,18 @@ Inbound messages fan out as `events.MessageReceived` envelopes with `MessageRece
 
 The parser also indexes the `contacts` array of the value block to attach `FromDisplayName` to the emitted event without a second scan.
 
+### DTO surface for specialised inbound types
+
+The `InboundService` also flattens the following canonical payloads into the persisted message's `Metadata` bag so the REST `Message` DTO (see `openapi.yaml → components.schemas.Message`) can render without a second lookup:
+
+| Canonical `MessageType` | DTO field(s) | Notes |
+|-------------------------|--------------|-------|
+| `location` | `location: {latitude, longitude, name?, address?, url?}` | Frontend renders a pin + venue name + "Open in Maps" link. |
+| `contacts` | `contacts: [{name, phones?, emails?}]` | Compact projection of the full vCard — the raw card is still available on the domain `Message.Metadata`. |
+| `reaction` | `reaction: {emoji, message_id}` | `message_id` is the wamid of the reacted-to message; frontends overlay a badge on the referenced bubble. |
+| `interactive` / `button` | `interactive: {kind, id?, title?, description?}` | One shape covers `button_reply`, `list_reply`, and template quick-reply `button`. |
+| any reply (`context.id` set) | `reply_to_provider_message_id: string` | Set whenever the inbound envelope carries a `context.id`, regardless of message type. |
+
 ## Signature verification
 
 Meta signs webhook bodies with `X-Hub-Signature-256: sha256=<hex hmac_sha256(body, app_secret)>`. The adapter computes the MAC over the raw request body (no re-serialisation) and compares in constant time with `hmac.Equal`.
@@ -129,6 +141,96 @@ Full limits are documented in `whatsapp_doc_tracker/docs/messaging-limits.md`, `
 | `permanent` | other 4xx | do not retry; surface to UI |
 | `unknown` | fallthrough | log + escalate |
 
+## Media inbound flow
+
+Meta webhooks for image/video/audio/document/sticker only carry a
+`media_id` handle — the raw bytes must be fetched separately. The
+adapter exposes `Provider.DownloadMedia(ctx, mediaID) (io.ReadCloser,
+contentType, error)` which packages Meta's two-step pattern:
+
+1. `GET https://graph.facebook.com/<version>/<media_id>` → JSON with a
+   short-lived signed `url` field, `mime_type`, `sha256`, `file_size`.
+2. `GET <url>` with the Bearer access token → raw bytes streamed back.
+
+The `InboundService` drives this via the provider-agnostic
+`AttachmentDownloader` port (`internal/application/message/deps.go`),
+so no provider package is imported from the application layer. On each
+media envelope the service:
+
+1. Calls `Downloader.Download(ctx, "whatsapp", integrationID, mediaID)`.
+2. Streams the bytes into `attachments.Store.Put(ctx, contentType, r)` —
+   the dev implementation is a local filesystem store rooted at
+   `attachments.root` in `config/local.yaml`, content-addressed by
+   SHA-256 with a `.contenttype` sidecar file.
+3. Stamps `attachment_key`, `content_type`, `file_size` on
+   `message.metadata` so the REST DTO surfaces `media_url =
+   /api/v1/media/<key>` and `content_type` on `Message`.
+4. Download failures are WARN-logged and swallowed — the message row
+   still persists so the thread never blocks on a transient Meta CDN
+   outage; the browser renders an "Attachment unavailable" fallback.
+
+The served endpoint (`GET /api/v1/media/{key}`, `HEAD` for prefetch)
+is auth-gated so downloaded media stays inside the tenant boundary.
+Cache headers are `private, max-age=86400` since content-addressed keys
+never change semantically.
+
+For the fuller Meta metadata surface (`SHA256`, `FileSize`, …), the
+adapter also exposes `Provider.DownloadMediaMetadata(...)` which wraps
+the same two calls into a `*Media` value.
+
+## Media outbound flow
+
+Operator picks a file in the composer → `POST /api/v1/attachments` (multipart)
+uploads it into the content-addressed attachments store → server returns
+`{attachment_id, media_url}` → composer calls `POST /api/v1/messages` with
+`type=image|video|audio|document` and `media: {url: <media_url>, caption?}` →
+`SendService.RequestSend` persists a `queued` row and enqueues on `message.send`
+→ the send worker calls the WhatsApp adapter → `canonicalSendToMeta` turns
+the canonical `MediaPayload.URL` into `{type:"image", image:{link:"<url>"}}`
+(or the corresponding video/audio/document/sticker shape) → Meta fetches the
+URL from `PublicBaseURL` and delivers to the recipient.
+
+The upload endpoint enforces a 16 MiB cap. Larger blobs will require the
+Meta resumable upload API (`POST /<phone_number_id>/uploads` in the docs) —
+still TODO in Phase 1. Content-type sniffing falls back to
+`http.DetectContentType` when the multipart part omits the header. The
+returned `media_url` is prefixed with `PublicBaseURL` so Meta's fetcher can
+reach it; a same-origin SPA also works when `PublicBaseURL` is empty.
+
+## Mark as read
+
+The `channel.Provider.MarkAsRead` port is implemented by
+`Provider.MarkAsRead(ctx, providerMessageID)` (`provider.go`). It POSTs to
+`/{phone_number_id}/messages` with:
+
+```json
+{
+  "messaging_product": "whatsapp",
+  "status": "read",
+  "message_id": "wamid...."
+}
+```
+
+Meta shows the customer's client a blue double-tick, and marks earlier
+messages in the same conversation as read as well (that's Meta's
+behaviour, not ours). Reference:
+`~/Documents/whatsapp_doc_tracker/docs/messages/mark-message-as-read.md`.
+
+Constraints:
+
+- Must be called within 30 days of the inbound receipt; older wamids
+  return Meta error 131009.
+- Meta does **not** send us a status callback for a business-side read
+  (the "read" event only exists on the customer's side). `ReadService`
+  therefore stamps `messages.read_at` locally.
+- The call is idempotent on our side: `ReadService.MarkRead` skips
+  outbound rows, rows without a `provider_message_id`, and rows already
+  stamped `read_at`.
+
+Wire path: `POST /api/v1/messages/{id}/read` or the batch
+`POST /api/v1/conversations/{id}/read` → `ReadService.MarkRead` /
+`MarkConversationRead` → `provider.MarkAsRead` → `client.markAsRead`.
+
 ## TODO — not yet supported
 
 - Group messaging (`groups.md`).
@@ -136,6 +238,8 @@ Full limits are documented in `whatsapp_doc_tracker/docs/messaging-limits.md`, `
 - Catalog + product / order webhooks (`catalogs/`, `webhooks/reference/messages/order.md`).
 - Payments (`payments/`).
 - Business Capability Update and other WABA-level webhooks (`webhooks/reference/*_update.md`).
-- Media upload endpoint (`POST /<phone_number_id>/media`) — Phase 1 only downloads.
+- Meta resumable upload API for attachments > 16 MiB (`POST /<phone_number_id>/uploads`).
+- Media upload via `POST /<phone_number_id>/media` (Meta-hosted media IDs) —
+  Phase 1 uses public `link` URLs served from our attachments store.
 - NFM (Flows) inbound response typed decoding — currently preserved as raw.
 - Ad referral (`referral`) — preserved in raw for now.

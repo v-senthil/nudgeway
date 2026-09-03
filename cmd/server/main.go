@@ -15,6 +15,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,6 +26,7 @@ import (
 	"github.com/oklog/ulid/v2"
 
 	v1 "github.com/fullwa/fullwa/internal/api/rest/v1"
+	"github.com/fullwa/fullwa/internal/infrastructure/attachments"
 	appauth "github.com/fullwa/fullwa/internal/application/auth"
 	appintegration "github.com/fullwa/fullwa/internal/application/integration"
 	appmsg "github.com/fullwa/fullwa/internal/application/message"
@@ -163,6 +165,17 @@ func run() error {
 	// --- Metrics ------------------------------------------------------------
 	m := fmetrics.New()
 
+	// --- Attachment store (local filesystem; dev impl of attachments.Store) -
+	attachRoot := cfg.Attachments.Root
+	if attachRoot == "" {
+		attachRoot = "./attachments"
+	}
+	attachStore, err := attachments.New(attachments.Config{Root: attachRoot})
+	if err != nil {
+		return fmt.Errorf("attachments: %w", err)
+	}
+	logger.Info("attachment store ready", slog.String("root", attachRoot))
+
 	// --- In-proc event bus + WebSocket hub ---------------------------------
 	inproc := events.NewInProc()
 	hub := fws.NewHub(logger)
@@ -202,6 +215,32 @@ func run() error {
 		return provRegistry.Channel(pctx, i.Provider, secrets)
 	})
 
+	// attachmentDownloader closes over the mysql Integrations repo + provider
+	// registry so the InboundService can fetch inbound media without
+	// importing any provider adapter directly.
+	attachDownloader := attachmentDownloaderFunc(func(dctx context.Context, providerKey string, integID dintegration.ID, mediaID string) (io.ReadCloser, string, error) {
+		row, secrets, err := integrations.GetWithSecrets(dctx, "", integID)
+		if err != nil {
+			return nil, "", fmt.Errorf("attachment download: load integration: %w", err)
+		}
+		// Merge non-secret config so PhoneNumberID etc. reach the adapter.
+		if v, ok := row.Config["phone_number_id"].(string); ok {
+			secrets["phone_number_id"] = v
+		}
+		if v, ok := row.Config["waba_id"].(string); ok {
+			secrets["waba_id"] = v
+		}
+		p, err := provRegistry.Channel(dctx, providerKey, secrets)
+		if err != nil {
+			return nil, "", fmt.Errorf("attachment download: resolve provider: %w", err)
+		}
+		waP, ok := p.(*whatsapp.Provider)
+		if !ok {
+			return nil, "", fmt.Errorf("attachment download: provider %q does not support media", providerKey)
+		}
+		return waP.DownloadMedia(dctx, mediaID)
+	})
+
 	// --- Application services ----------------------------------------------
 	// For events: prefer durable Kafka when available, but the in-proc bus
 	// still feeds the WebSocket hub. We publish to both by composing them.
@@ -224,6 +263,8 @@ func run() error {
 		Conversations:      conversations,
 		Messages:           messages,
 		MessageStatusByPMI: messages,
+		Attachments:        attachStore,
+		Downloader:         attachDownloader,
 		Bus:                pub,
 		LookupProvider:     providerLookup,
 		NewID:              func() string { return ulid.Make().String() },
@@ -242,6 +283,17 @@ func run() error {
 		Publisher:     pub,
 		Providers:     provRegistry,
 		IDs:           idGenerator{},
+		Clock:         systemClock{},
+		Logger:        logger,
+	})
+
+	readSvc := appmsg.NewReadService(appmsg.ReadDeps{
+		Messages:      messages,
+		Conversations: conversations,
+		Sessions:      commSessions,
+		Endpoints:     businessEndpoints,
+		Integrations:  integrations,
+		Providers:     provRegistry,
 		Clock:         systemClock{},
 		Logger:        logger,
 	})
@@ -311,10 +363,20 @@ func run() error {
 		},
 		Messages: v1.MessagesDeps{
 			Send:                      sendSvc,
+			Read:                      readSvc,
 			Messages:                  messages,
 			Conversations:             conversationsLister{repo: conversations},
 			IncludeConversationsIndex: true,
 			Logger:                    logger,
+		},
+		Attachments: v1.AttachmentsDeps{
+			Store:  attachStore,
+			Logger: logger,
+		},
+		AttachmentsUpload: v1.AttachmentsUploadDeps{
+			Store:         attachStore,
+			PublicBaseURL: publicBaseURL(cfg),
+			Logger:        logger,
 		},
 		PermissionResolver: perms,
 		Logger:             logger,
@@ -444,6 +506,14 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// attachmentDownloaderFunc adapts a closure into appmsg.AttachmentDownloader.
+type attachmentDownloaderFunc func(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID string) (io.ReadCloser, string, error)
+
+// Download implements appmsg.AttachmentDownloader.
+func (f attachmentDownloaderFunc) Download(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID string) (io.ReadCloser, string, error) {
+	return f(ctx, providerKey, integrationID, mediaID)
 }
 
 // publicBaseURL returns the URL prefix operators use to build webhook URLs.

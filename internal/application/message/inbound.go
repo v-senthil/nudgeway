@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fullwa/fullwa/internal/domain/contact"
@@ -35,7 +37,8 @@ import (
 // UNIQUE(org, provider_message_id) index on messages plus the
 // UNIQUE(integration_id, external_event_id) index on webhook_events.
 type InboundService struct {
-	deps Deps
+	deps           Deps
+	mediaWarnOnce  sync.Once
 }
 
 // NewInboundService constructs an InboundService with the injected deps.
@@ -112,7 +115,7 @@ func (s *InboundService) process(
 		if envelopes[i].OrganizationID == "" {
 			envelopes[i].OrganizationID = string(orgID)
 		}
-		if err := s.handleEnvelope(ctx, providerKey, orgID, envelopes[i]); err != nil {
+		if err := s.handleEnvelope(ctx, providerKey, integrationID, orgID, envelopes[i]); err != nil {
 			// Any envelope error aborts the batch — the raw event will be
 			// marked failed and the queue policy applies. Envelope-level
 			// permanence bubbles up as-is.
@@ -126,6 +129,7 @@ func (s *InboundService) process(
 func (s *InboundService) handleEnvelope(
 	ctx context.Context,
 	providerKey string,
+	integrationID integration.ID,
 	orgID organization.ID,
 	env events.Envelope,
 ) error {
@@ -135,7 +139,7 @@ func (s *InboundService) handleEnvelope(
 		if !ok {
 			return Permanent(fmt.Errorf("%w: MessageReceived payload=%T", ErrUnknownEnvelope, env.Payload))
 		}
-		return s.handleInbound(ctx, providerKey, orgID, env, payload)
+		return s.handleInbound(ctx, providerKey, integrationID, orgID, env, payload)
 	case events.MessageSent, events.MessageDelivered, events.MessageRead, events.MessageFailed:
 		payload, ok := env.Payload.(events.MessageStatusPayload)
 		if !ok {
@@ -154,6 +158,7 @@ func (s *InboundService) handleEnvelope(
 func (s *InboundService) handleInbound(
 	ctx context.Context,
 	providerKey string,
+	integrationID integration.ID,
 	orgID organization.ID,
 	env events.Envelope,
 	payload events.MessageReceivedPayload,
@@ -271,6 +276,92 @@ func (s *InboundService) handleInbound(
 		if m.URL != "" {
 			msg.Metadata["media_url"] = m.URL
 		}
+		if m.MediaID != "" {
+			s.downloadInboundMedia(ctx, providerKey, orgID, integrationID, msg.Metadata, m)
+		}
+	}
+	if l, ok := payload.Payload.(message.LocationPayload); ok {
+		loc := map[string]any{
+			"latitude":  l.Latitude,
+			"longitude": l.Longitude,
+		}
+		if l.Name != "" {
+			loc["name"] = l.Name
+		}
+		if l.Address != "" {
+			loc["address"] = l.Address
+		}
+		if l.URL != "" {
+			loc["url"] = l.URL
+		}
+		msg.Metadata["location"] = loc
+	}
+	if c, ok := payload.Payload.(message.ContactsPayload); ok {
+		cards := make([]map[string]any, 0, len(c.Contacts))
+		for _, card := range c.Contacts {
+			out := map[string]any{}
+			name := ""
+			if card.Name != nil {
+				if v, ok := card.Name["formatted_name"].(string); ok && v != "" {
+					name = v
+				} else if v, ok := card.Name["first_name"].(string); ok {
+					name = v
+					if last, ok := card.Name["last_name"].(string); ok && last != "" {
+						name = strings.TrimSpace(name + " " + last)
+					}
+				}
+			}
+			out["name"] = name
+			if len(card.Phones) > 0 {
+				phones := make([]string, 0, len(card.Phones))
+				for _, p := range card.Phones {
+					if s, ok := p["phone"].(string); ok && s != "" {
+						phones = append(phones, s)
+					} else if s, ok := p["wa_id"].(string); ok && s != "" {
+						phones = append(phones, s)
+					}
+				}
+				if len(phones) > 0 {
+					out["phones"] = phones
+				}
+			}
+			if len(card.Emails) > 0 {
+				emails := make([]string, 0, len(card.Emails))
+				for _, e := range card.Emails {
+					if s, ok := e["email"].(string); ok && s != "" {
+						emails = append(emails, s)
+					}
+				}
+				if len(emails) > 0 {
+					out["emails"] = emails
+				}
+			}
+			cards = append(cards, out)
+		}
+		msg.Metadata["contacts"] = cards
+	}
+	if r, ok := payload.Payload.(message.ReactionPayload); ok {
+		msg.Metadata["reaction"] = map[string]any{
+			"emoji":      r.Emoji,
+			"message_id": r.MessageID,
+		}
+	}
+	if it, ok := payload.Payload.(message.InteractivePayload); ok {
+		interactive := map[string]any{"kind": it.Kind}
+		if it.ButtonReply != nil {
+			interactive["id"] = it.ButtonReply.ID
+			interactive["title"] = it.ButtonReply.Title
+		} else if it.ListReply != nil {
+			interactive["id"] = it.ListReply.ID
+			interactive["title"] = it.ListReply.Title
+			if it.ListReply.Description != "" {
+				interactive["description"] = it.ListReply.Description
+			}
+		}
+		msg.Metadata["interactive"] = interactive
+	}
+	if payload.ContextProviderMessageID != "" {
+		msg.Metadata["reply_to_wamid"] = payload.ContextProviderMessageID
 	}
 
 	if err := s.deps.Messages.Create(ctx, msg); err != nil {
@@ -408,4 +499,66 @@ func isNotFound(err error) bool {
 // Consumers who want the strict sentinel behaviour can wrap their
 // infrastructure error with errors.Join(err, errNotFoundSentinel).
 var errNotFoundSentinel = errors.New("row not found")
+
+// downloadInboundMedia streams the provider media bytes into the
+// attachment store and stamps the resulting key + content-type + size on
+// the message metadata. Failures are logged (WARN) but never returned —
+// the message row still persists and the frontend falls back to the
+// "attachment unavailable" placeholder. This mirrors the guarantee that a
+// transient Meta CDN outage never blocks the inbox from advancing.
+//
+// When either the Downloader or Store dep is nil the feature is silently
+// disabled after emitting a one-shot boot WARN so operators know the
+// media pipeline is off.
+func (s *InboundService) downloadInboundMedia(
+	ctx context.Context,
+	providerKey string,
+	orgID organization.ID,
+	integrationID integration.ID,
+	metadata map[string]any,
+	payload message.MediaPayload,
+) {
+	if s.deps.Downloader == nil || s.deps.Attachments == nil {
+		s.mediaWarnOnce.Do(func() {
+			slog.Default().Warn("inbound media download disabled — Attachments or Downloader dep is nil",
+				slog.String("provider", providerKey),
+				slog.String("org_id", string(orgID)),
+			)
+		})
+		return
+	}
+	body, ctype, err := s.deps.Downloader.Download(ctx, providerKey, integrationID, payload.MediaID)
+	if err != nil {
+		slog.Default().Warn("inbound media download failed",
+			slog.String("provider", providerKey),
+			slog.String("org_id", string(orgID)),
+			slog.String("integration_id", string(integrationID)),
+			slog.String("media_id", payload.MediaID),
+			slog.Any("err", err),
+		)
+		return
+	}
+	defer func() { _ = body.Close() }()
+
+	// Fall back to the payload's MIME type when the transport didn't
+	// surface one. Meta's media-download endpoint always sets
+	// Content-Type but tests + non-Meta providers may not.
+	if ctype == "" {
+		ctype = payload.MIMEType
+	}
+	key, size, _, err := s.deps.Attachments.Put(ctx, ctype, body)
+	if err != nil {
+		slog.Default().Warn("inbound media store failed",
+			slog.String("provider", providerKey),
+			slog.String("org_id", string(orgID)),
+			slog.String("integration_id", string(integrationID)),
+			slog.String("media_id", payload.MediaID),
+			slog.Any("err", err),
+		)
+		return
+	}
+	metadata["attachment_key"] = key
+	metadata["content_type"] = ctype
+	metadata["file_size"] = size
+}
 

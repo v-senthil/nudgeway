@@ -6,6 +6,68 @@ Format: reverse-chronological. Latest at the top.
 
 ---
 
+## 2026-09-04 — Phase 1 correctness: status ticks + mark-as-read
+
+Live status callbacks now propagate to the browser without a refresh, and operators can push the "read" signal (blue double-tick) back to the customer's phone. Two REST endpoints ship the mark-as-read pipeline: `POST /api/v1/messages/{id}/read` for a single message and `POST /api/v1/conversations/{id}/read` for a batch capped at 50 unread inbound rows. The frontend auto-fires the batch variant when the operator opens a conversation with unread inbound, throttled to once per 5 s per conversation.
+
+- **`internal/ports/channel/channel.go`** — extended `channel.Provider` with `MarkAsRead(ctx, providerMessageID) error`. Non-supporting adapters return `nil`; the WhatsApp adapter is the sole implementation today.
+- **`internal/providers/whatsapp/client.go` + `provider.go`** — `client.markAsRead` POSTs `{messaging_product:"whatsapp", status:"read", message_id:<wamid>}` to `/{phone_number_id}/messages`. `Provider.MarkAsRead` guards on empty wamid, flips `healthy=false` on auth-class errors, otherwise reuses the shared retrying `doJSON` core.
+- **`internal/application/message/read.go`** — new `ReadService` with `MarkRead(ctx, orgID, messageID)` and `MarkConversationRead(ctx, orgID, convID, cap)`. Both resolve conversation → session → endpoint → integration → provider adapter, call `provider.MarkAsRead`, and stamp `read_at` locally (Meta does not deliver a status callback for business-side reads). Idempotent — outbound / no-wamid / already-read messages are silently skipped.
+- **`internal/ports/repository/message_repo.go` + `internal/infrastructure/mysql/messages.go`** — `MessageRepo.Get(ctx, orgID, id)` added; the MySQL impl selects on `(org_id, id)` with the shared `messageCols` list.
+- **`internal/api/rest/v1/messages.go` + `router.go`** — new `MessagesDeps.Read`; `POST /messages/{id}/read` and `POST /conversations/{id}/read` mount when non-nil. Both auth + CSRF, return 204 on success, 404 / 424 / 502 on domain / integration / provider errors.
+- **`cmd/server/main.go`** — wires `NewReadService(ReadDeps{...})` and passes it through `MessagesDeps.Read`.
+- **`web/src/features/inbox/renderers/TickIcon.tsx`** — placeholder text-glyph component replaced with SVG double-ticks (grey delivered / sky-blue read), single-tick (grey sent), three-dot (queued/sending), and a red exclamation for failed. Uses `currentColor` so bubbles can tint the icon.
+- **`web/src/lib/ws.ts` + `events.ts`** — status envelopes (`message.delivered`, `message.read`, `message.failed`) now invalidate the TanStack Query cache; when the WebSocket payload does not carry a `conversation_id` (the domain `MessageStatusPayload` is keyed on wamid) the hook invalidates every `['messages']` key so the tick flips without a refresh.
+- **`web/src/lib/messages.ts`** — `useMarkMessageRead()` + `useMarkConversationRead()` mutations targeting the new endpoints.
+- **`web/src/features/inbox/Thread.tsx`** — minimal effect that fires `useMarkConversationRead` on conversation-change / message-load when there is at least one unread inbound row, throttled to once per 5 s per conversation via a `useRef` timestamp.
+- **OpenAPI** — bumped to `0.2.3-phase1`; adds `postMessageMarkRead` and `postConversationMarkRead`.
+- **Docs** — `docs/flows/inbound-message.md` gains a mark-as-read sequence diagram; `docs/providers/whatsapp.md` documents the `MarkAsRead` port surface, Meta's 30-day / 131009 constraint, and the wire path.
+
+TODO: retry semantics on `Provider.MarkAsRead` are still permanent-fail — the mutation returns 502 on the first Meta 5xx and the operator is expected to refire. Follow-up work: enqueue a "mark-read" side-lane on the Kafka bus and let the send worker retry with backoff.
+
+---
+
+## 2026-09-04 — Phase 1 correctness: inbound media
+
+- Inbound WhatsApp media (image / video / audio / document / sticker) is now downloaded from Meta on receipt, stored in the content-addressed attachments store, and served through our own `GET /api/v1/media/{key}` — closing the gap where the browser previously rendered "[image] media message" because the raw bytes were never fetched.
+- **`internal/infrastructure/attachments/localfs.go`** + **`store.go`** — new local-filesystem `attachments.Store` implementation for dev. `Put` streams into a temp file while computing SHA-256, then atomically renames onto `<root>/aa/bb/<digest>` and drops a `.contenttype` sidecar so `Get` (and the REST handler) can surface the MIME string without sniffing. `Get` / `Delete` refuse non-hex 64-char keys as a path-traversal guard.
+- **`internal/infrastructure/config/config.go`** + **`config/example.yaml`** — new `attachments: root: "./attachments"` block; default is `./attachments` relative to the process working dir.
+- **`internal/application/message/deps.go`** + **`inbound.go`** — `Deps` gains `Attachments attachments.Store` + `Downloader AttachmentDownloader` (both optional; nil pair emits a one-shot WARN and skips the media branch). `handleInbound` now, for any `MediaPayload` with a non-empty `MediaID`, calls `Downloader.Download(ctx, provider, integrationID, mediaID)` → `Attachments.Put` → stamps `attachment_key`, `content_type`, `file_size` on `message.metadata`. Download failures WARN-log and are swallowed so the message row still commits and the frontend shows a subtle "Attachment unavailable" fallback.
+- **`internal/api/rest/v1/media.go`** + **`router.go`** — new `GET` / `HEAD /api/v1/media/{key}` route, auth-gated, streams from the store with `Cache-Control: private, max-age=86400`. Unknown keys return 404. Router gains `Attachments AttachmentsDeps { Store, Logger }`; nil `Store` omits the route.
+- **`internal/api/rest/v1/messages.go`** — `MessageDTO` gains `ContentType`; `toMessageDTO` prefers `metadata.attachment_key` (surfacing `media_url: /api/v1/media/<key>`) over the short-lived provider-native URL.
+- **`internal/providers/whatsapp/provider.go`** — new `Provider.DownloadMedia(ctx, mediaID) (io.ReadCloser, contentType, error)` that packages Meta's two-step `getMediaURL` + `downloadMedia` client helpers into a single streaming call. The previous `*Media` wrapper is preserved as `DownloadMediaMetadata` for callers who need SHA-256 / filesize alongside the stream.
+- **`web/src/features/inbox/renderers/MediaBubble.tsx`** — real renderer replacing the placeholder: `<img>` for image (rounded, `max-w-xs`) with a skeleton loader, `<video controls>` for video, `<audio controls>` for audio, styled download link with filename + download icon for document, fixed 128×128 `<img>` for sticker, caption below where applicable, and "Attachment unavailable" broken-media fallback. Self-contained — the driver composes it in the bubble shell.
+- **`web/src/lib/messages.ts`** — `Message.content_type?: string` added so the document renderer can surface the MIME string.
+- **OpenAPI** — new `GET /api/v1/media/{key}` + `HEAD` operations returning `application/octet-stream`; `Message` schema gains `text`, `content_type`, and a documented `media_url`.
+- **Docs** — `docs/providers/whatsapp.md` gains a "Media inbound flow" section; `docs/flows/inbound-message.md` extends the Mermaid diagram with the download / store branch and adds a "Media persistence" section.
+
+Driver wire-up (`cmd/server/main.go`) is unchanged in this commit — the new deps are optional and default to nil, so booting fullWA without a media root is safe. The follow-up wire commit will instantiate `attachments.New(cfg.Attachments)`, close over the WhatsApp adapter as a `message.AttachmentDownloader`, and thread both into `appmsg.Deps` + `v1.Deps.Attachments`.
+
+---
+
+## 2026-09-04 — Phase 1 correctness: outbound media
+
+- Operators can now attach a file to a WhatsApp send. `POST /api/v1/attachments` (auth + CSRF) accepts a `multipart/form-data` `file`, streams it through `attachments.Store`, and returns `{attachment_id, media_url, size, content_type, filename}`; the composer then calls `POST /api/v1/messages` with `type=image|video|audio|document` and `media: {url: <media_url>, caption?, filename?}`. The send worker hands the URL to the WhatsApp adapter's `canonicalSendToMeta`, which emits `{type:"image", image:{link:"…"}}` (or the corresponding video/audio/document/sticker shape) so Meta fetches + delivers.
+- **`internal/api/rest/v1/attachments.go`** — new `POST /api/v1/attachments` handler. Enforces a 16 MiB cap via `http.MaxBytesReader` + `multipart.FileHeader.Size`, sniffs content-type when the multipart part omits it, and returns 201 with the fully-qualified `media_url` prefixed with `PublicBaseURL`. `AttachmentsUploadDeps` bundles `Store attachments.Store`, `PublicBaseURL string`, `Logger *slog.Logger`; a nil `Store` silently omits the route.
+- **`internal/api/rest/v1/router.go`** — new `AttachmentsUpload AttachmentsUploadDeps` field on `Deps`; `mountAttachmentsUpload(mux, authed, deps.AttachmentsUpload)` wired after `mountMessages` (reuses the same auth + CSRF chain).
+- **`web/src/lib/attachments.ts`** — `useUploadAttachment` mutation posts multipart with the standard CSRF header; `mediaKindFromContentType` maps a MIME type to the canonical `image|video|audio|document` message type; `MAX_ATTACHMENT_BYTES` mirrors the backend cap.
+- **`web/src/features/inbox/renderers/ComposerAttach.tsx`** — paperclip button + hidden file input, thumbnail preview for images, filename + size preview otherwise, inline clear button.
+- **`web/src/features/inbox/Composer.tsx`** — integrates `ComposerAttach`, kicks off upload on file select, blocks send while upload is in flight, sends either `text`, `media`, or `media + caption` in one request; optimistic row + rollback preserved.
+- **`web/src/lib/messages.ts`** — `SendMessageInput` becomes a discriminated union (`text` / media). `useSendMessage` builds the correct backend body, echoes `client_reference_id` as `idempotency_key`.
+- **OpenAPI** — bumped to `0.2.2-phase1`: new `POST /api/v1/attachments` path + `AttachmentUploadResponse` schema.
+- **Docs** — `docs/providers/whatsapp.md` gains a "Media outbound flow" section (Meta resumable upload for > 16 MiB flagged as TODO). `docs/flows/outbound-send.md` Mermaid extended with the upload step + endpoint list documents the new route.
+
+---
+
+## 2026-09-04 — Phase 1 correctness: location/contacts/reactions/interactive rendering
+
+- Inbound WhatsApp location, contacts, reactions, and interactive (list_reply / button_reply / template button) messages now render as proper bubbles in the operator inbox instead of the "[image] media message" placeholder. Reactions overlay as a small emoji chip on the reacted-to bubble (looked up by `provider_message_id`) and fall back to a standalone "Reacted <emoji>" bubble when the target is outside the loaded window.
+- **Backend** — `internal/application/message/inbound.go` extends the metadata surfacing to flatten `LocationPayload`, `ContactsPayload`, `ReactionPayload`, and `InteractivePayload` into `message.Metadata` under stable keys (`location`, `contacts`, `reaction`, `interactive`), plus `reply_to_wamid` whenever the envelope carries a `context.id`. `internal/api/rest/v1/messages.go`'s `MessageDTO` gains optional `location`, `contacts`, `reaction`, `interactive`, and `reply_to_provider_message_id` fields (JSON tags with `omitempty`); `toMessageDTO` unmarshals them from metadata. OpenAPI `components.schemas.Message` documents all five new fields.
+- **Frontend** — new `web/src/features/inbox/renderers/{LocationBubble,ContactCardBubble,ReactionBadge,InteractiveBubble,UnknownBubble}.tsx`. `Thread.tsx` is rebuilt around a `BubbleDispatch` component that switches on `msg.type`, with reactions pre-grouped by `groupReactions` so they overlay on their targets (or render as fallback bubbles). `web/src/lib/messages.ts` widens the `Message` type with the new optional fields.
+- **Docs** — `docs/providers/whatsapp.md` gains a "DTO surface for specialised inbound types" table pairing each canonical payload with the DTO fields the frontend consumes.
+
+---
+
 ## 2026-09-04 — Phase 1 Task 5: integrations API + CLI
 
 Operators can list / create / test / disconnect provider integrations behind `/api/v1/integrations/*`, and a new `fullwa-cli integration create` subcommand seeds a WhatsApp integration without touching the UI. Secret material is envelope-encrypted at rest and never crosses the API boundary — the response's `webhook_url` is the tenant-facing URL to paste into the provider console.

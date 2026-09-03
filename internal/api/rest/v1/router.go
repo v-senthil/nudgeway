@@ -16,6 +16,7 @@ type Deps struct {
 	Webhook            WebhookDeps
 	Integrations       IntegrationsDeps
 	Messages           MessagesDeps
+	AttachmentsUpload  AttachmentsUploadDeps
 	PermissionResolver middleware.PermissionResolver
 	Logger             *slog.Logger
 	SlideEvery         time.Duration
@@ -27,6 +28,11 @@ type Deps struct {
 	// WSAllowedOrigins overrides the default set of origins accepted during
 	// the WebSocket upgrade. Leave nil to use wsapi.DefaultAllowedOrigins.
 	WSAllowedOrigins []string
+	// Attachments configures the media serve endpoint
+	// (GET/HEAD /api/v1/media/{key}). When Store is nil the route is
+	// silently omitted — inbound media persistence is disabled in this
+	// deploy.
+	Attachments AttachmentsDeps
 }
 
 // Registrar is the minimal surface Mount needs to install patterns. It is
@@ -109,6 +115,15 @@ func Mount(mux Registrar, deps Deps) {
 		return base(middleware.RequireAuth(next))
 	}
 	mountMessages(mux, authed, authedGET, deps.Messages, deps.Messages.IncludeConversationsIndex)
+
+	// Attachments upload — POST /api/v1/attachments (auth + CSRF). The
+	// route is silently omitted when no attachments.Store has been wired.
+	mountAttachmentsUpload(mux, authed, deps.AttachmentsUpload)
+
+	// Media serve — GET/HEAD /api/v1/media/{key} (auth-only). Streams the
+	// bytes for a stored blob keyed by SHA-256. Route is silently omitted
+	// when Attachments.Store is nil.
+	mountMedia(mux, authedGET, deps.Attachments)
 
 	// /ws/inbox — WebSocket real-time endpoint. Reuses the same session-auth
 	// middleware chain as REST so the upgrade sees a Principal on the

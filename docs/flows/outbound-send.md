@@ -8,6 +8,8 @@ status webhooks close the loop.
 sequenceDiagram
     autonumber
     participant Agent as REST client (agent UI / API)
+    participant Attach as internal/api/rest/v1/attachments
+    participant Store as attachments.Store (HBase)
     participant API as internal/api/rest/v1/messages
     participant App as internal/application/message.SendService
     participant DB as MySQL
@@ -17,6 +19,12 @@ sequenceDiagram
     participant WA as whatsapp.Provider
     participant Meta as Meta Cloud API
     participant Bus as in-proc event bus
+
+    Note over Agent,Store: (Optional) media upload prior to send
+    Agent->>Attach: POST /api/v1/attachments<br/>multipart file
+    Attach->>Store: Put(ctx, contentType, reader)
+    Store-->>Attach: key, size, sha256
+    Attach-->>Agent: 201 {attachment_id, media_url}
 
     Agent->>API: POST /api/v1/messages<br/>{conversation_id, type, ...}
     API->>App: RequestSend(SendRequest)
@@ -77,8 +85,13 @@ sequenceDiagram
 
 ## Endpoints
 
+- `POST /api/v1/attachments` (auth + CSRF) — multipart upload. Returns
+  `{attachment_id, media_url, size, content_type, filename}`. Max 16 MiB;
+  larger blobs require the resumable upload API (TODO).
 - `POST /api/v1/messages` (auth + CSRF) — enqueues a send. See the OpenAPI
-  spec at `internal/api/openapi/openapi.yaml` for the request body.
+  spec at `internal/api/openapi/openapi.yaml` for the request body. For
+  media sends, populate `media: {url: <media_url from /attachments>, caption?, filename?}`
+  and set `type` to `image` / `video` / `audio` / `document` / `sticker`.
 - `GET /api/v1/conversations/{id}/messages` (auth) — returns paginated
   messages for a conversation, newest first.
 - `GET /api/v1/conversations` (auth) — placeholder empty list until the
