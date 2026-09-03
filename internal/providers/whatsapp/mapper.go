@@ -81,6 +81,10 @@ type metaTextMsg struct {
 
 type metaMediaMsg struct {
 	ID       string `json:"id,omitempty"`
+	// URL is a short-lived direct download link Meta includes in the
+	// webhook envelope (image/video/audio/document/sticker). Using this
+	// with a Bearer token skips the /v20.0/{media_id} lookup.
+	URL      string `json:"url,omitempty"`
 	MimeType string `json:"mime_type,omitempty"`
 	SHA256   string `json:"sha256,omitempty"`
 	Caption  string `json:"caption,omitempty"`
@@ -245,6 +249,7 @@ func mediaPayload(kind string, m *metaMediaMsg) message.MediaPayload {
 	return message.MediaPayload{
 		Kind:     kind,
 		MediaID:  m.ID,
+		URL:      m.URL,
 		MIMEType: m.MimeType,
 		SHA256:   m.SHA256,
 		Caption:  m.Caption,

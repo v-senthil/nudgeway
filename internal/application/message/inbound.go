@@ -373,6 +373,11 @@ func (s *InboundService) handleInbound(
 		return fmt.Errorf("inbound: persist message: %w", err)
 	}
 
+	// Enrich the payload with the canonical conversation_id so downstream
+	// subscribers (WebSocket bridge → browser) can route to the right
+	// thread without a second DB round-trip.
+	payload.ConversationID = string(conv.ID)
+	env.Payload = payload
 	if err := s.deps.Bus.Publish(ctx, env); err != nil {
 		return fmt.Errorf("inbound: publish MessageReceived: %w", err)
 	}
@@ -527,7 +532,7 @@ func (s *InboundService) downloadInboundMedia(
 		})
 		return
 	}
-	body, ctype, err := s.deps.Downloader.Download(ctx, providerKey, integrationID, payload.MediaID)
+	body, ctype, err := s.deps.Downloader.Download(ctx, providerKey, integrationID, payload.MediaID, payload.URL)
 	if err != nil {
 		slog.Default().Warn("inbound media download failed",
 			slog.String("provider", providerKey),

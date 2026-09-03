@@ -34,6 +34,12 @@ type MessageReceivedPayload struct {
 	// ContextProviderMessageID references a prior message this one replies to
 	// (e.g. a button tap or list reply). Empty when not a reply.
 	ContextProviderMessageID string
+	// ConversationID is the canonical conversation id set by the
+	// InboundService right before publish (the parser cannot know it —
+	// it's assigned when we upsert the domain Conversation row). Enables
+	// downstream subscribers (WebSocket bridge, automation engine) to
+	// route updates to a specific conversation without a second DB hit.
+	ConversationID string
 	// Raw preserves the exact provider payload for TypeUnknown / debug.
 	Raw map[string]any
 }

@@ -130,12 +130,24 @@ func (p *Provider) DownloadMedia(ctx context.Context, mediaID string) (io.ReadCl
 	if err != nil {
 		return nil, "", fmt.Errorf("whatsapp: download media bytes: %w", err)
 	}
-	// Fall back to the lookup's reported MIME type when the transport
-	// didn't set Content-Type (mock servers occasionally omit it).
 	if ctype == "" {
 		ctype = lookup.MimeType
 	}
 	return body, ctype, nil
+}
+
+// DownloadMediaByURL streams bytes from a URL Meta already gave us in the
+// webhook envelope (image/video/audio/document/sticker `url` field). It
+// skips the /v20.0/{media_id} lookup step — the URL is already signed +
+// hash-scoped; we just need the Bearer token.
+//
+// Prefer this path when a URL is present in the payload: it's one HTTPS
+// round-trip instead of two.
+func (p *Provider) DownloadMediaByURL(ctx context.Context, url string) (io.ReadCloser, string, error) {
+	if url == "" {
+		return nil, "", fmt.Errorf("whatsapp: DownloadMediaByURL: url required")
+	}
+	return p.client.downloadMedia(ctx, url)
 }
 
 // HealthCheck reports the last-known outbound health. A dedicated ping call

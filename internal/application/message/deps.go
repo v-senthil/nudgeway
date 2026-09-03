@@ -27,7 +27,11 @@ import (
 // The returned stream MUST be closed by the caller. contentType is the
 // MIME string the provider reported (empty when unknown).
 type AttachmentDownloader interface {
-	Download(ctx context.Context, providerKey string, integrationID integration.ID, mediaID string) (io.ReadCloser, string, error)
+	// Download returns a byte stream + content-type. Callers pass whichever
+	// of (mediaID, mediaURL) they have; implementations prefer mediaURL
+	// when non-empty (Meta already gave us a short-lived signed URL in
+	// the webhook envelope) and fall back to mediaID.
+	Download(ctx context.Context, providerKey string, integrationID integration.ID, mediaID, mediaURL string) (io.ReadCloser, string, error)
 }
 
 // IntegrationSecretsRepo is the subset of the integration repository that

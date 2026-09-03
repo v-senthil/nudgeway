@@ -267,8 +267,10 @@ export function Thread({ conversationID, orgID }: Props) {
               }
             />
           ))}
-        {grouped !== null &&
-          grouped.fallback.map((r) => <ReactionBadge key={r.id} msg={r} asBubble />)}
+        {/* Reactions whose target message isn't in the loaded window are
+            deliberately not rendered — WhatsApp shows reactions only on
+            the message they react to. Load the target via pagination if
+            needed. */}
       </div>
       <Composer conversationID={conversationID} orgID={orgID} />
     </section>

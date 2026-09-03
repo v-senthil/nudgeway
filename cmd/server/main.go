@@ -218,12 +218,11 @@ func run() error {
 	// attachmentDownloader closes over the mysql Integrations repo + provider
 	// registry so the InboundService can fetch inbound media without
 	// importing any provider adapter directly.
-	attachDownloader := attachmentDownloaderFunc(func(dctx context.Context, providerKey string, integID dintegration.ID, mediaID string) (io.ReadCloser, string, error) {
+	attachDownloader := attachmentDownloaderFunc(func(dctx context.Context, providerKey string, integID dintegration.ID, mediaID, mediaURL string) (io.ReadCloser, string, error) {
 		row, secrets, err := integrations.GetWithSecrets(dctx, "", integID)
 		if err != nil {
 			return nil, "", fmt.Errorf("attachment download: load integration: %w", err)
 		}
-		// Merge non-secret config so PhoneNumberID etc. reach the adapter.
 		if v, ok := row.Config["phone_number_id"].(string); ok {
 			secrets["phone_number_id"] = v
 		}
@@ -237,6 +236,12 @@ func run() error {
 		waP, ok := p.(*whatsapp.Provider)
 		if !ok {
 			return nil, "", fmt.Errorf("attachment download: provider %q does not support media", providerKey)
+		}
+		// Prefer the URL Meta gave us in the webhook envelope — one HTTPS
+		// call instead of two. Fall back to the ID-based lookup path when
+		// only the mediaID is known.
+		if mediaURL != "" {
+			return waP.DownloadMediaByURL(dctx, mediaURL)
 		}
 		return waP.DownloadMedia(dctx, mediaID)
 	})
@@ -509,11 +514,11 @@ func envOr(key, def string) string {
 }
 
 // attachmentDownloaderFunc adapts a closure into appmsg.AttachmentDownloader.
-type attachmentDownloaderFunc func(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID string) (io.ReadCloser, string, error)
+type attachmentDownloaderFunc func(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID, mediaURL string) (io.ReadCloser, string, error)
 
 // Download implements appmsg.AttachmentDownloader.
-func (f attachmentDownloaderFunc) Download(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID string) (io.ReadCloser, string, error) {
-	return f(ctx, providerKey, integrationID, mediaID)
+func (f attachmentDownloaderFunc) Download(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID, mediaURL string) (io.ReadCloser, string, error) {
+	return f(ctx, providerKey, integrationID, mediaID, mediaURL)
 }
 
 // publicBaseURL returns the URL prefix operators use to build webhook URLs.
