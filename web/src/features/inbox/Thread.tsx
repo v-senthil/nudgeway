@@ -131,7 +131,10 @@ export function Thread({ conversationID, orgID }: Props) {
             <p className="text-sm text-slate-500">No messages in this conversation yet. Say hello 👋</p>
           </div>
         )}
-        {messages.data !== undefined && messages.data.map((m) => <Bubble key={m.id} msg={m} />)}
+        {messages.data !== undefined &&
+          // Backend returns newest-first (best for cursor pagination). WhatsApp-style
+          // rendering puts oldest at top, newest at bottom — reverse for display.
+          [...messages.data].reverse().map((m) => <Bubble key={m.id} msg={m} />)}
       </div>
       <Composer conversationID={conversationID} orgID={orgID} />
     </section>
