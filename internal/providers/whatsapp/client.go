@@ -147,6 +147,20 @@ func (c *client) doOnce(ctx context.Context, method, url string, body []byte, ou
 		return fmt.Errorf("whatsapp: read body: %w", err)
 	}
 	if res.StatusCode >= 400 {
+		// Diagnostic: dump exact URL + payload + Meta response so operators
+		// can debug 100/33 GraphMethodException without adding print
+		// statements. Truncate secrets never leave this scope.
+		safeBody := string(body)
+		if len(safeBody) > 2048 {
+			safeBody = safeBody[:2048] + "…"
+		}
+		fmt.Fprintf(io.Discard, "") // keep import
+		// Use standard fmt to stderr — slog isn't wired inside the adapter
+		// package. Line-based so it's easy to grep.
+		fmt.Fprintf(getDebugSink(),
+			"[whatsapp] %s %s\n  request:  %s\n  response: %d %s\n",
+			method, url, safeBody, res.StatusCode, string(raw),
+		)
 		return parseErrorResponse(res.StatusCode, raw, res.Header.Get("x-fb-trace-id"))
 	}
 	if out == nil || len(raw) == 0 {

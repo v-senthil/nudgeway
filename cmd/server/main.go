@@ -236,6 +236,7 @@ func run() error {
 		Sessions:      commSessions,
 		Endpoints:     businessEndpoints,
 		Contacts:      contacts,
+		Identities:    identities,
 		Integrations:  integrations,
 		Enqueuer:      enq,
 		Publisher:     pub,

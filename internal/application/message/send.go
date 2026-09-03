@@ -11,6 +11,7 @@ import (
 	"github.com/fullwa/fullwa/internal/domain/contact"
 	"github.com/fullwa/fullwa/internal/domain/conversation"
 	"github.com/fullwa/fullwa/internal/domain/events"
+	"github.com/fullwa/fullwa/internal/domain/identity"
 	"github.com/fullwa/fullwa/internal/domain/integration"
 	msgdom "github.com/fullwa/fullwa/internal/domain/message"
 	"github.com/fullwa/fullwa/internal/domain/organization"
@@ -97,6 +98,10 @@ type SendDeps struct {
 	Endpoints repository.BusinessEndpointRepo
 	// Contacts resolves the recipient identity for the outbound send.
 	Contacts repository.ContactRepo
+	// Identities loads the ContactIdentity behind Contact.PrimaryIdentityID
+	// so the outbound "to" is the provider-native address (E.164 phone
+	// for WhatsApp) rather than an internal ULID.
+	Identities repository.IdentityRepo
 	// Integrations resolves integration config + decrypts secrets.
 	Integrations IntegrationSecrets
 	// Enqueuer places SendJobPayload on the "message.send" lane.
@@ -319,6 +324,19 @@ func (s *SendService) ProcessSend(ctx context.Context, job SendJobPayload) error
 		return fmt.Errorf("integration provider mismatch: row=%q job=%q", integ.Provider, job.ProviderKey)
 	}
 
+	// Merge non-secret config keys the provider factory needs (e.g. WhatsApp
+	// phone_number_id + waba_id live in integration.Config, not the
+	// encrypted secrets bag). The factory takes a single flat map for
+	// backwards compatibility with the port; do the merge here.
+	if secrets == nil {
+		secrets = map[string]string{}
+	}
+	if v, ok := integ.Config["phone_number_id"].(string); ok && v != "" {
+		secrets["phone_number_id"] = v
+	}
+	if v, ok := integ.Config["waba_id"].(string); ok && v != "" {
+		secrets["waba_id"] = v
+	}
 	// Resolve provider adapter.
 	provider, err := s.deps.Providers.Channel(ctx, integ.Provider, secrets)
 	if err != nil {
@@ -428,9 +446,25 @@ func (s *SendService) resolveRecipient(ctx context.Context, orgID organization.I
 		return "", err
 	}
 	if c.PrimaryIdentityID == nil {
+		// No primary identity — fall back to any identity we can find
+		// for this contact. Better than returning the display name,
+		// which providers can't route to.
+		if s.deps.Identities != nil {
+			list, err := s.deps.Identities.ListForContact(ctx, orgID, contactID)
+			if err == nil && len(list) > 0 {
+				return list[0].NormalizedValue, nil
+			}
+		}
 		return c.DisplayName, nil
 	}
-	return string(*c.PrimaryIdentityID), nil
+	if s.deps.Identities == nil {
+		return string(*c.PrimaryIdentityID), nil
+	}
+	ident, err := s.deps.Identities.Get(ctx, orgID, identity.ID(*c.PrimaryIdentityID))
+	if err != nil {
+		return "", fmt.Errorf("load identity %q: %w", *c.PrimaryIdentityID, err)
+	}
+	return ident.NormalizedValue, nil
 }
 
 // validatePayload sanity-checks the JSON envelope for the given canonical
