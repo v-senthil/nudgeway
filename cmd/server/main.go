@@ -256,6 +256,17 @@ func run() error {
 	authSvc := appauth.NewService(users, sessionStore, perms.AsTyped(), cfg.Auth.SessionTTL)
 
 	// --- Webhook ingress ----------------------------------------------------
+	// DEV MODE: signature verification is currently disabled. Meta's App
+	// Secret is not reliably configurable in this dev flow. The ingress
+	// instead matches the payload's phone_number_id + waba_id against the
+	// integration.Config values (see webhook.ClaimsVerifier). Never ship
+	// this to prod — set FULLWA_REQUIRE_SIGNATURE=1 (or config webhook
+	// section) once the Meta App Secret is trusted.
+	requireSig := os.Getenv("FULLWA_REQUIRE_SIGNATURE") == "1"
+	if !requireSig {
+		logger.Warn("webhook signature verification DISABLED — dev mode, do NOT ship to prod",
+			slog.String("fallback", "phone_number_id + waba_id claims match"))
+	}
 	ingress := &webhook.Ingress{
 		Integrations: integrations,
 		Events:       webhookEvents,
@@ -263,8 +274,12 @@ func run() error {
 		Verifiers: webhook.StaticVerifierLookup(map[string]webhook.SignatureVerifier{
 			"whatsapp": webhook.SignatureVerifierFunc(whatsapp.VerifySignature),
 		}),
-		Logger: logger,
-		Now:    func() time.Time { return time.Now().UTC() },
+		ClaimsVerifiers: webhook.StaticClaimsVerifierLookup(map[string]webhook.ClaimsVerifier{
+			"whatsapp": webhook.ClaimsVerifierFunc(whatsapp.VerifyClaims),
+		}),
+		RequireSignature: requireSig,
+		Logger:           logger,
+		Now:              func() time.Time { return time.Now().UTC() },
 	}
 
 	// --- Cookie options -----------------------------------------------------

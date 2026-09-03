@@ -68,12 +68,58 @@ type Ingress struct {
 	// at wire-up time so the ingress does not import any provider package.
 	Verifiers VerifierLookup
 
+	// ClaimsVerifiers is the payload-claims fallback used when
+	// RequireSignature is false. For a given provider it parses the raw
+	// body enough to extract the provider-native subject identifiers
+	// (e.g. WhatsApp phone_number_id + WABA id) and asserts they match
+	// the integration.Config values. Rejected requests still return 401
+	// so callers can't distinguish this from the HMAC path.
+	ClaimsVerifiers ClaimsVerifierLookup
+
+	// RequireSignature gates the HMAC verification path. Default (true)
+	// enforces X-Hub-Signature-256 as production requires. Setting to
+	// false switches to ClaimsVerifiers — DEV ONLY, and boot logs a
+	// loud WARN.
+	RequireSignature bool
+
 	// Logger receives one structured record per delivery with
 	// request_id, provider, integration_id, event_id, sig_ok, dup.
 	Logger *slog.Logger
 
 	// Now is injectable for tests; defaults to time.Now.
 	Now func() time.Time
+}
+
+// ClaimsVerifier parses a raw provider webhook body and asserts that the
+// subject identifiers embedded in it match the integration's configured
+// values (e.g. WhatsApp's phone_number_id + waba_id).
+type ClaimsVerifier interface {
+	// VerifyClaims returns nil when the body's declared subject ids match
+	// config. Non-nil error means the payload was addressed to a different
+	// tenant / phone / account than the integration owns.
+	VerifyClaims(body []byte, config map[string]any) error
+}
+
+// ClaimsVerifierFunc adapts a plain func to ClaimsVerifier.
+type ClaimsVerifierFunc func(body []byte, config map[string]any) error
+
+// VerifyClaims implements ClaimsVerifier.
+func (f ClaimsVerifierFunc) VerifyClaims(body []byte, config map[string]any) error {
+	return f(body, config)
+}
+
+// ClaimsVerifierLookup resolves a providerKey to its ClaimsVerifier.
+type ClaimsVerifierLookup func(providerKey string) (ClaimsVerifier, error)
+
+// StaticClaimsVerifierLookup returns a lookup backed by a fixed map.
+func StaticClaimsVerifierLookup(m map[string]ClaimsVerifier) ClaimsVerifierLookup {
+	return func(k string) (ClaimsVerifier, error) {
+		v, ok := m[k]
+		if !ok {
+			return nil, fmt.Errorf("no claims verifier for provider %q", k)
+		}
+		return v, nil
+	}
 }
 
 // jobPayload is the concrete envelope written to the queue for the webhook
@@ -149,29 +195,51 @@ func (in *Ingress) Handle(w http.ResponseWriter, r *http.Request, providerKey, i
 		log.Warn("webhook rejected: no verifier", slog.Any("err", err))
 		return
 	}
-	appSecret := secrets["app_secret"]
-	if err := verifier.VerifySignature(r.Header, raw, appSecret); err != nil {
-		writeProblem(w, r, http.StatusUnauthorized, "signature_verification_failed",
-			"signature verification failed")
-		// Diagnostic: log what would confirm/refute an app_secret mismatch
-		// vs a body-tampering issue. We log lengths and prefixes only —
-		// never the secret itself.
-		gotSig := r.Header.Get("X-Hub-Signature-256")
-		if gotSig == "" {
-			gotSig = "(missing)"
+	if in.RequireSignature {
+		appSecret := secrets["app_secret"]
+		if err := verifier.VerifySignature(r.Header, raw, appSecret); err != nil {
+			writeProblem(w, r, http.StatusUnauthorized, "signature_verification_failed",
+				"signature verification failed")
+			gotSig := r.Header.Get("X-Hub-Signature-256")
+			gotPrefix := gotSig
+			if len(gotPrefix) > 20 {
+				gotPrefix = gotPrefix[:20] + "…"
+			}
+			log.Warn("webhook rejected: signature",
+				slog.Bool("sig_ok", false),
+				slog.Any("err", err),
+				slog.Int("body_len", len(raw)),
+				slog.Int("secret_len", len(appSecret)),
+				slog.String("got_sig_prefix", gotPrefix),
+			)
+			return
 		}
-		gotPrefix := gotSig
-		if len(gotPrefix) > 20 {
-			gotPrefix = gotPrefix[:20] + "…"
+	} else {
+		// DEV MODE: HMAC verification is disabled. Fall back to matching
+		// the payload's declared subject identifiers against the
+		// integration.Config values. Random payloads still fail because
+		// they won't carry the tenant's phone_number_id / waba_id.
+		cv, cvErr := in.ClaimsVerifiers(providerKey)
+		if cvErr != nil {
+			writeProblem(w, r, http.StatusUnauthorized, "signature_verification_failed",
+				"no claims verifier for provider")
+			log.Warn("webhook rejected: no claims verifier", slog.Any("err", cvErr))
+			return
 		}
-		log.Warn("webhook rejected: signature",
-			slog.Bool("sig_ok", false),
-			slog.Any("err", err),
+		if err := cv.VerifyClaims(raw, integ.Config); err != nil {
+			writeProblem(w, r, http.StatusUnauthorized, "signature_verification_failed",
+				"payload claims mismatch")
+			log.Warn("webhook rejected: claims mismatch",
+				slog.Bool("sig_ok", false),
+				slog.Any("err", err),
+				slog.Int("body_len", len(raw)),
+			)
+			return
+		}
+		log.Info("webhook: signature check bypassed (dev mode)",
+			slog.Bool("claims_ok", true),
 			slog.Int("body_len", len(raw)),
-			slog.Int("secret_len", len(appSecret)),
-			slog.String("got_sig_prefix", gotPrefix),
 		)
-		return
 	}
 
 	// 4. Extract a stable external event id.
