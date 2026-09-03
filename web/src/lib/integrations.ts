@@ -67,7 +67,24 @@ export function useCreateIntegration() {
   const qc = useQueryClient();
   return useMutation<Integration, ApiError, CreateIntegrationInput>({
     mutationFn: async (input) => {
-      return api<Integration>('/integrations', { method: 'POST', body: input });
+      // Backend expects a nested shape: {type, provider, name, config, secrets}.
+      // The form collects a flat object; we split it here so the UI stays
+      // simple.
+      const body = {
+        type: 'channel',
+        provider: input.provider,
+        name: input.name,
+        config: {
+          phone_number_id: input.phone_number_id,
+          waba_id: input.waba_id,
+        },
+        secrets: {
+          access_token: input.access_token,
+          app_secret: input.app_secret,
+          verify_token: input.verify_token,
+        },
+      };
+      return api<Integration>('/integrations', { method: 'POST', body });
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: INTEGRATIONS_KEY });
