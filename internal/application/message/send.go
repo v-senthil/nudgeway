@@ -221,6 +221,17 @@ func (s *SendService) RequestSend(ctx context.Context, req SendRequest) (SendRes
 		CreatedAt:         now,
 		Metadata:          map[string]any{"idempotency_key": req.IdempotencyKey},
 	}
+	// Surface text / media_url into Metadata so the REST DTO can render the
+	// bubble without dereferencing HBase (payload storage) later. Inbound
+	// does the same in InboundService — outbound must match.
+	if req.Type == string(msgdom.TypeText) && len(req.Payload) > 0 {
+		var t struct {
+			Body string `json:"body"`
+		}
+		if json.Unmarshal(req.Payload, &t) == nil && t.Body != "" {
+			row.Metadata["text"] = t.Body
+		}
+	}
 	if err := s.deps.Messages.Create(ctx, row); err != nil {
 		return SendResponse{}, fmt.Errorf("persist message: %w", err)
 	}
