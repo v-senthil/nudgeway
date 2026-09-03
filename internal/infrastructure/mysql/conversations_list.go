@@ -37,6 +37,12 @@ func (c *Conversations) ListForOrg(ctx context.Context, orgID organization.ID) (
 	if err != nil {
 		return nil, fmt.Errorf("conversations list: %w", err)
 	}
+	// Latest-message subquery drives both the preview text and the
+	// last_message_at fallback — conversations.last_message_at is not
+	// populated by the InboundService today; the freshest signal is the
+	// max(created_at) across the conversation's rows. Preview text is
+	// pulled from the newest message's JSON metadata.text (populated by
+	// the InboundService when the payload was a text/media message).
 	const q = `
 		SELECT
 		    c.id,
@@ -44,10 +50,17 @@ func (c *Conversations) ListForOrg(ctx context.Context, orgID organization.ID) (
 		    COALESCE(ct.display_name, '') AS contact_display,
 		    c.status,
 		    COALESCE(be.channel, '') AS channel,
-		    c.last_message_at,
-		    (SELECT m.payload_ref FROM messages m
-		       WHERE m.org_id = c.org_id AND m.conversation_id = c.id
-		       ORDER BY m.created_at DESC LIMIT 1) AS last_preview,
+		    COALESCE(c.last_message_at,
+		             (SELECT MAX(m.created_at) FROM messages m
+		                WHERE m.org_id = c.org_id AND m.conversation_id = c.id)
+		            ) AS last_message_at,
+		    COALESCE(
+		      (SELECT JSON_UNQUOTE(JSON_EXTRACT(m.metadata, '$.text'))
+		         FROM messages m
+		         WHERE m.org_id = c.org_id AND m.conversation_id = c.id
+		         ORDER BY m.created_at DESC LIMIT 1),
+		      ''
+		    ) AS last_preview,
 		    c.unread_count,
 		    c.created_at
 		  FROM conversations c
@@ -55,7 +68,10 @@ func (c *Conversations) ListForOrg(ctx context.Context, orgID organization.ID) (
 		  LEFT JOIN sessions_comm s     ON s.id  = c.session_id AND s.org_id  = c.org_id
 		  LEFT JOIN business_endpoints be ON be.id = s.business_endpoint_id AND be.org_id = s.org_id
 		  WHERE c.org_id = ?
-		  ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
+		  ORDER BY COALESCE(c.last_message_at,
+		                     (SELECT MAX(m.created_at) FROM messages m
+		                        WHERE m.org_id = c.org_id AND m.conversation_id = c.id),
+		                     c.created_at) DESC
 		  LIMIT 200`
 	rows, err := c.db.QueryContext(ctx, q, orgBytes)
 	if err != nil {
