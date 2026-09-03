@@ -199,20 +199,29 @@ func (r *Integrations) Delete(ctx context.Context, orgID organization.ID, id int
 // map (secret name → value). The map is empty when no
 // integration_credentials row exists. Requires an Envelope on the
 // repository.
+//
+// When orgID is empty, the lookup falls back to the id-only PK path — used
+// by the webhook ingress, which only has an integration_id from the URL
+// and derives the org from the returned row.
 func (r *Integrations) GetWithSecrets(ctx context.Context, orgID organization.ID, id integration.ID) (integration.Integration, map[string]string, error) {
 	if r.env == nil {
 		return integration.Integration{}, nil, errors.New("integrations: envelope not configured")
 	}
-	i, err := r.Get(ctx, orgID, id)
+	var i integration.Integration
+	var err error
+	if orgID == "" {
+		i, err = r.getByID(ctx, id)
+	} else {
+		i, err = r.Get(ctx, orgID, id)
+	}
 	if err != nil {
 		return integration.Integration{}, nil, err
 	}
-	orgBytes, _ := ulidToBytes(string(orgID))
 	idBytes, _ := ulidToBytes(string(id))
 	var ct []byte
 	err = r.db.QueryRowContext(ctx,
-		`SELECT ciphertext FROM integration_credentials WHERE org_id = ? AND integration_id = ? LIMIT 1`,
-		orgBytes, idBytes,
+		`SELECT ciphertext FROM integration_credentials WHERE integration_id = ? LIMIT 1`,
+		idBytes,
 	).Scan(&ct)
 	if errors.Is(err, sql.ErrNoRows) {
 		return i, map[string]string{}, nil
@@ -229,6 +238,19 @@ func (r *Integrations) GetWithSecrets(ctx context.Context, orgID organization.ID
 		return integration.Integration{}, nil, fmt.Errorf("integrations credentials json: %w", err)
 	}
 	return i, secrets, nil
+}
+
+// getByID looks up an Integration by primary key alone. Used only by
+// GetWithSecrets when the caller (webhook ingress) has no org context.
+func (r *Integrations) getByID(ctx context.Context, id integration.ID) (integration.Integration, error) {
+	idBytes, err := ulidToBytes(string(id))
+	if err != nil {
+		return integration.Integration{}, fmt.Errorf("integrations id: %w", err)
+	}
+	const q = `SELECT id, org_id, type, provider, name, status, config, credentials_ref, capabilities, health, created_at, updated_at
+	           FROM integrations WHERE id = ? LIMIT 1`
+	row := r.db.QueryRowContext(ctx, q, idBytes)
+	return scanIntegration(row.Scan)
 }
 
 // scanIntegration decodes a row into integration.Integration.

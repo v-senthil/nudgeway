@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"bufio"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"time"
 )
@@ -34,4 +37,16 @@ type statusWriter struct {
 func (s *statusWriter) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack forwards to the underlying ResponseWriter's Hijacker so WebSocket
+// upgrades (via nhooyr.io/websocket) work through the middleware chain.
+// Standard Go http.ResponseWriter supports http.Hijacker; wrapping it here
+// would break WebSocket if we didn't proxy the method.
+func (s *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := s.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("statusWriter: upstream does not implement http.Hijacker")
+	}
+	return h.Hijack()
 }

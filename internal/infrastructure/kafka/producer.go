@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oklog/ulid/v2"
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/fullwa/fullwa/internal/domain/events"
@@ -42,7 +43,10 @@ func (p *Producer) Enqueue(ctx context.Context, j queue.Job) (string, error) {
 		return "", fmt.Errorf("kafka: enqueue: lane is required")
 	}
 	if j.ID == "" {
-		return "", fmt.Errorf("kafka: enqueue: id is required")
+		// Callers that don't care about partition affinity (webhook ingress —
+		// each delivery is independent) leave ID empty. Mint one so the
+		// record still has a stable partition key.
+		j.ID = ulid.Make().String()
 	}
 	body, err := EncodeJob(j)
 	if err != nil {

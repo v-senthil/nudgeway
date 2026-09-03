@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/oklog/ulid/v2"
+
 	"github.com/fullwa/fullwa/internal/domain/integration"
 	"github.com/fullwa/fullwa/internal/domain/organization"
 )
@@ -24,6 +26,11 @@ func NewWebhookEvents(db *sql.DB) *WebhookEvents { return &WebhookEvents{db: db}
 // created=false with nil error on UNIQUE(integration_id, external_event_id)
 // duplicates so callers can absorb duplicate deliveries as no-ops.
 func (r *WebhookEvents) Insert(ctx context.Context, evt integration.WebhookEvent) (bool, error) {
+	// Mint an ID when the caller left it empty — webhook events are opaque
+	// bookkeeping rows; the ingress helper does not need to allocate its own.
+	if evt.ID == "" {
+		evt.ID = integration.WebhookEventID(ulid.Make().String())
+	}
 	idBytes, err := ulidToBytes(string(evt.ID))
 	if err != nil {
 		return false, fmt.Errorf("webhook_events id: %w", err)

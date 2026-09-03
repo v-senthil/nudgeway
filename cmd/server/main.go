@@ -137,9 +137,16 @@ func run() error {
 			logger.Warn("kafka admin failed", slog.Any("err", aErr))
 		} else {
 			topicCtx, topicCancel := context.WithTimeout(ctx, 10*time.Second)
+			// EnsureTopics wants fully-qualified names; TopicName is the
+			// canonical builder — matches what the producer computes on send.
+			prefix := cfg.Kafka.TopicsPrefix
+			required := []string{
+				fkafka.TopicName(prefix, fkafka.KindJob, "webhook.process"),
+				fkafka.TopicName(prefix, fkafka.KindJob, "message.send"),
+			}
 			if err := fkafka.EnsureTopics(topicCtx, adm,
 				cfg.Kafka.ReplicationFactor, cfg.Kafka.DefaultPartitions,
-				[]string{"webhook.process", "message.send"}); err != nil {
+				required); err != nil {
 				logger.Warn("kafka ensure topics failed", slog.Any("err", err))
 			} else {
 				logger.Info("kafka topics ready")

@@ -176,6 +176,30 @@ func (s *InboundService) handleInbound(
 	}
 
 	contactID := contact.ID(s.deps.NewID())
+	// The schema has a mutual FK between contacts and contact_identities:
+	// identity.contact_id → contacts.id (NOT NULL), and
+	// contact.primary_identity_id → contact_identities.id (nullable).
+	// Bootstrap by inserting the Contact first with PrimaryIdentityID=nil,
+	// then the Identity, then re-upsert the Contact with the primary set.
+	display := payload.FromDisplayName
+	if display == "" {
+		display = fallbackDisplayName(normalizedPhone)
+	}
+	if norm, err := contact.NormalizeDisplayName(display); err == nil {
+		display = norm
+	}
+	now := s.deps.Now()
+	if err := s.deps.Contacts.Upsert(ctx, contact.Contact{
+		ID:          contactID,
+		OrgID:       orgID,
+		DisplayName: display,
+		LastSeenAt:  &now,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}); err != nil {
+		return fmt.Errorf("inbound: upsert contact (pre-identity): %w", err)
+	}
+
 	ident, created, err := s.deps.Identities.FindOrCreate(
 		ctx, orgID, contactID, identityTypeForProvider(providerKey), providerKey, payload.From, normalizedPhone,
 	)
@@ -187,16 +211,8 @@ func (s *InboundService) handleInbound(
 	contactID = ident.ContactID
 
 	if created {
-		display := payload.FromDisplayName
-		if display == "" {
-			display = fallbackDisplayName(normalizedPhone)
-		}
-		if norm, err := contact.NormalizeDisplayName(display); err == nil {
-			display = norm
-		}
 		primary := contact.IdentityID(ident.ID)
-		now := s.deps.Now()
-		c := contact.Contact{
+		if err := s.deps.Contacts.Upsert(ctx, contact.Contact{
 			ID:                contactID,
 			OrgID:             orgID,
 			DisplayName:       display,
@@ -204,9 +220,8 @@ func (s *InboundService) handleInbound(
 			LastSeenAt:        &now,
 			CreatedAt:         now,
 			UpdatedAt:         now,
-		}
-		if err := s.deps.Contacts.Upsert(ctx, c); err != nil {
-			return fmt.Errorf("inbound: upsert contact: %w", err)
+		}); err != nil {
+			return fmt.Errorf("inbound: upsert contact (post-identity): %w", err)
 		}
 	}
 
