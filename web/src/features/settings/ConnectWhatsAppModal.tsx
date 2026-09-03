@@ -131,10 +131,8 @@ export function ConnectWhatsAppModal({ open, onClose }: Props) {
             </Button>
             <Button
               variant="primary"
-              onClick={(e) => {
-                const form = (e.currentTarget as HTMLButtonElement).closest('form');
-                if (form !== null) form.requestSubmit();
-              }}
+              type="submit"
+              form="connect-whatsapp-form"
               loading={create.isPending}
               disabled={!canSubmit}
             >
@@ -149,7 +147,7 @@ export function ConnectWhatsAppModal({ open, onClose }: Props) {
       }
     >
       {step === 'form' ? (
-        <form onSubmit={handleSubmit} className="space-y-3">
+        <form id="connect-whatsapp-form" onSubmit={handleSubmit} className="space-y-3">
           <Input
             label="Display name"
             placeholder="e.g. Support line"

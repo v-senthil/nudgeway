@@ -255,6 +255,23 @@ func (s *InboundService) handleInbound(
 	if payload.Raw != nil {
 		msg.Metadata = payload.Raw
 	}
+	// Surface the message body / caption into metadata.text so the REST DTO
+	// can render it without dereferencing HBase. Real payload storage lands
+	// with the HBase infra work.
+	if msg.Metadata == nil {
+		msg.Metadata = map[string]any{}
+	}
+	if t, ok := payload.Payload.(message.TextPayload); ok && t.Body != "" {
+		msg.Metadata["text"] = t.Body
+	}
+	if m, ok := payload.Payload.(message.MediaPayload); ok {
+		if m.Caption != "" {
+			msg.Metadata["text"] = m.Caption
+		}
+		if m.URL != "" {
+			msg.Metadata["media_url"] = m.URL
+		}
+	}
 
 	if err := s.deps.Messages.Create(ctx, msg); err != nil {
 		if IsDuplicateMessage(err) {

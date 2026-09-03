@@ -91,6 +91,8 @@ type MessageDTO struct {
 	Sender            string  `json:"sender"`
 	Recipient         string  `json:"recipient"`
 	ProviderMessageID string  `json:"provider_message_id,omitempty"`
+	Text              string  `json:"text,omitempty"`
+	MediaURL          string  `json:"media_url,omitempty"`
 	CreatedAt         string  `json:"created_at"`
 	SentAt            *string `json:"sent_at,omitempty"`
 	DeliveredAt       *string `json:"delivered_at,omitempty"`
@@ -99,7 +101,7 @@ type MessageDTO struct {
 
 // MessageListResponse is the 200 body of GET /api/v1/conversations/{id}/messages.
 type MessageListResponse struct {
-	Messages   []MessageDTO `json:"messages"`
+	Items      []MessageDTO `json:"items"`
 	NextCursor string       `json:"next_cursor,omitempty"`
 }
 
@@ -244,11 +246,11 @@ func (h *messagesHandler) listByConversation(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	dto := MessageListResponse{
-		Messages:   make([]MessageDTO, 0, len(page.Messages)),
+		Items:      make([]MessageDTO, 0, len(page.Messages)),
 		NextCursor: page.NextCursor,
 	}
 	for _, m := range page.Messages {
-		dto.Messages = append(dto.Messages, toMessageDTO(m))
+		dto.Items = append(dto.Items, toMessageDTO(m))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -354,6 +356,14 @@ func toMessageDTO(m msgdom.Message) MessageDTO {
 	if m.ReadAt != nil {
 		s := m.ReadAt.UTC().Format("2006-01-02T15:04:05Z07:00")
 		dto.ReadAt = &s
+	}
+	if m.Metadata != nil {
+		if v, ok := m.Metadata["text"].(string); ok {
+			dto.Text = v
+		}
+		if v, ok := m.Metadata["media_url"].(string); ok {
+			dto.MediaURL = v
+		}
 	}
 	return dto
 }
