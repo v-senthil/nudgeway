@@ -2,7 +2,11 @@
 
 Every change to `internal/api/openapi/openapi.yaml` gets an entry here.
 
-## Unreleased — Phase 0 Task 3
+## 0.1.1 — 2026-09-04
+
+- **`Me` schema** now includes required `email` and `display_name`. Fixes a frontend inbox crash where the initials helper called `.trim()` on undefined. (`3bc7132`)
+
+## 0.1.0-phase0-auth — 2026-09-03
 
 - Added `GET /api/v1/auth/csrf` — issues the double-submit CSRF cookie for the first login.
 - Added `POST /api/v1/auth/login` — email + password login; sets session + CSRF cookies.

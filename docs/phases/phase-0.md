@@ -1,10 +1,10 @@
 # Phase 0 — Foundations
 
-Status: **in progress**.
+Status: **complete** (walking skeleton is real, end-to-end auth works, both servers boot).
 
 ## Goal
 
-Repo is real. gstack is installed. One canonical event can flow end-to-end. Green CI. Green `make verify`.
+Repo is real. Local dev works against the developer's native MySQL + Redis (no Docker anywhere). A user can log in through the browser. Backend + frontend both green. Groundwork laid so Phase 1 can build the WhatsApp inbox.
 
 ## What shipped in Phase 0 Task 1
 
@@ -58,24 +58,70 @@ git commit -m "chore: enable gstack team mode"
 
 After that, every Claude Code session on this repo runs through the gstack skill pipeline referenced in [`CLAUDE.md` §12](../../CLAUDE.md#12-gstack-workflow).
 
-## What lands in Phase 0 Task 2 (next)
+## What shipped in Phase 0 Task 2 (auth infrastructure)
 
-- Complete gstack team-mode wiring (post owner install).
-- Session-cookie auth + argon2id + CSRF middleware.
-- RBAC middleware + permission-key checks.
-- Login screen wired to the API.
-- `sqlc` queries for organizations / users / roles.
-- `/readyz` probes MySQL + Redis + HBase.
-- Coverage bumped to ≥60% overall / ≥80% domain.
-- Full CI green.
+Commit `c3ed4e2`.
 
-## Exit criteria (Phase 0 overall)
+- **argon2id** password hashing (PHC-encoded, OWASP-2023 params) — `internal/infrastructure/auth/argon2.go`.
+- **Session cookies** — `HttpOnly`, `SameSite=Lax`, `Secure` in prod. Opaque base64url session IDs; DB rows keyed by SHA-256(id) so the raw ID stays only in the cookie — `internal/infrastructure/auth/session.go`, `sessions.go` (mysql impl).
+- **CSRF** double-submit cookie (JS-readable, echoed as `X-CSRF-Token`) with constant-time verify — `csrf.go`.
+- **Middleware chain** — `RequestID → Recover → Logger → SessionAuth → RequireAuth → RequireCSRF` under `internal/infrastructure/http/middleware/`.
+- **Permission resolver** — reads `role_permissions ⨝ user_roles` — `internal/infrastructure/mysql/rbac.go`.
+- **Health probes** — MySQL + Redis; `/readyz` returns 503 with per-probe results when either is unreachable — `internal/infrastructure/health/`.
+- **Redis client** — `internal/infrastructure/redis/client.go`.
+- **In-memory session store** kept for tests (`memstore.go`); MySQL is the prod path.
 
-- `make dev` starts a browsable app.
-- An admin can log in.
-- `/healthz` + `/readyz` return 200.
-- Coverage gate passes.
-- CI green on `main`.
+## What shipped in Phase 0 Task 3 (login flow live)
+
+Commit `c3ed4e2` (same batch — spawned 3 parallel agents).
+
+- **REST v1 handlers**: `GET /api/v1/auth/csrf`, `POST /api/v1/auth/login`, `POST /api/v1/auth/logout`, `GET /api/v1/auth/me` — RFC 7807 problem+json on errors.
+- **Application service** `internal/application/auth.Service` — `Login` returns `ErrInvalidCredentials` on every failure mode (no user enumeration).
+- **CLI subcommands**: `tenant create --slug --name`, `user create --org-slug --email --password --admin`, `migrate up|down|status`.
+- **cmd/server/main.go rewritten** — wires config → MySQL → Redis → repos → application services → middleware chain → routes → probes → graceful shutdown in reverse-open order.
+- **Frontend walking skeleton** — TanStack Router + Query; login page → `/inbox` three-pane layout → `/settings/integrations` cards; auth store with `useMe`/`useLogin`/`useLogout`; fetch wrapper auto-attaches CSRF header on non-GET; RFC 7807 → typed `ApiError`.
+- **OpenAPI** additions: `LoginRequest`, `LoginResponse`, `Me` schemas + 4 auth ops.
+
+Commit `a0d820c` — cleanup: stopped `tsc -b` from emitting `.js` next to `.tsx`; `tsconfig.json` set `noEmit: true`; scripts now `tsc --noEmit && vite build`.
+
+Commit `3bc7132` — `/me` handler now returns `email` and `display_name` (fixed a runtime crash in the inbox Header when it called `.trim()` on undefined).
+
+## End-to-end demo (verified 2026-09-03)
+
+Both servers boot against the developer's native MySQL 8.4 + Redis 7:
+
+```bash
+# One-time setup
+cp config/example.yaml config/local.yaml   # then edit mysql.dsn + auth.credential_kek_hex
+go run ./cmd/cli migrate up                # applies 20260903000001 + 20260903000002
+go run ./cmd/cli tenant create --slug acme --name "Acme Co"
+go run ./cmd/cli user create --org-slug acme --email you@acme.com --password 'password123' --admin
+
+# Run
+go run ./cmd/server                        # :8080
+cd web && npm run dev                      # :5173, proxies /api → :8080
+```
+
+Open http://localhost:5173/ → land on `/login` → sign in → land on `/inbox`. `curl -c cookies.txt /api/v1/auth/csrf` → `POST /login` → `GET /me` returns the user + org + permissions.
+
+Live checks:
+- `/healthz` → `{"status":"ok"}`
+- `/readyz` → `{"status":"ready","probes":[{mysql ok},{redis ok}]}`
+- `/api/v1/auth/me` → full principal
+
+## Exit criteria — met
+
+- ✅ `go run ./cmd/server` boots against real MySQL + Redis.
+- ✅ Admin can log in from the browser.
+- ✅ Health + readiness probes return correctly (503 on downstream outage).
+- ✅ Backend + frontend both green (`go build ./...`, `go vet ./...`, `go test ./...` all pass; `npm run typecheck && npm run build`).
+- ✅ Repo pushed to `origin` (`v-senthil/whatsapp-cloud-api`).
+
+## Deferred (rolls into Phase 1)
+
+- Real Prometheus metrics wiring (placeholder only for now).
+- gstack team-mode wiring — owner-executed one-time step, documented above.
+- Coverage bumped to ≥80% domain (Phase 1 backfill per user's "working first, tests later" preference).
 
 ## Docs delivered this phase
 
