@@ -153,9 +153,23 @@ func (in *Ingress) Handle(w http.ResponseWriter, r *http.Request, providerKey, i
 	if err := verifier.VerifySignature(r.Header, raw, appSecret); err != nil {
 		writeProblem(w, r, http.StatusUnauthorized, "signature_verification_failed",
 			"signature verification failed")
+		// Diagnostic: log what would confirm/refute an app_secret mismatch
+		// vs a body-tampering issue. We log lengths and prefixes only —
+		// never the secret itself.
+		gotSig := r.Header.Get("X-Hub-Signature-256")
+		if gotSig == "" {
+			gotSig = "(missing)"
+		}
+		gotPrefix := gotSig
+		if len(gotPrefix) > 20 {
+			gotPrefix = gotPrefix[:20] + "…"
+		}
 		log.Warn("webhook rejected: signature",
 			slog.Bool("sig_ok", false),
 			slog.Any("err", err),
+			slog.Int("body_len", len(raw)),
+			slog.Int("secret_len", len(appSecret)),
+			slog.String("got_sig_prefix", gotPrefix),
 		)
 		return
 	}
