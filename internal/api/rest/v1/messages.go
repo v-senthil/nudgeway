@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -290,13 +291,30 @@ func (h *messagesHandler) logger() *slog.Logger {
 
 // selectPayload picks the matching payload sub-object off the SendMessageRequest
 // based on Type. Returns the raw JSON bytes to hand to the application layer.
+//
+// Ergonomic shorthand: for type=text the frontend may send `text: "Hello"`
+// (a JSON string) instead of the canonical `text: {"body": "Hello"}` shape.
+// We normalise here so the composer stays simple.
 func selectPayload(req SendMessageRequest) ([]byte, error) {
 	switch msgdom.Type(req.Type) {
 	case msgdom.TypeText:
 		if req.Text == nil {
 			return nil, errors.New("text payload required for type=text")
 		}
-		return *req.Text, nil
+		raw := *req.Text
+		// If the operator sent a bare string, wrap it into {"body": "..."}.
+		if len(raw) > 0 && raw[0] == '"' {
+			var body string
+			if err := json.Unmarshal(raw, &body); err != nil {
+				return nil, fmt.Errorf("text: %w", err)
+			}
+			wrapped, err := json.Marshal(map[string]string{"body": body})
+			if err != nil {
+				return nil, fmt.Errorf("text wrap: %w", err)
+			}
+			return wrapped, nil
+		}
+		return raw, nil
 	case msgdom.TypeTemplate:
 		if req.Template == nil {
 			return nil, errors.New("template payload required for type=template")
