@@ -5,6 +5,8 @@ const styles: Record<IntegrationStatus, { label: string; className: string }> = 
   pending: { label: 'Pending', className: 'bg-amber-50 text-amber-700 ring-amber-200' },
   degraded: { label: 'Degraded', className: 'bg-amber-50 text-amber-800 ring-amber-300' },
   auth_failed: { label: 'Auth failed', className: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  rate_limited: { label: 'Rate limited', className: 'bg-amber-50 text-amber-800 ring-amber-300' },
+  disconnected: { label: 'Not connected', className: 'bg-slate-100 text-slate-600 ring-slate-200' },
   disabled: { label: 'Disabled', className: 'bg-slate-100 text-slate-600 ring-slate-200' },
   unknown: { label: 'Unknown', className: 'bg-slate-100 text-slate-600 ring-slate-200' },
 };

@@ -57,9 +57,12 @@ func integrationStatusFromDB(s string) integration.Status {
 	case "error":
 		return integration.StatusDegraded
 	case "pending":
-		return integration.StatusConnected // treat pending as connected pre-verification
+		// Freshly created or awaiting Test — surface as Disconnected so
+		// the frontend badge reads "Not connected" instead of falsely
+		// green.
+		return integration.StatusDisconnected
 	default:
-		return integration.StatusConnected
+		return integration.StatusDisconnected
 	}
 }
 

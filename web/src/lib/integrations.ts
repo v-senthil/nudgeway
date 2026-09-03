@@ -6,6 +6,8 @@ export type IntegrationStatus =
   | 'connected'
   | 'degraded'
   | 'auth_failed'
+  | 'rate_limited'
+  | 'disconnected'
   | 'disabled'
   | 'unknown';
 
