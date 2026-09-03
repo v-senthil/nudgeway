@@ -1,5 +1,0 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
-import { Button } from '../../components/Button';
-export function IntegrationCard({ name, description, initials, accentClass, onConnect }) {
-    return (_jsxs("div", { className: "flex items-center justify-between rounded-xl border border-slate-200 bg-white p-4 shadow-sm", children: [_jsxs("div", { className: "flex items-center gap-3", children: [_jsx("div", { className: `flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold text-white ${accentClass ?? 'bg-slate-500'}`, "aria-hidden": "true", children: initials }), _jsxs("div", { children: [_jsx("p", { className: "text-sm font-semibold text-slate-900", children: name }), _jsx("p", { className: "text-xs text-slate-500", children: description })] })] }), _jsxs("div", { className: "flex items-center gap-3", children: [_jsx("span", { className: "text-xs font-medium text-slate-500", children: "Not connected" }), _jsx(Button, { variant: "secondary", onClick: onConnect, children: "Connect" })] })] }));
-}

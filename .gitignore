@@ -16,6 +16,13 @@ node_modules/
 web/dist/
 .pnpm-store/
 web/coverage/
+web/**/*.tsbuildinfo
+web/vite.config.js
+web/src/**/*.js
+web/src/**/*.js.map
+# but keep the JS config files at the root of web/
+!web/postcss.config.js
+!web/tailwind.config.js
 
 # local config & secrets
 config/local.yaml
