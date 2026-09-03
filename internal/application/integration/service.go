@@ -40,6 +40,11 @@ type IntegrationSecretsRepo interface {
 	// GetWithSecrets returns the Integration together with a decrypted
 	// secrets map. Never log the returned map.
 	GetWithSecrets(ctx context.Context, orgID organization.ID, id dintegration.ID) (dintegration.Integration, map[string]string, error)
+
+	// SaveSecrets envelope-encrypts and persists the secret map for an
+	// integration. Called by Create right after the integration row is
+	// inserted so the REST and CLI paths persist secrets the same way.
+	SaveSecrets(ctx context.Context, orgID organization.ID, id dintegration.ID, secrets map[string]string) error
 }
 
 // BusinessEndpointUpserter is the write path used by Create to ensure a
@@ -242,6 +247,17 @@ func (s *Service) Create(ctx context.Context, orgID organization.ID, in CreateIn
 	}
 	if err := s.repo.Create(ctx, row); err != nil {
 		return PublicIntegration{}, nil, fmt.Errorf("integration create: %w", err)
+	}
+
+	// Persist secrets right after the integration row lands so the FK
+	// (integration_credentials.integration_id → integrations.id) is
+	// satisfied. Without this, the REST-created row would have no
+	// credentials and the webhook verify handshake would 403 (Meta's
+	// "Callback verification failed").
+	if s.secrets != nil && len(in.Secrets) > 0 {
+		if err := s.secrets.SaveSecrets(ctx, orgID, row.ID, in.Secrets); err != nil {
+			return PublicIntegration{}, nil, fmt.Errorf("integration save secrets: %w", err)
+		}
 	}
 
 	// Upsert the business endpoint for channel-kind providers.
