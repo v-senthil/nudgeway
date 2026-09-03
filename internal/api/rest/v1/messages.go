@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -15,6 +16,26 @@ import (
 	"github.com/fullwa/fullwa/internal/ports/repository"
 )
 
+// ConversationSummary is the compact conversation row returned by the
+// inbox listing. Wire-up time supplies a lister that returns these.
+type ConversationSummary struct {
+	ID                 string  `json:"id"`
+	OrgID              string  `json:"org_id"`
+	ContactID          string  `json:"contact_id"`
+	ContactName        string  `json:"contact_name,omitempty"`
+	Status             string  `json:"status"`
+	Channel            string  `json:"channel,omitempty"`
+	LastMessageAt      *string `json:"last_message_at,omitempty"`
+	LastMessagePreview string  `json:"last_message_preview,omitempty"`
+	UnreadCount        int     `json:"unread_count,omitempty"`
+	CreatedAt          string  `json:"created_at"`
+}
+
+// ConversationsLister returns the inbox summary rows for one org.
+type ConversationsLister interface {
+	ListConversations(ctx context.Context, orgID string) ([]ConversationSummary, error)
+}
+
 // MessagesDeps bundles the dependencies of the message + conversation REST
 // endpoints. Provided by cmd/server at wire-up time.
 type MessagesDeps struct {
@@ -22,9 +43,10 @@ type MessagesDeps struct {
 	Send *appmsg.SendService
 	// Messages powers GET /conversations/{id}/messages listings.
 	Messages repository.MessageRepo
-	// IncludeConversationsIndex installs a minimal empty-list handler at
-	// GET /api/v1/conversations so the frontend does not 404. Set to true
-	// ONLY when no peer package supplies the real implementation.
+	// Conversations powers GET /api/v1/conversations. Nil falls back to
+	// the empty-list stub when IncludeConversationsIndex is set.
+	Conversations ConversationsLister
+	// IncludeConversationsIndex installs the /api/v1/conversations handler.
 	IncludeConversationsIndex bool
 	// Logger receives one structured record per request.
 	Logger *slog.Logger
@@ -233,17 +255,28 @@ func (h *messagesHandler) listByConversation(w http.ResponseWriter, r *http.Requ
 	_ = json.NewEncoder(w).Encode(dto)
 }
 
-// listConversationsStub returns an empty conversation list. Placeholder that
-// unblocks the frontend until the full list impl lands under Phase 1 Task 4.
+// listConversationsStub calls into MessagesDeps.Conversations when provided
+// and falls back to an empty list otherwise. Response shape uses `items` to
+// match the frontend's ListResponse convention.
 func (h *messagesHandler) listConversationsStub(w http.ResponseWriter, r *http.Request) {
-	_, ok := middleware.PrincipalFrom(r.Context())
+	pr, ok := middleware.PrincipalFrom(r.Context())
 	if !ok {
 		writeProblem(w, r, http.StatusUnauthorized, "unauthenticated", "session required")
 		return
 	}
+	items := []ConversationSummary{}
+	if h.d.Conversations != nil {
+		rows, err := h.d.Conversations.ListConversations(r.Context(), pr.OrgID)
+		if err != nil {
+			h.logger().Error("list conversations", slog.Any("err", err), slog.String("org_id", pr.OrgID))
+			writeProblem(w, r, http.StatusInternalServerError, "internal", "list conversations")
+			return
+		}
+		items = rows
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(ConversationListResponse{Conversations: []any{}})
+	_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 }
 
 func (h *messagesHandler) logger() *slog.Logger {

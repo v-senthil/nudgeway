@@ -30,6 +30,7 @@ import (
 	appmsg "github.com/fullwa/fullwa/internal/application/message"
 	devents "github.com/fullwa/fullwa/internal/domain/events"
 	dintegration "github.com/fullwa/fullwa/internal/domain/integration"
+	"github.com/fullwa/fullwa/internal/domain/organization"
 	"github.com/fullwa/fullwa/internal/events"
 	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
 	"github.com/fullwa/fullwa/internal/infrastructure/config"
@@ -295,6 +296,7 @@ func run() error {
 		Messages: v1.MessagesDeps{
 			Send:                      sendSvc,
 			Messages:                  messages,
+			Conversations:             conversationsLister{repo: conversations},
 			IncludeConversationsIndex: true,
 			Logger:                    logger,
 		},
@@ -509,4 +511,37 @@ type disabledEnqueuer struct{}
 // Enqueue always fails; caller propagates as 5xx.
 func (disabledEnqueuer) Enqueue(_ context.Context, _ queue.Job) (string, error) {
 	return "", errors.New("queue disabled: kafka is not connected")
+}
+
+// conversationsLister adapts *mysql.Conversations to v1.ConversationsLister
+// without pushing the infra type into the API package.
+type conversationsLister struct{ repo *fmysql.Conversations }
+
+// ListConversations implements v1.ConversationsLister.
+func (c conversationsLister) ListConversations(ctx context.Context, orgID string) ([]v1.ConversationSummary, error) {
+	rows, err := c.repo.ListForOrg(ctx, organization.ID(orgID))
+	if err != nil {
+		return nil, err
+	}
+	out := make([]v1.ConversationSummary, 0, len(rows))
+	for _, r := range rows {
+		var lastAt *string
+		if r.LastMessageAt != nil {
+			s := r.LastMessageAt.UTC().Format(time.RFC3339)
+			lastAt = &s
+		}
+		out = append(out, v1.ConversationSummary{
+			ID:                 string(r.ID),
+			OrgID:              string(r.OrgID),
+			ContactID:          r.ContactID,
+			ContactName:        r.ContactDisplay,
+			Status:             string(r.Status),
+			Channel:            r.Channel,
+			LastMessageAt:      lastAt,
+			LastMessagePreview: r.LastMessagePreview,
+			UnreadCount:        r.UnreadCount,
+			CreatedAt:          r.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+	return out, nil
 }
