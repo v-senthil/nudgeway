@@ -71,6 +71,96 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /api/v1/auth/csrf:
+    get:
+      tags: [auth]
+      operationId: getAuthCsrf
+      summary: Issue a CSRF cookie.
+      description: |
+        Sets a fresh `fullwa_csrf` cookie so the caller can echo the token in
+        the `X-CSRF-Token` header on subsequent state-changing requests
+        (double-submit cookie pattern). No session required.
+      security: []
+      responses:
+        '204':
+          description: Cookie issued.
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/auth/login:
+    post:
+      tags: [auth]
+      operationId: postAuthLogin
+      summary: Log in with email + password.
+      description: |
+        Authenticates the caller against MySQL-backed users, issues a session
+        cookie (`fullwa_session`) and a fresh CSRF cookie (`fullwa_csrf`).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Authenticated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        '400':
+          description: Bad request
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Invalid credentials
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/auth/logout:
+    post:
+      tags: [auth]
+      operationId: postAuthLogout
+      summary: Invalidate the current session.
+      description: |
+        Deletes the session server-side and clears the session + CSRF cookies.
+        Requires a valid session and matching CSRF token.
+      responses:
+        '204':
+          description: Logged out.
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/auth/me:
+    get:
+      tags: [auth]
+      operationId: getAuthMe
+      summary: Return the current principal.
+      description: Returns the authenticated user, its org, and permission set.
+      responses:
+        '200':
+          description: The current principal.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Me' }
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -92,6 +182,48 @@ components:
         status:
           type: string
           examples: ['ok', 'ready']
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          examples: ['admin@example.com']
+        password:
+          type: string
+          format: password
+          minLength: 1
+
+    LoginResponse:
+      type: object
+      required: [user_id, org_id, permissions, expires_at]
+      properties:
+        user_id:
+          type: string
+          description: ULID of the authenticated user.
+        org_id:
+          type: string
+          description: ULID of the user's organization.
+        permissions:
+          type: array
+          items: { type: string }
+          description: Permission keys granted to the user in this org.
+        expires_at:
+          type: string
+          format: date-time
+
+    Me:
+      type: object
+      required: [user_id, org_id, org_name, permissions]
+      properties:
+        user_id: { type: string }
+        org_id: { type: string }
+        org_name: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
 
     Problem:
       type: object

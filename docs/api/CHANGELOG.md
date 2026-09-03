@@ -2,6 +2,14 @@
 
 Every change to `internal/api/openapi/openapi.yaml` gets an entry here.
 
+## Unreleased — Phase 0 Task 3
+
+- Added `GET /api/v1/auth/csrf` — issues the double-submit CSRF cookie for the first login.
+- Added `POST /api/v1/auth/login` — email + password login; sets session + CSRF cookies.
+- Added `POST /api/v1/auth/logout` — invalidates the session; clears cookies. Requires CSRF.
+- Added `GET /api/v1/auth/me` — returns the current principal, org, and permissions.
+- Added `LoginRequest`, `LoginResponse`, `Me` schemas.
+
 ## 0.1.0-phase0 — 2026-09-03
 
 - Initial spec.
