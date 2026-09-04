@@ -2,12 +2,11 @@
 
 Nudgeway needs **MySQL 8+**, **Redis 7+**, **Kafka 3+**, and **HBase 2+** running on the local machine before `make dev`.
 
-Two paths:
+Three paths — pick one, don't mix (ports collide otherwise):
 
-1. [Native install](#native-install) — recommended for day-to-day dev. Every service becomes a normal OS service, so restarts survive reboots and there's no VM overhead.
-2. [Docker Compose](#docker-compose) — one command, everything in a container. Good for CI or when you don't want the services scattered across your OS.
-
-Pick one. Don't mix native + Docker for the same service or ports collide.
+1. [Native install](#native-install) — recommended for day-to-day dev. Every service becomes a normal OS service, restarts survive reboots, no VM overhead.
+2. [Docker Compose](#docker-compose) — one command, all four services in a container. Best for CI, evaluation, or when you don't want them scattered across your OS. Works with Docker Desktop and Podman.
+3. [Apple Containers](#apple-containers-macos-26) — Apple's native OCI runtime on macOS 26+. No Docker Desktop VM, lower overhead, same compose file.
 
 ## Native install
 
@@ -85,12 +84,7 @@ choco install mysql redis-64
 
 Nudgeway ships a [`docker-compose.yml`](../docker-compose.yml) at the repo root that starts all four services with sane dev defaults (ports 3306 / 6379 / 9092 / 2181 / 16010).
 
-Works with:
-- **Docker Desktop** (macOS, Windows, Linux)
-- **Podman** (`podman compose up -d`) — Docker-compatible on Linux + macOS
-- **Apple Containers** — the OCI runtime that ships with macOS 26+, speaks the Compose spec
-
-Bring everything up:
+**Docker Desktop** (macOS, Windows, Linux):
 
 ```bash
 docker compose up -d          # start
@@ -100,9 +94,70 @@ docker compose down           # stop (volumes persist)
 docker compose down --volumes # nuke data
 ```
 
+**Podman** (Linux + macOS, Docker-compatible, no Desktop app):
+
+```bash
+brew install podman           # macOS; on Linux use your package manager
+podman machine init && podman machine start   # macOS only
+podman compose up -d          # same subcommands as docker compose
+```
+
 Everything binds to `127.0.0.1` so `config/example.yaml` values work as-is. HBase takes ~60 seconds to fully warm up on first boot — the healthcheck reflects that.
 
 The Go server + Vite dev server still run natively via `make dev`. This compose file only replaces the four backing services.
+
+## Apple Containers (macOS 26+)
+
+macOS 26 ships `container` — Apple's native OCI runtime built on Virtualization.framework. Same OCI images as Docker, but no Docker Desktop VM (each container gets its own lightweight VM) and no license worries. The `docker-compose.yml` at the repo root works as-is.
+
+```bash
+# One-time setup
+softwareupdate --install --all              # ensure macOS 26 is current
+container system start                       # brings up the container VM daemon
+
+# Bring the stack up using the same compose file
+container compose up -d
+container compose logs -f
+container compose ps
+container compose down
+```
+
+If your macOS 26 install doesn't have `container compose` yet (the compose plugin ships separately in some builds), install it:
+
+```bash
+brew install container-compose               # or: container plugin install compose
+```
+
+Alternative — run each service directly, no compose:
+
+```bash
+container run -d --name nudgeway-mysql \
+  -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=nudgeway \
+  mysql:8.0
+
+container run -d --name nudgeway-redis \
+  -p 6379:6379 redis:7-alpine
+
+container run -d --name nudgeway-kafka \
+  -p 9092:9092 \
+  -e KAFKA_ENABLE_KRAFT=yes \
+  -e KAFKA_CFG_PROCESS_ROLES=broker,controller \
+  -e KAFKA_CFG_NODE_ID=1 \
+  -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@localhost:9093 \
+  -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
+  -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://127.0.0.1:9092 \
+  -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
+  -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
+  -e ALLOW_PLAINTEXT_LISTENER=yes \
+  bitnami/kafka:3.7
+
+container run -d --name nudgeway-hbase \
+  -p 2181:2181 -p 16000:16000 -p 16010:16010 -p 16020:16020 -p 16030:16030 \
+  -e HBASE_MANAGES_ZK=true --hostname hbase \
+  harisekhon/hbase:2.1
+```
+
+Everything binds `127.0.0.1` on the host so `config/example.yaml` works as-is; the Go server + Vite still run natively via `make dev`.
 
 ## Verify
 
