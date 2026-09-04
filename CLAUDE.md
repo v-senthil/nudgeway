@@ -297,6 +297,19 @@ The rule is simple: **if a git diff changes runtime behaviour, at least three fi
 
 ---
 
+## Nudgeway skills
+
+Repo-local skills at [`skills/`](skills/) — one per domain. Any Claude Code agent (or MCP-aware LLM) working against Nudgeway should read the relevant SKILL.md before touching the corresponding surface:
+
+- [`skills/nudgeway-inbox`](skills/nudgeway-inbox/SKILL.md) — conversations, messages, read state
+- [`skills/nudgeway-integrations`](skills/nudgeway-integrations/SKILL.md) — provider CRUD + webhook + test
+- [`skills/nudgeway-templates`](skills/nudgeway-templates/SKILL.md) — template CRUD + sync
+- [`skills/nudgeway-calls`](skills/nudgeway-calls/SKILL.md) — call flow + permissions
+- [`skills/nudgeway-analytics`](skills/nudgeway-analytics/SKILL.md) — KPIs + sparklines + provider-call telemetry
+- [`skills/nudgeway-mcp`](skills/nudgeway-mcp/SKILL.md) — how to run the MCP server + wire it into a client
+
+See [`skills/README.md`](skills/README.md) for the golden rules that apply to every skill (multi-tenancy, CSRF, idempotency, RBAC, audit).
+
 ## gstack skills index
 
 Available in every session (installed at `~/.claude/skills/gstack`):
