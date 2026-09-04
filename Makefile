@@ -13,6 +13,7 @@ PKGS         := ./...
 BUILD_DIR    := ./bin
 SERVER_BIN   := $(BUILD_DIR)/nudgeway
 CLI_BIN      := $(BUILD_DIR)/nudgeway-cli
+MCP_BIN      := $(BUILD_DIR)/nudgeway-mcp
 CONFIG       ?= config/local.yaml
 COVER_FILE   := coverage.out
 COVER_MIN    ?= 60
@@ -129,6 +130,14 @@ build: frontend
 	CGO_ENABLED=0 $(GO) build $(GOFLAGS) -trimpath -ldflags "-s -w" -o $(SERVER_BIN) ./cmd/server
 	CGO_ENABLED=0 $(GO) build $(GOFLAGS) -trimpath -ldflags "-s -w" -o $(CLI_BIN)    ./cmd/cli
 	@ls -lh $(SERVER_BIN) $(CLI_BIN)
+
+## mcp: Build the standalone MCP server (bin/nudgeway-mcp) that exposes every
+##      OpenAPI operation as a Model Context Protocol tool over stdio.
+.PHONY: mcp
+mcp:
+	mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 $(GO) build $(GOFLAGS) -trimpath -ldflags "-s -w" -o $(MCP_BIN) ./cmd/mcp
+	@ls -lh $(MCP_BIN)
 
 ## frontend: Build the Vite frontend into web/dist for embedding.
 .PHONY: frontend

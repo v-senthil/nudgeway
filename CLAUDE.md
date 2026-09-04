@@ -137,6 +137,7 @@ Adding a new provider must NOT require changing `internal/domain/*` or `internal
 4. Add contract test asserting real response validates against the OpenAPI schema.
 5. Update `docs/api/CHANGELOG.md`.
 6. Wire the frontend hook using the generated client.
+7. The MCP server auto-generates tools from openapi.yaml at boot, so no code change is needed for MCP — but you MUST verify the new operation appears in the MCP tool list (`./bin/nudgeway-mcp --list-tools` or via an MCP client).
 
 Errors: RFC 7807 `application/problem+json` always.
 
@@ -177,6 +178,7 @@ Ordering guarantee: per-`conversation_id` ordering is enforced by consumer-group
 - Cross-tenant reads (any query missing `org_id`).
 - Hand-written SQL outside `sqlc` queries.
 - Holding a DB tx while making an outbound HTTP call.
+- OpenAPI + REST handler + MCP tool must ship together. Handler without spec entry, or spec entry without handler, are both blocked.
 
 ---
 
