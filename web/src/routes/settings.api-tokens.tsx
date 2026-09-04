@@ -125,7 +125,7 @@ function APITokensPage() {
           </p>
         </div>
         {tokens.data !== undefined && tokens.data.length > 0 && (
-          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+          <Button variant="primary" onClick={() => setCreateOpen(true)} className="whitespace-nowrap">
             New token
           </Button>
         )}
@@ -168,7 +168,7 @@ function APITokensPage() {
             title="No API tokens yet."
             description="Mint a token to authenticate the MCP server, a CI pipeline, or a custom script against the Nudgeway API."
             action={
-              <Button variant="primary" onClick={() => setCreateOpen(true)}>
+              <Button variant="primary" onClick={() => setCreateOpen(true)} className="whitespace-nowrap">
                 New token
               </Button>
             }
