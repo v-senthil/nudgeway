@@ -487,9 +487,9 @@
                 <path d="M3 20V10M9 20V4M15 20v-8M21 20v-14" />
               </svg>
             </div>
-            <div class="mt-4 font-semibold">Analytics that update</div>
+            <div class="mt-4 font-semibold">Analytics + Meta Analytics</div>
             <p class="mt-1.5 text-sm text-slate-600">
-              Sparkline KPIs for messages, delivery rate, response time, and calls. Rollups every 15 minutes; on-boot refresh so cards aren't empty.
+              Local KPI cards + sparklines for messages, delivery rate, response time, calls. Second tab proxies Meta's WABA analytics — messaging, calls, pricing — with an integration selector and quick-pick date ranges.
             </p>
           </div>
 
@@ -550,13 +550,41 @@
           <div class="card p-5">
             <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M3 5h18M3 12h18M3 19h18" />
+                <circle cx="6" cy="5" r="1.5" fill="currentColor" />
+                <circle cx="10" cy="12" r="1.5" fill="currentColor" />
+                <circle cx="14" cy="19" r="1.5" fill="currentColor" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Token usage log + metrics</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Every bearer request writes an execution row — method, path, status, latency, IP, redacted body — into a per-token log. KPI cards, sparkline, and top paths per token in the settings drawer.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M4 12h6M14 12h6M12 4v6M12 14v6" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Push webhook to Meta</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Operator pastes a public URL (or hits <span class="code">Detect ngrok</span>); Nudgeway posts the WABA-scoped webhook_configuration override to Meta. No copy-pasting the phone-number ID or verify token.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
                 <path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" />
                 <path d="M12 22V12M3 7l9 5 9-5" />
               </svg>
             </div>
             <div class="mt-4 font-semibold">MCP-native</div>
             <p class="mt-1.5 text-sm text-slate-600">
-              Every REST endpoint is auto-exposed as a Model Context Protocol tool. Point Claude Desktop / Claude Code / any MCP client at Nudgeway and talk to your inbox in natural language.
+              Every REST endpoint (73 and counting — inbox, integrations, templates, calls, groups, analytics, Meta analytics, tokens, usage) is auto-exposed as a Model Context Protocol tool. Point Claude Desktop / Claude Code / any MCP client at Nudgeway and talk to your inbox in natural language.
             </p>
           </div>
         </div>
@@ -601,7 +629,7 @@
               Reads <span class="code">openapi.yaml</span> at boot; emits one tool per <span class="code">operationId</span>. Auth via <b>bearer API token</b> (or session cookie for local dev). Zero manual tool registration — new endpoints appear the moment the OpenAPI spec ships them.
             </p>
             <pre class="mt-4 bg-slate-900 text-emerald-200 rounded-lg p-4 code overflow-x-auto text-xs">export NUDGEWAY_API_TOKEN=nk_...
-./bin/nudgeway-mcp --list-tools   # 26 tools and counting</pre>
+./bin/nudgeway-mcp --list-tools   # 73 tools and counting</pre>
           </div>
 
           <div class="card p-6">
