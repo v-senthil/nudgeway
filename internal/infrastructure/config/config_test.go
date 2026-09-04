@@ -35,7 +35,7 @@ func TestLoad_ParsesExample(t *testing.T) {
 	if cfg.Redis.Addr != "127.0.0.1:6379" {
 		t.Errorf("Redis.Addr = %q", cfg.Redis.Addr)
 	}
-	if cfg.HBase.Namespace != "fullwa" {
+	if cfg.HBase.Namespace != "nudgeway" {
 		t.Errorf("HBase.Namespace = %q", cfg.HBase.Namespace)
 	}
 	if len(cfg.HBase.ZookeeperQuorum) != 1 || cfg.HBase.ZookeeperQuorum[0] != "127.0.0.1:2181" {
@@ -44,8 +44,8 @@ func TestLoad_ParsesExample(t *testing.T) {
 }
 
 func TestApplyEnv_Overrides(t *testing.T) {
-	t.Setenv("FULLWA_HTTP_ADDR", ":9999")
-	t.Setenv("FULLWA_LOG_LEVEL", "debug")
+	t.Setenv("NUDGEWAY_HTTP_ADDR", ":9999")
+	t.Setenv("NUDGEWAY_LOG_LEVEL", "debug")
 	cfg, err := Load("../../../config/example.yaml")
 	if err != nil {
 		t.Fatalf("Load: %v", err)

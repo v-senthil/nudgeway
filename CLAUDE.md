@@ -1,4 +1,4 @@
-# CLAUDE.md — fullWA operating manual for AI-assisted work
+# CLAUDE.md — Nudgeway operating manual for AI-assisted work
 
 This file is the AI operating manual for every future Claude Code (or other agent) session on this repo. It is not a stub. Read it fully before making changes.
 
@@ -8,7 +8,7 @@ This file is the AI operating manual for every future Claude Code (or other agen
 
 ## 1. Project overview
 
-**fullWA** is an open-source, multi-tenant, provider-agnostic customer communication and engagement platform, initially centred on the WhatsApp Business Cloud API. Backend is a Go modular monolith compiled to a single binary; frontend is a Vite + React + TypeScript SPA embedded via `//go:embed`. MySQL is the transactional source of truth, Redis handles queues/cache/coordination, HBase stores high-volume message + event data. See [`docs/architecture.md`](docs/architecture.md) for the full picture and [`docs/phases/`](docs/phases/) for what's shipped.
+**Nudgeway** is an open-source, multi-tenant, provider-agnostic customer communication and engagement platform, initially centred on the WhatsApp Business Cloud API. Backend is a Go modular monolith compiled to a single binary; frontend is a Vite + React + TypeScript SPA embedded via `//go:embed`. MySQL is the transactional source of truth, Redis handles queues/cache/coordination, HBase stores high-volume message + event data. See [`docs/architecture.md`](docs/architecture.md) for the full picture and [`docs/phases/`](docs/phases/) for what's shipped.
 
 ---
 
@@ -90,7 +90,7 @@ Open http://localhost:8080.
 
 ```bash
 make test         # unit tests
-make test-int     # integration tests against local MySQL/Redis/HBase (creates + drops fullwa_test schema/namespace)
+make test-int     # integration tests against local MySQL/Redis/HBase (creates + drops nudgeway_test schema/namespace)
 make e2e          # Playwright golden path for the current phase
 make verify       # everything CI runs: fmt, vet, lint, arch-lint, sqlc-diff, spectral, openapi-diff, unit, int, frontend
 ```
@@ -224,8 +224,8 @@ A feature is not done until *all* of these ship together:
 - `docs/providers/<provider>.md` if a new provider.
 - `docs/api/CHANGELOG.md` entry for every OpenAPI change (bump the version line).
 - ADR if a non-trivial choice.
-- **Claude memory update** in `~/.claude/projects/-Users-senthil-11424-Documents-fullWA/memory/`:
-  - `project_fullwa_state.md` — current phase, seeded state, live services, next planned batch.
+- **Claude memory update** in `~/.claude/projects/-Users-senthil-11424-Documents-Nudgeway/memory/`:
+  - `project_nudgeway_state.md` — current phase, seeded state, live services, next planned batch.
   - `reference_repo_and_docs.md` — if a new code entry point or docs location was added.
   - New `feedback_*.md` if a user preference or correction was discovered.
 

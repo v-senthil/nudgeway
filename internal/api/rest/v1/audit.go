@@ -9,13 +9,13 @@ import (
 	"strconv"
 	"time"
 
-	appaudit "github.com/fullwa/fullwa/internal/application/audit"
-	daudit "github.com/fullwa/fullwa/internal/domain/audit"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	"github.com/fullwa/fullwa/internal/domain/user"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	appaudit "github.com/v-senthil/nudgeway/internal/application/audit"
+	daudit "github.com/v-senthil/nudgeway/internal/domain/audit"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	"github.com/v-senthil/nudgeway/internal/domain/user"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // AuditDeps bundles the audit endpoints' dependencies.

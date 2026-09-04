@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"time"
 
-	appauth "github.com/fullwa/fullwa/internal/application/auth"
-	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
+	appauth "github.com/v-senthil/nudgeway/internal/application/auth"
+	infauth "github.com/v-senthil/nudgeway/internal/infrastructure/auth"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
 )
 
 // OrgLookup fetches the display name of an organization by its canonical ID.
@@ -210,7 +210,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"type":       "https://fullwa.dev/errors/" + title,
+		"type":       "https://nudgeway.dev/errors/" + title,
 		"title":      title,
 		"status":     status,
 		"detail":     detail,

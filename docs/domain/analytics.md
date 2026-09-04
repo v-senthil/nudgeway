@@ -53,7 +53,7 @@ the counts once per (org, day) and the dashboard reads from
 The rollup worker persists `last_processed_day` in
 `analytics_rollup_state` after every tick. On a fresh install, the
 first tick rolls up yesterday + today only. To backfill historical
-days, run the admin CLI subcommand `fullwa analytics rollup --from
+days, run the admin CLI subcommand `nudgeway analytics rollup --from
 YYYY-MM-DD --to YYYY-MM-DD` (planned) which drives `Service.Rollup` in
 a loop. Backfill is safe to interrupt because every day is idempotent.
 

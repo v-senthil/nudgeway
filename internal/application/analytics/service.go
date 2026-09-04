@@ -7,9 +7,9 @@ import (
 	"sort"
 	"time"
 
-	danalytics "github.com/fullwa/fullwa/internal/domain/analytics"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	danalytics "github.com/v-senthil/nudgeway/internal/domain/analytics"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // providerAll is the sentinel used for pan-provider aggregate rows.

@@ -6,8 +6,8 @@ import { useEffect, useState, useCallback } from 'react';
 
 export type Theme = 'light' | 'dark';
 
-const STORAGE_KEY = 'fullwa.theme';
-const EVENT_NAME = 'fullwa:theme-change';
+const STORAGE_KEY = 'nudgeway.theme';
+const EVENT_NAME = 'nudgeway:theme-change';
 
 function readStored(): Theme | null {
   try {

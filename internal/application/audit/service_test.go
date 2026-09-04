@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	appaudit "github.com/fullwa/fullwa/internal/application/audit"
-	daudit "github.com/fullwa/fullwa/internal/domain/audit"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	appaudit "github.com/v-senthil/nudgeway/internal/application/audit"
+	daudit "github.com/v-senthil/nudgeway/internal/domain/audit"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 type stubRepo struct {

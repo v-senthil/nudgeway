@@ -56,7 +56,7 @@ type CookieOptions struct {
 	SameSite http.SameSite
 }
 
-// SetSessionCookie writes the session cookie to the response with fullWA's
+// SetSessionCookie writes the session cookie to the response with Nudgeway's
 // mandated flags (HttpOnly, SameSite=Lax, Secure in prod).
 func SetSessionCookie(w http.ResponseWriter, id SessionID, opts CookieOptions) {
 	http.SetCookie(w, &http.Cookie{

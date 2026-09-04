@@ -11,11 +11,11 @@ import (
 	"log/slog"
 	"time"
 
-	dgroup "github.com/fullwa/fullwa/internal/domain/group"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/channel"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	dgroup "github.com/v-senthil/nudgeway/internal/domain/group"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/channel"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // SyncResult reports what a Sync call produced.

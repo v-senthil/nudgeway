@@ -1,6 +1,6 @@
 package whatsapp
 
-import "github.com/fullwa/fullwa/internal/ports/channel"
+import "github.com/v-senthil/nudgeway/internal/ports/channel"
 
 // Capabilities reports what this adapter supports. Groups + Calls came online
 // with Phase 2's Templates / Groups / Calling rounds. Calling capabilities

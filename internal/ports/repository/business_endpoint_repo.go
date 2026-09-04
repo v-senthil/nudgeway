@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/session"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/session"
 )
 
 // BusinessEndpoint is a channel-specific address owned by the tenant

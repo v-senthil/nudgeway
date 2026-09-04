@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/conversation"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/conversation"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // ConversationSummary is the row shape returned by ListForOrg — enriched with

@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: fullWA API
+  title: Nudgeway API
   version: 0.2.4-phase2
   summary: Multi-tenant customer communication platform API.
   description: |
@@ -81,7 +81,7 @@ paths:
       operationId: getAuthCsrf
       summary: Issue a CSRF cookie.
       description: |
-        Sets a fresh `fullwa_csrf` cookie so the caller can echo the token in
+        Sets a fresh `nudgeway_csrf` cookie so the caller can echo the token in
         the `X-CSRF-Token` header on subsequent state-changing requests
         (double-submit cookie pattern). No session required.
       security: []
@@ -101,7 +101,7 @@ paths:
       summary: Log in with email + password.
       description: |
         Authenticates the caller against MySQL-backed users, issues a session
-        cookie (`fullwa_session`) and a fresh CSRF cookie (`fullwa_csrf`).
+        cookie (`nudgeway_session`) and a fresh CSRF cookie (`nudgeway_csrf`).
       security: []
       requestBody:
         required: true
@@ -959,7 +959,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: fullwa_session
+      name: nudgeway_session
       description: Signed session cookie.
     apiKey:
       type: apiKey
@@ -1495,7 +1495,7 @@ components:
           type: string
           format: uri
           description: URI reference identifying the problem type.
-          examples: ['https://fullwa.dev/errors/validation']
+          examples: ['https://nudgeway.dev/errors/validation']
         title:
           type: string
           examples: ['validation failed']

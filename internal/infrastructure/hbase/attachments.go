@@ -66,7 +66,7 @@ type Attachments struct {
 }
 
 // NewAttachments builds an Attachments backed by client against the
-// fully-qualified table name (e.g. "fullwa:attachments").
+// fully-qualified table name (e.g. "nudgeway:attachments").
 func NewAttachments(client gohbase.Client, table string) *Attachments {
 	return &Attachments{client: client, table: table}
 }

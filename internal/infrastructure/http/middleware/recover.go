@@ -22,7 +22,7 @@ func Recover(logger *slog.Logger) func(http.Handler) http.Handler {
 					w.Header().Set("Content-Type", "application/problem+json")
 					w.WriteHeader(http.StatusInternalServerError)
 					_ = json.NewEncoder(w).Encode(map[string]any{
-						"type":       "https://fullwa.dev/errors/internal",
+						"type":       "https://nudgeway.dev/errors/internal",
 						"title":      "internal server error",
 						"status":     http.StatusInternalServerError,
 						"request_id": RequestIDFrom(r.Context()),

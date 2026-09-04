@@ -14,9 +14,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/ports/channel"
-	"github.com/fullwa/fullwa/internal/providers"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/ports/channel"
+	"github.com/v-senthil/nudgeway/internal/providers"
 )
 
 // providerKey is the stable identifier used in the registry + integration rows.

@@ -1,4 +1,4 @@
-module github.com/fullwa/fullwa
+module github.com/v-senthil/nudgeway
 
 go 1.27.1
 

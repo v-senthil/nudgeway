@@ -7,10 +7,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/conversation"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/session"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/conversation"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/session"
 )
 
 // ID identifies a Message row.

@@ -9,7 +9,7 @@ Provider-agnostic platforms live and die by their tests. Adapters are the risk s
 ## Decision
 
 - **Unit tests** — table-driven, next to each file. Coverage ≥80% on `internal/domain/*` and `internal/application/*`; ≥60% overall.
-- **Integration tests** (`//go:build integration`) — run against the developer's real MySQL / Redis / HBase in a dedicated `fullwa_test` schema/namespace, created + dropped per run. **No DB mocks.**
+- **Integration tests** (`//go:build integration`) — run against the developer's real MySQL / Redis / HBase in a dedicated `nudgeway_test` schema/namespace, created + dropped per run. **No DB mocks.**
 - **Provider adapter tests** — httptest fixtures captured from official docs (e.g. `~/Documents/whatsapp_doc_tracker/docs/`), never fabricated payloads.
 - **Contract tests** — every REST response validated against the OpenAPI schema.
 - **e2e** — Playwright golden-path per phase; runs headless in CI, headed locally.

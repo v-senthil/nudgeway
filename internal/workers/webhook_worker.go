@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	appmsg "github.com/fullwa/fullwa/internal/application/message"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/ports/queue"
+	appmsg "github.com/v-senthil/nudgeway/internal/application/message"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
 )
 
 // WebhookLane is the queue-lane name for asynchronous webhook processing.

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
-	dcall "github.com/fullwa/fullwa/internal/domain/providercall"
+	dcall "github.com/v-senthil/nudgeway/internal/domain/providercall"
 )
 
 // GroupSummary is the compact shape returned by ListGroups. Deliberately a

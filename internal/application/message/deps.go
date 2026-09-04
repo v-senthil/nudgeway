@@ -5,14 +5,14 @@ import (
 	"io"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/attachments"
-	"github.com/fullwa/fullwa/internal/ports/channel"
-	"github.com/fullwa/fullwa/internal/ports/eventbus"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/attachments"
+	"github.com/v-senthil/nudgeway/internal/ports/channel"
+	"github.com/v-senthil/nudgeway/internal/ports/eventbus"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // CallInbound receives Call* envelopes routed from the inbound webhook

@@ -1,12 +1,12 @@
-// Command fullwa is the single-binary entrypoint for the fullWA platform.
+// Command nudgeway is the single-binary entrypoint for the Nudgeway platform.
 //
 // It boots the HTTP server, wires MySQL + Redis + Kafka, builds every
 // application service, mounts the v1 REST API + webhook ingress + WebSocket
 // hub, starts background worker pools, registers Prometheus metrics, and
 // shuts everything down gracefully on SIGINT / SIGTERM.
 //
-// Configuration is loaded from config/local.yaml (or FULLWA_CONFIG) with
-// FULLWA_* env vars overriding individual keys.
+// Configuration is loaded from config/local.yaml (or NUDGEWAY_CONFIG) with
+// NUDGEWAY_* env vars overriding individual keys.
 package main
 
 import (
@@ -28,42 +28,42 @@ import (
 
 	"github.com/tsuna/gohbase"
 
-	v1 "github.com/fullwa/fullwa/internal/api/rest/v1"
-	"github.com/fullwa/fullwa/internal/infrastructure/attachments"
-	fhbase "github.com/fullwa/fullwa/internal/infrastructure/hbase"
-	attachmentsPort "github.com/fullwa/fullwa/internal/ports/attachments"
-	appanalytics "github.com/fullwa/fullwa/internal/application/analytics"
-	appaudit "github.com/fullwa/fullwa/internal/application/audit"
-	appauth "github.com/fullwa/fullwa/internal/application/auth"
-	appcall "github.com/fullwa/fullwa/internal/application/call"
-	appgrp "github.com/fullwa/fullwa/internal/application/group"
-	appintegration "github.com/fullwa/fullwa/internal/application/integration"
-	appsettings "github.com/fullwa/fullwa/internal/application/integrationsettings"
-	appmsg "github.com/fullwa/fullwa/internal/application/message"
-	appproviderc "github.com/fullwa/fullwa/internal/application/providercall"
-	apptmpl "github.com/fullwa/fullwa/internal/application/template"
-	dpc "github.com/fullwa/fullwa/internal/domain/providercall"
-	devents "github.com/fullwa/fullwa/internal/domain/events"
-	dintegration "github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	tmpldom "github.com/fullwa/fullwa/internal/domain/template"
-	"github.com/fullwa/fullwa/internal/events"
-	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
-	"github.com/fullwa/fullwa/internal/infrastructure/crypto"
-	"github.com/fullwa/fullwa/internal/infrastructure/health"
-	fhttp "github.com/fullwa/fullwa/internal/infrastructure/http"
-	fkafka "github.com/fullwa/fullwa/internal/infrastructure/kafka"
-	fmetrics "github.com/fullwa/fullwa/internal/infrastructure/metrics"
-	fmysql "github.com/fullwa/fullwa/internal/infrastructure/mysql"
-	fredis "github.com/fullwa/fullwa/internal/infrastructure/redis"
-	fws "github.com/fullwa/fullwa/internal/infrastructure/websocket"
-	"github.com/fullwa/fullwa/internal/ports/calling"
-	"github.com/fullwa/fullwa/internal/ports/channel"
-	"github.com/fullwa/fullwa/internal/ports/queue"
-	"github.com/fullwa/fullwa/internal/providers/whatsapp"
-	"github.com/fullwa/fullwa/internal/webhook"
-	"github.com/fullwa/fullwa/internal/workers"
+	v1 "github.com/v-senthil/nudgeway/internal/api/rest/v1"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/attachments"
+	fhbase "github.com/v-senthil/nudgeway/internal/infrastructure/hbase"
+	attachmentsPort "github.com/v-senthil/nudgeway/internal/ports/attachments"
+	appanalytics "github.com/v-senthil/nudgeway/internal/application/analytics"
+	appaudit "github.com/v-senthil/nudgeway/internal/application/audit"
+	appauth "github.com/v-senthil/nudgeway/internal/application/auth"
+	appcall "github.com/v-senthil/nudgeway/internal/application/call"
+	appgrp "github.com/v-senthil/nudgeway/internal/application/group"
+	appintegration "github.com/v-senthil/nudgeway/internal/application/integration"
+	appsettings "github.com/v-senthil/nudgeway/internal/application/integrationsettings"
+	appmsg "github.com/v-senthil/nudgeway/internal/application/message"
+	appproviderc "github.com/v-senthil/nudgeway/internal/application/providercall"
+	apptmpl "github.com/v-senthil/nudgeway/internal/application/template"
+	dpc "github.com/v-senthil/nudgeway/internal/domain/providercall"
+	devents "github.com/v-senthil/nudgeway/internal/domain/events"
+	dintegration "github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	tmpldom "github.com/v-senthil/nudgeway/internal/domain/template"
+	"github.com/v-senthil/nudgeway/internal/events"
+	infauth "github.com/v-senthil/nudgeway/internal/infrastructure/auth"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/crypto"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/health"
+	fhttp "github.com/v-senthil/nudgeway/internal/infrastructure/http"
+	fkafka "github.com/v-senthil/nudgeway/internal/infrastructure/kafka"
+	fmetrics "github.com/v-senthil/nudgeway/internal/infrastructure/metrics"
+	fmysql "github.com/v-senthil/nudgeway/internal/infrastructure/mysql"
+	fredis "github.com/v-senthil/nudgeway/internal/infrastructure/redis"
+	fws "github.com/v-senthil/nudgeway/internal/infrastructure/websocket"
+	"github.com/v-senthil/nudgeway/internal/ports/calling"
+	"github.com/v-senthil/nudgeway/internal/ports/channel"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
+	"github.com/v-senthil/nudgeway/internal/providers/whatsapp"
+	"github.com/v-senthil/nudgeway/internal/webhook"
+	"github.com/v-senthil/nudgeway/internal/workers"
 )
 
 // version is stamped at build time via `-ldflags "-X main.version=..."`.
@@ -78,7 +78,7 @@ func main() {
 
 //nolint:funlen,gocyclo // wire-up is deliberately linear so the boot order is auditable at a glance.
 func run() error {
-	cfgPath := flag.String("config", envOr("FULLWA_CONFIG", "config/local.yaml"), "path to config file")
+	cfgPath := flag.String("config", envOr("NUDGEWAY_CONFIG", "config/local.yaml"), "path to config file")
 	flag.Parse()
 
 	cfg, err := config.Load(*cfgPath)
@@ -88,7 +88,7 @@ func run() error {
 
 	logger := newLogger(cfg.Log)
 	slog.SetDefault(logger)
-	logger.Info("fullwa starting",
+	logger.Info("nudgeway starting",
 		slog.String("version", version),
 		slog.String("env", cfg.Env),
 		slog.String("config", *cfgPath),
@@ -200,7 +200,7 @@ func run() error {
 		// prefixed table name. Real namespaces need shell pre-creation +
 		// gohbase upgrade or a raw admin call.
 		ns := ""
-		tbl := "fullwa_attachments"
+		tbl := "nudgeway_attachments"
 		client, admin, hErr := fhbase.NewClient(cfg.HBase.ZookeeperQuorum, zkNode)
 		if hErr != nil {
 			logger.Warn("hbase connect failed; falling back to local FS attachments", slog.Any("err", hErr))
@@ -548,9 +548,9 @@ func run() error {
 	// Secret is not reliably configurable in this dev flow. The ingress
 	// instead matches the payload's phone_number_id + waba_id against the
 	// integration.Config values (see webhook.ClaimsVerifier). Never ship
-	// this to prod — set FULLWA_REQUIRE_SIGNATURE=1 (or config webhook
+	// this to prod — set NUDGEWAY_REQUIRE_SIGNATURE=1 (or config webhook
 	// section) once the Meta App Secret is trusted.
-	requireSig := os.Getenv("FULLWA_REQUIRE_SIGNATURE") == "1"
+	requireSig := os.Getenv("NUDGEWAY_REQUIRE_SIGNATURE") == "1"
 	if !requireSig {
 		logger.Warn("webhook signature verification DISABLED — dev mode, do NOT ship to prod",
 			slog.String("fallback", "phone_number_id + waba_id claims match"))

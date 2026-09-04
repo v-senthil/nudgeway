@@ -1,4 +1,4 @@
-// Command fullwa-cli is the admin CLI for the fullWA platform.
+// Command nudgeway-cli is the admin CLI for the Nudgeway platform.
 //
 // Subcommands:
 //
@@ -23,11 +23,11 @@ import (
 	"os/exec"
 	"time"
 
-	appauth "github.com/fullwa/fullwa/internal/application/auth"
-	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
-	"github.com/fullwa/fullwa/internal/infrastructure/crypto"
-	fmysql "github.com/fullwa/fullwa/internal/infrastructure/mysql"
+	appauth "github.com/v-senthil/nudgeway/internal/application/auth"
+	infauth "github.com/v-senthil/nudgeway/internal/infrastructure/auth"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/crypto"
+	fmysql "github.com/v-senthil/nudgeway/internal/infrastructure/mysql"
 )
 
 func main() {
@@ -52,7 +52,7 @@ func dispatch(cmd string, args []string) error {
 	case "migrate":
 		return runMigrate(args)
 	case "version":
-		fmt.Println("fullwa-cli 0.0.0-dev")
+		fmt.Println("nudgeway-cli 0.0.0-dev")
 		return nil
 	case "-h", "--help", "help":
 		usage()
@@ -64,10 +64,10 @@ func dispatch(cmd string, args []string) error {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, `fullwa-cli — fullWA admin CLI
+	fmt.Fprintln(os.Stderr, `nudgeway-cli — Nudgeway admin CLI
 
 usage:
-  fullwa-cli <subcommand> [flags]
+  nudgeway-cli <subcommand> [flags]
 
 subcommands:
   tenant create --slug S --name N            create an organization
@@ -83,7 +83,7 @@ subcommands:
 }
 
 func loadConfig() (config.Config, error) {
-	path := os.Getenv("FULLWA_CONFIG")
+	path := os.Getenv("NUDGEWAY_CONFIG")
 	if path == "" {
 		path = "config/local.yaml"
 	}

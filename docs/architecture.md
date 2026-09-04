@@ -1,8 +1,8 @@
-# fullWA architecture
+# Nudgeway architecture
 
 ## Overview
 
-fullWA is a **modular monolith** written in Go, compiled to a single binary that hosts the REST API, WebSocket server, webhook ingress, background workers, and scheduler. The frontend is a React SPA embedded via `//go:embed`.
+Nudgeway is a **modular monolith** written in Go, compiled to a single binary that hosts the REST API, WebSocket server, webhook ingress, background workers, and scheduler. The frontend is a React SPA embedded via `//go:embed`.
 
 Three infrastructure services, all running natively on the developer's machine (no Docker):
 

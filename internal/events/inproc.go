@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	dev "github.com/fullwa/fullwa/internal/domain/events"
+	dev "github.com/v-senthil/nudgeway/internal/domain/events"
 )
 
 // InProc is a synchronous, in-process implementation of the eventbus port.

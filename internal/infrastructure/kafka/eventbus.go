@@ -10,8 +10,8 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
 )
 
 // EventBus implements eventbus.Subscriber for durable cross-node event
@@ -44,7 +44,7 @@ func NewEventBus(cfg config.KafkaConfig, group string, logger *slog.Logger) *Eve
 		logger = slog.Default()
 	}
 	if group == "" {
-		group = "fullwa"
+		group = "nudgeway"
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &EventBus{

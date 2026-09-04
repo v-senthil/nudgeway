@@ -6,7 +6,7 @@ import (
 
 	goredis "github.com/redis/go-redis/v9"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
 )
 
 // New returns a redis.Client configured from cfg. It does NOT ping — call

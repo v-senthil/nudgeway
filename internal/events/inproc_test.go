@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	dev "github.com/fullwa/fullwa/internal/domain/events"
+	dev "github.com/v-senthil/nudgeway/internal/domain/events"
 )
 
 func TestInProc_PublishFansOut(t *testing.T) {

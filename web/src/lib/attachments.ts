@@ -21,7 +21,7 @@ export type UploadResult = {
   filename?: string;
 };
 
-const CSRF_COOKIE = 'fullwa_csrf';
+const CSRF_COOKIE = 'nudgeway_csrf';
 
 /** Map a MIME type to the canonical WhatsApp message type the send API accepts. */
 export function mediaKindFromContentType(contentType: string): 'image' | 'video' | 'audio' | 'document' {

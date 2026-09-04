@@ -30,7 +30,7 @@ the adapter boundary.
 - The `(org_id, integration_id, name, language)` tuple is unique.
   Provider adapters enforce the same uniqueness on their side; the local
   mirror follows.
-- `Status = DRAFT` is a fullWA-only concept. A DRAFT row has never been
+- `Status = DRAFT` is a Nudgeway-only concept. A DRAFT row has never been
   sent to the provider and can be freely edited or deleted. Every other
   status is a mirror of the provider's review state.
 - `Components` is required to include at least one `BODY` component.

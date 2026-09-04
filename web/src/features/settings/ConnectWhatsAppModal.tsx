@@ -218,7 +218,7 @@ export function ConnectWhatsAppModal({ open, onClose }: Props) {
           <CopyField label="Webhook URL" value={webhookURL} onCopy={copy} />
           <CopyField label="Verify token" value={displayVerifyToken} onCopy={copy} />
           <p className="text-xs text-slate-500">
-            Subscribe to the <code className="rounded bg-slate-100 px-1">messages</code> field. fullWA will start
+            Subscribe to the <code className="rounded bg-slate-100 px-1">messages</code> field. Nudgeway will start
             receiving events immediately.
           </p>
           <div aria-live="polite" role="status" className="sr-only">

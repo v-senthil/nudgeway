@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	devents "github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/ports/eventbus"
+	devents "github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/ports/eventbus"
 )
 
 // bridgedTypes is the list of canonical event types the WebSocket bridge

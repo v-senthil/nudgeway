@@ -1,4 +1,4 @@
-# fullWA CHANGELOG
+# Nudgeway CHANGELOG
 
 Human-readable project history. Commit hashes are on `main` at `v-senthil/whatsapp-cloud-api`. For the OpenAPI-specific changelog see [`docs/api/CHANGELOG.md`](docs/api/CHANGELOG.md).
 
@@ -141,14 +141,14 @@ Phase 1 (WhatsApp Inbox MVP) is functionally complete end-to-end.
 - **`16e0665`** — feat(bsuid): switch to Meta business-scoped user id (BSUID) as the primary identity. New mapper fields for `user_id`, `parent_user_id`, `username`, `from_user_id`, `from_parent_user_id`, `recipient_user_id`. `MessageReceivedPayload` gains `FromUserID` / `FromParentUserID` / `FromUsername`; `MessageStatusPayload` gains `RecipientUserID`. `InboundService` upserts a `bsuid` identity bound to the same Contact and promotes it to primary. See `~/Documents/whatsapp_doc_tracker/docs/business-scoped-user-ids.md`.
 - **`60ebdf5`** — fix(send): media message flow. Frontend sends `media_id` alongside `url`; `SendService.RequestSend` stashes `media_url`, `media_id`, `caption`, `filename` into `metadata` for the outbound row so bubbles render immediately.
 - **`6030038`** — feat(attachments): Meta Media Upload wired end-to-end. `POST /api/v1/attachments` stores bytes to HBase AND uploads to Meta's `POST /{phone_number_id}/media` via the WhatsApp adapter; returned `media_id` is stashed on the HBase row (`m:media_id_<provider>_<integration>`). Response now `{attachment_id, media_url, media_id, provider, size, content_type, filename}`. Composer prefers `media_id` (Meta-native handle) with `media_url` as fallback.
-- **`95ce274`** — feat(attachments): HBase-backed store. New `internal/infrastructure/hbase/{client,schema,attachments}.go` (gohbase). Table `fullwa_attachments`, column families `d` (data) + `m` (metadata). Row key = SHA-256 hex. Falls back to `LocalFS` when HBase unreachable.
+- **`95ce274`** — feat(attachments): HBase-backed store. New `internal/infrastructure/hbase/{client,schema,attachments}.go` (gohbase). Table `nudgeway_attachments`, column families `d` (data) + `m` (metadata). Row key = SHA-256 hex. Falls back to `LocalFS` when HBase unreachable.
 - **`12c6871`** — fix: (a) media download uses the URL Meta ships in the webhook directly (one HTTPS round-trip), (b) `MessageReceivedPayload` gains `ConversationID` set before publish so WS bridge routes to `['messages', <id>]`, (c) reactions render only near their target — the orphan-reaction-bubble at top is gone.
 - **`0394203`** — feat(phase1): media in/out + status ticks live + mark-as-read + rich rendering (location / contacts / interactive / reactions). Four parallel agents.
 - **`40e4a32`** — fix(send): outbound to Meta uses real `phone_number_id` from `integration.Config` (was empty → double-slash URL) and the E.164 phone as `to` (was leaking internal ULID).
 - **`adc9121`** — fix(pub): `combinedPublisher.Publish` fires Kafka in a detached goroutine so REST send returns in ~40 ms instead of 22 s.
 - **`7e87965`** — fix(inbox): WhatsApp-style thread — oldest at top, newest at bottom.
 - **`fd8f908`** — fix(messages): accept `text` as bare JSON string or canonical `{"body": "..."}` object.
-- **`571cb39`** — feat(webhook): dev-mode fallback — payload-claims match instead of HMAC. `RequireSignature bool` gate (set `FULLWA_REQUIRE_SIGNATURE=0` for dev). Boot logs a WARN when disabled.
+- **`571cb39`** — feat(webhook): dev-mode fallback — payload-claims match instead of HMAC. `RequireSignature bool` gate (set `NUDGEWAY_REQUIRE_SIGNATURE=0` for dev). Boot logs a WARN when disabled.
 - **`f6fc1e5`** — fix(integrations): `disconnected` surfaces as "Not connected" (grey) instead of "Unknown".
 - **`1c90b67`** — chore(webhook): log `body_len` / `secret_len` / sig-prefix on HMAC mismatch for debugging.
 - **`be4f65e`** — fix(integrations): REST Create now envelope-encrypts secrets to `integration_credentials` (was silently dropping them, so Meta's callback-verify 403'd).
@@ -194,7 +194,7 @@ TODO: retry semantics on `Provider.MarkAsRead` are still permanent-fail — the 
 - **OpenAPI** — new `GET /api/v1/media/{key}` + `HEAD` operations returning `application/octet-stream`; `Message` schema gains `text`, `content_type`, and a documented `media_url`.
 - **Docs** — `docs/providers/whatsapp.md` gains a "Media inbound flow" section; `docs/flows/inbound-message.md` extends the Mermaid diagram with the download / store branch and adds a "Media persistence" section.
 
-Driver wire-up (`cmd/server/main.go`) is unchanged in this commit — the new deps are optional and default to nil, so booting fullWA without a media root is safe. The follow-up wire commit will instantiate `attachments.New(cfg.Attachments)`, close over the WhatsApp adapter as a `message.AttachmentDownloader`, and thread both into `appmsg.Deps` + `v1.Deps.Attachments`.
+Driver wire-up (`cmd/server/main.go`) is unchanged in this commit — the new deps are optional and default to nil, so booting Nudgeway without a media root is safe. The follow-up wire commit will instantiate `attachments.New(cfg.Attachments)`, close over the WhatsApp adapter as a `message.AttachmentDownloader`, and thread both into `appmsg.Deps` + `v1.Deps.Attachments`.
 
 ---
 
@@ -223,7 +223,7 @@ Driver wire-up (`cmd/server/main.go`) is unchanged in this commit — the new de
 
 ## 2026-09-04 — Phase 1 Task 5: integrations API + CLI
 
-Operators can list / create / test / disconnect provider integrations behind `/api/v1/integrations/*`, and a new `fullwa-cli integration create` subcommand seeds a WhatsApp integration without touching the UI. Secret material is envelope-encrypted at rest and never crosses the API boundary — the response's `webhook_url` is the tenant-facing URL to paste into the provider console.
+Operators can list / create / test / disconnect provider integrations behind `/api/v1/integrations/*`, and a new `nudgeway-cli integration create` subcommand seeds a WhatsApp integration without touching the UI. Secret material is envelope-encrypted at rest and never crosses the API boundary — the response's `webhook_url` is the tenant-facing URL to paste into the provider console.
 
 - **`internal/application/integration/service.go`** — `Service` with `List`, `Get`, `Create`, `Test`, `Delete`. A small `providerSchema` map validates required config + secret keys per provider (whatsapp: `phone_number_id` + `waba_id` in config; `access_token` + `app_secret` + `verify_token` in secrets). Unknown / unregistered providers rejected via `providers.Lookup`. `Test` dispatches to `channel.Provider.HealthCheck` through a `ProviderResolver` interface (implemented in `cmd/server`, the only package allowed to import concrete adapters) and persists `Status` + `Health`. `Delete` soft-disconnects so the audit trail survives.
 - **`internal/application/integration/dto.go`** — `CreateInput`, `TestResult`, `PublicIntegration` (secrets-stripped view + `webhook_url`).
@@ -309,7 +309,7 @@ Follow-up (out of scope for this commit): wire `websocket.NewHub(logger)` + `Reg
 Real Prometheus metrics and a Kafka readiness signal replace the Phase 0 placeholders. No behaviour change to existing routes; new surfaces are ready to be wired at `cmd/server/main.go` (`/metrics`, `/readyz`) — the wiring change is a follow-up commit because Task 0 keeps `cmd/` untouched.
 
 - **Phase 1 Task 0 — observability + infra checks**
-- `internal/infrastructure/metrics/metrics.go` — dedicated `*prometheus.Registry` plus the fullWA canonical metric families: HTTP requests + latency, provider calls + latency, worker jobs + latency + retries, webhook events received, Kafka producer batch bytes + consumer lag, WebSocket connections. Registers `GoCollector` + `ProcessCollector`. `Metrics.Handler()` serves the OpenMetrics exposition.
+- `internal/infrastructure/metrics/metrics.go` — dedicated `*prometheus.Registry` plus the Nudgeway canonical metric families: HTTP requests + latency, provider calls + latency, worker jobs + latency + retries, webhook events received, Kafka producer batch bytes + consumer lag, WebSocket connections. Registers `GoCollector` + `ProcessCollector`. `Metrics.Handler()` serves the OpenMetrics exposition.
 - `internal/infrastructure/metrics/http.go` — small `HTTPMiddleware(route)` that wraps a handler with a status-capturing `ResponseWriter` and records the HTTP counter + histogram.
 - `internal/infrastructure/health/kafka.go` — `KafkaProbe(brokers)` — 500 ms per-broker TCP dial; ok if at least one broker answers. Deeper metadata probe is Phase 2.
 - `scripts/check-infra.sh` — new Kafka section reads inline `kafka.brokers` list (matching the `hbase.zookeeper_quorum` style) and TCP-checks each; green if any responds; `[skip]` when the key is absent.
@@ -339,7 +339,7 @@ Replaces the Redis Streams placeholder from ADR 0004 with a real Kafka backend b
   - `NewEventBus` — implements `eventbus.Subscriber` with one managed background goroutine per event type, `Close` blocks on the goroutine set.
   - JSON codec for `queue.Job` + `events.Envelope` (protobuf follow-up in ADR 0009).
   - `Probe` for `/readyz`.
-- `internal/infrastructure/config/config.go` gains a `KafkaConfig` (`Brokers`, `ClientID`, `TopicsPrefix`, `ReplicationFactor`, `DefaultPartitions`) with YAML + `FULLWA_KAFKA_BROKERS` env override.
+- `internal/infrastructure/config/config.go` gains a `KafkaConfig` (`Brokers`, `ClientID`, `TopicsPrefix`, `ReplicationFactor`, `DefaultPartitions`) with YAML + `NUDGEWAY_KAFKA_BROKERS` env override.
 - `config/example.yaml` and `config/local.yaml` gain a `kafka:` section pointing at `127.0.0.1:9092`.
 - New ADR `docs/adr/0009-kafka-for-event-log.md` supersedes the Redis-Streams portion of ADR 0004.
 - `docs/adr/0004-event-bus.md` gains a "Superseded by 0009 for durable path" footer.
@@ -409,7 +409,7 @@ Repo bootstrap. Modular monolith → single Go binary; MySQL + Redis + HBase all
 - `internal/events`: in-proc fan-out event bus with fan-out + first-error tests.
 - `internal/ports/{channel,ticketing,bot,aiport,calling,eventbus,queue,attachments,repository}`.
 - `internal/providers/registry.go`: self-registering provider registry.
-- `internal/infrastructure/config`: YAML + `FULLWA_*` env override loader.
+- `internal/infrastructure/config`: YAML + `NUDGEWAY_*` env override loader.
 - OpenAPI 3.1 skeleton with `Problem` schema (RFC 7807) + security schemes.
 - First migration: organizations, users, teams, roles, permissions, user_roles, web_sessions, audit_logs (InnoDB / utf8mb4 / org-scoped indexes).
 - Vite + React 18 + strict TS + Tailwind frontend scaffold.
@@ -435,5 +435,5 @@ See [`docs/adr/`](docs/adr/):
 ## Delivery-workflow notes
 
 - Three-agent parallelisation pattern used in commit `c3ed4e2`. Each agent gets a strictly non-overlapping file scope so they don't collide when writing concurrently to the same worktree. Integration pass by the driver rebuilds + re-runs tests to catch cross-agent interface drift.
-- User preference: "working end-to-end first, tests later" — captured in Claude memory at `~/.claude/projects/-Users-senthil-11424-Documents-fullWA/memory/feedback_working_first_tests_later.md`.
-- User preference: "no Docker / no Kubernetes anywhere" — captured at `~/.claude/projects/-Users-senthil-11424-Documents-fullWA/memory/feedback_no_docker_k8s.md`.
+- User preference: "working end-to-end first, tests later" — captured in Claude memory at `~/.claude/projects/-Users-senthil-11424-Documents-Nudgeway/memory/feedback_working_first_tests_later.md`.
+- User preference: "no Docker / no Kubernetes anywhere" — captured at `~/.claude/projects/-Users-senthil-11424-Documents-Nudgeway/memory/feedback_no_docker_k8s.md`.

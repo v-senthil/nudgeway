@@ -1,4 +1,4 @@
-# Spectral ruleset for fullWA OpenAPI 3.1 spec.
+# Spectral ruleset for Nudgeway OpenAPI 3.1 spec.
 extends:
   - spectral:oas
 rules:

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
 )
 
 func TestServer_RegistersAndServes(t *testing.T) {

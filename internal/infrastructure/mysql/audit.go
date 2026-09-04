@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/audit"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/user"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/audit"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/user"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // Audit implements repository.AuditRepo against MySQL. Rows land in the

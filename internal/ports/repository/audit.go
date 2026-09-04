@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/audit"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/user"
+	"github.com/v-senthil/nudgeway/internal/domain/audit"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/user"
 )
 
 // AuditListFilter narrows an AuditRepo.List query. All fields are optional;

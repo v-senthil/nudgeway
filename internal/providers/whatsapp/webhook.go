@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
 )
 
 // ErrSignatureMissing is returned when the incoming request lacks the

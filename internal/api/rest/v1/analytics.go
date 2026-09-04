@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"time"
 
-	appanalytics "github.com/fullwa/fullwa/internal/application/analytics"
-	danalytics "github.com/fullwa/fullwa/internal/domain/analytics"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
+	appanalytics "github.com/v-senthil/nudgeway/internal/application/analytics"
+	danalytics "github.com/v-senthil/nudgeway/internal/domain/analytics"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
 )
 
 // AnalyticsDeps bundles the state the analytics endpoints need.

@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"time"
 
-	appproviderc "github.com/fullwa/fullwa/internal/application/providercall"
-	dintegration "github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/providercall"
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	appproviderc "github.com/v-senthil/nudgeway/internal/application/providercall"
+	dintegration "github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/providercall"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // ProviderCallsDeps bundles the state the provider-calls handler needs.

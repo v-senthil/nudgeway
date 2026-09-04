@@ -1,4 +1,4 @@
-# fullWA — build, test, and dev targets.
+# Nudgeway — build, test, and dev targets.
 # Everything runs against the user's LOCAL MySQL / Redis / HBase — no Docker, no K8s.
 
 SHELL := /usr/bin/env bash
@@ -11,8 +11,8 @@ GOOS         ?= $(shell $(GO) env GOOS)
 GOARCH       ?= $(shell $(GO) env GOARCH)
 PKGS         := ./...
 BUILD_DIR    := ./bin
-SERVER_BIN   := $(BUILD_DIR)/fullwa
-CLI_BIN      := $(BUILD_DIR)/fullwa-cli
+SERVER_BIN   := $(BUILD_DIR)/nudgeway
+CLI_BIN      := $(BUILD_DIR)/nudgeway-cli
 CONFIG       ?= config/local.yaml
 COVER_FILE   := coverage.out
 COVER_MIN    ?= 60
@@ -50,7 +50,7 @@ tools:
 .PHONY: fmt
 fmt:
 	$(GO) fmt $(PKGS)
-	@command -v goimports >/dev/null 2>&1 && goimports -w -local github.com/fullwa/fullwa . || true
+	@command -v goimports >/dev/null 2>&1 && goimports -w -local github.com/v-senthil/nudgeway . || true
 	@[[ -d web/node_modules ]] && (cd web && npm run format) || true
 
 ## vet: Run go vet.
@@ -139,10 +139,10 @@ frontend:
 ## dev: Run server + Vite dev server. Requires local MySQL/Redis/HBase.
 .PHONY: dev
 dev: check-infra
-	@echo "Starting fullwa server + vite dev server..."
+	@echo "Starting nudgeway server + vite dev server..."
 	@trap 'kill 0' SIGINT SIGTERM EXIT; \
 	 (cd web && npm run dev) & \
-	 FULLWA_CONFIG=$(CONFIG) $(GO) run ./cmd/server & \
+	 NUDGEWAY_CONFIG=$(CONFIG) $(GO) run ./cmd/server & \
 	 wait
 
 ## clean: Remove build + coverage artefacts.

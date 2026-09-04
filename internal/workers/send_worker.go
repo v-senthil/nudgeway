@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	appmsg "github.com/fullwa/fullwa/internal/application/message"
-	"github.com/fullwa/fullwa/internal/ports/queue"
+	appmsg "github.com/v-senthil/nudgeway/internal/application/message"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
 )
 
 // SendWorker consumes the outbound message send lane and drives the

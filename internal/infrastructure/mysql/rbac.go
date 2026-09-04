@@ -5,9 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	dusr "github.com/fullwa/fullwa/internal/domain/user"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	dusr "github.com/v-senthil/nudgeway/internal/domain/user"
 )
 
 // RBAC resolves the permission set for a (org, user) pair by joining

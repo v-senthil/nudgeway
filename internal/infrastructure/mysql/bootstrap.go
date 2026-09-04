@@ -10,10 +10,10 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	dusr "github.com/fullwa/fullwa/internal/domain/user"
-	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
-	"github.com/fullwa/fullwa/internal/infrastructure/crypto"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	dusr "github.com/v-senthil/nudgeway/internal/domain/user"
+	infauth "github.com/v-senthil/nudgeway/internal/infrastructure/auth"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/crypto"
 )
 
 // Bootstrap wraps the CLI's admin-provisioning operations.
@@ -124,7 +124,7 @@ func (b *Bootstrap) EnsureAdminRole(ctx context.Context, orgID string) (string, 
 // channel-kind providers — a matching business_endpoints row. Returns
 // the integration ID (whether newly-created or already-present).
 //
-// Called from the fullwa-cli `integration create` subcommand so an
+// Called from the nudgeway-cli `integration create` subcommand so an
 // operator can wire a WhatsApp phone number without the UI. Requires
 // WithEnvelope(env) to have been called first.
 func (b *Bootstrap) EnsureIntegration(

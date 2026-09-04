@@ -18,7 +18,7 @@ jobs:
         image: mysql:8.0
         env:
           MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
-          MYSQL_DATABASE: fullwa
+          MYSQL_DATABASE: nudgeway
         ports: ['3306:3306']
         options: >-
           --health-cmd="mysqladmin ping --silent"

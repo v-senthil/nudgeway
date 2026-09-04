@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"strconv"
 
-	apptmpl "github.com/fullwa/fullwa/internal/application/template"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	tmpldom "github.com/fullwa/fullwa/internal/domain/template"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	apptmpl "github.com/v-senthil/nudgeway/internal/application/template"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	tmpldom "github.com/v-senthil/nudgeway/internal/domain/template"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // TemplateDeps bundles the state the template endpoints need.

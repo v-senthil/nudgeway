@@ -7,8 +7,8 @@ package integration
 import (
 	"time"
 
-	dintegration "github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	dintegration "github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // CreateInput is the operator-supplied payload for POST

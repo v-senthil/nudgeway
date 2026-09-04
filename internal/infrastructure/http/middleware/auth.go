@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	"github.com/fullwa/fullwa/internal/infrastructure/auth"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/auth"
 )
 
 // Principal is the authenticated caller resolved from the session cookie.
@@ -143,7 +143,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"type":       "https://fullwa.dev/errors/" + title,
+		"type":       "https://nudgeway.dev/errors/" + title,
 		"title":      title,
 		"status":     status,
 		"detail":     detail,

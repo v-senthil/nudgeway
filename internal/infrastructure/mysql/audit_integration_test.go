@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/audit"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/user"
-	imysql "github.com/fullwa/fullwa/internal/infrastructure/mysql"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/audit"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/user"
+	imysql "github.com/v-senthil/nudgeway/internal/infrastructure/mysql"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // TestAudit_RecordAndList exercises Record + List against a real MySQL

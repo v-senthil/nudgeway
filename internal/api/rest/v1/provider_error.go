@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
 )
 
 // providerErrRe matches the wrapped error string emitted by
@@ -61,7 +61,7 @@ func writeProblemExtras(w http.ResponseWriter, r *http.Request, status int, titl
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	body := map[string]any{
-		"type":       "https://fullwa.dev/errors/" + title,
+		"type":       "https://nudgeway.dev/errors/" + title,
 		"title":      title,
 		"status":     status,
 		"detail":     detail,

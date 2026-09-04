@@ -8,8 +8,8 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/ports/queue"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
 )
 
 // tuning constants shared across producer + consumer.

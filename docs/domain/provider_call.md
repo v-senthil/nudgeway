@@ -104,9 +104,9 @@ A Phase 4 rolling-delete job will drop rows older than 30 days by default
 range deletes cheap.
 
 Until that job lands, operators should monitor `provider_calls` table
-size via Prometheus (`fullwa_provider_calls_row_count` — TODO) and
+size via Prometheus (`nudgeway_provider_calls_row_count` — TODO) and
 periodically run `DELETE FROM provider_calls WHERE occurred_at < NOW() -
-INTERVAL 30 DAY` from `fullwa-cli` (TODO subcommand).
+INTERVAL 30 DAY` from `nudgeway-cli` (TODO subcommand).
 
 ## Related
 

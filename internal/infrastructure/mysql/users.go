@@ -9,8 +9,8 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	dusr "github.com/fullwa/fullwa/internal/domain/user"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	dusr "github.com/v-senthil/nudgeway/internal/domain/user"
 )
 
 // Users implements application/auth.UserFinder against the users table.

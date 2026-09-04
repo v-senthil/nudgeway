@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // SetProviderMessageID stamps a message's provider_message_id after a

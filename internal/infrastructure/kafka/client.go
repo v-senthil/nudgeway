@@ -1,4 +1,4 @@
-// Package kafka wires fullWA's durable event log and job queue on top of
+// Package kafka wires Nudgeway's durable event log and job queue on top of
 // Apache Kafka via the franz-go client. It implements the queue and eventbus
 // ports so callers stay unaware of the underlying broker.
 //
@@ -17,11 +17,11 @@ import (
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
 )
 
 // NewClient builds a producer-capable franz-go client with sensible defaults
-// for the fullWA workload: idempotent producer, snappy compression, small
+// for the Nudgeway workload: idempotent producer, snappy compression, small
 // batches with a short linger so end-to-end latency stays low.
 //
 // The returned client is safe for concurrent use. Callers own the lifecycle
@@ -75,7 +75,7 @@ func Close(c *kgo.Client) {
 
 func clientID(cfg config.KafkaConfig) string {
 	if cfg.ClientID == "" {
-		return "fullwa"
+		return "nudgeway"
 	}
 	return cfg.ClientID
 }

@@ -12,7 +12,7 @@ import { PhoneNumberQRModal } from './PhoneNumberQRModal';
  * clipboard on every row — these are the values operators most often
  * need when configuring the Meta App dashboard. Also surfaces the live
  * Meta phone-number record (status, quality, tier, etc.) so operators
- * can spot issues without leaving fullWA. */
+ * can spot issues without leaving Nudgeway. */
 export function DetailsTab({ integration }: { integration: Integration }) {
   const pnid = integrationPhoneNumberID(integration);
   const waba = integrationWABAID(integration);

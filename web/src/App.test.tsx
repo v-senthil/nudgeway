@@ -13,6 +13,6 @@ describe('App', () => {
 
   it('renders the header', () => {
     render(<App />);
-    expect(screen.getByText('fullWA')).toBeInTheDocument();
+    expect(screen.getByText('Nudgeway')).toBeInTheDocument();
   });
 });

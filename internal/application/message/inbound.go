@@ -9,12 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/domain/identity"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/domain/identity"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // InboundService is the application-layer entry point for processing a

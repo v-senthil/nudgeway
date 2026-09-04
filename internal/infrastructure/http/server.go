@@ -1,4 +1,4 @@
-// Package http wraps the stdlib HTTP server with fullWA defaults, middleware
+// Package http wraps the stdlib HTTP server with Nudgeway defaults, middleware
 // composition, and graceful shutdown.
 //
 // Phase 0 exposes only the raw mux and health probes. Phase 1 adds the
@@ -11,7 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
 )
 
 // Server is a thin wrapper around *http.Server with a mux and structured

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	"github.com/fullwa/fullwa/internal/infrastructure/auth"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/auth"
 )
 
 type stubResolver struct{ perms rbac.PermissionSet }

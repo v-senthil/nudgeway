@@ -7,8 +7,8 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
-	"github.com/fullwa/fullwa/internal/domain/session"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/session"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // Upsert finds-or-creates the (org, provider, external_id) tuple, linking

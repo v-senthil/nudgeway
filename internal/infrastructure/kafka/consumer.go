@@ -9,8 +9,8 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
-	"github.com/fullwa/fullwa/internal/ports/queue"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
 )
 
 // Consumer implements queue.Consumer. Each call to Consume spins up a

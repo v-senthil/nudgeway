@@ -1,4 +1,4 @@
-# golangci-lint config for fullWA.
+# golangci-lint config for Nudgeway.
 run:
   timeout: 5m
   tests: true

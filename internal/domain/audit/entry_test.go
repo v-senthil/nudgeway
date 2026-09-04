@@ -3,7 +3,7 @@ package audit_test
 import (
 	"testing"
 
-	"github.com/fullwa/fullwa/internal/domain/audit"
+	"github.com/v-senthil/nudgeway/internal/domain/audit"
 )
 
 func TestActionConstants(t *testing.T) {

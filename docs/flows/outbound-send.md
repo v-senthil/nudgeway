@@ -1,6 +1,6 @@
 # Outbound send flow
 
-Agent (or automation) posts a message → fullWA persists a `queued` row →
+Agent (or automation) posts a message → Nudgeway persists a `queued` row →
 the send worker drains the queue → the WhatsApp adapter POSTs to Meta →
 status webhooks close the loop.
 

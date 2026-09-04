@@ -7,10 +7,10 @@ import (
 
 	_ "github.com/go-sql-driver/mysql" // MySQL driver registration.
 
-	"github.com/fullwa/fullwa/internal/infrastructure/config"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/config"
 )
 
-// Open opens the fullWA MySQL pool with the driver + pool limits from cfg.
+// Open opens the Nudgeway MySQL pool with the driver + pool limits from cfg.
 // It pings the server before returning so the caller sees connection errors
 // synchronously at boot instead of on the first query.
 func Open(ctx context.Context, cfg config.MySQLConfig) (*sql.DB, error) {

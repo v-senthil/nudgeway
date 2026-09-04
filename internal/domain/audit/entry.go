@@ -4,8 +4,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/user"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/user"
 )
 
 // Action is a stable, human-readable verb identifying the mutation that

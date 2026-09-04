@@ -35,7 +35,7 @@ func (s *statusRecorder) Write(b []byte) (int, error) {
 }
 
 // HTTPMiddleware returns a middleware that records HTTP request counts
-// and latencies onto the fullWA metrics registry. The `route` argument is
+// and latencies onto the Nudgeway metrics registry. The `route` argument is
 // the route template (not the raw URL) — pass it in from the router so
 // paths remain low cardinality. When empty, `r.URL.Path` is used as a
 // last-resort label; prefer to mount this per-route.

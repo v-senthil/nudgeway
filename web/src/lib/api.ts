@@ -30,7 +30,7 @@ type ApiOptions = {
   signal?: AbortSignal;
 };
 
-const CSRF_COOKIE = 'fullwa_csrf';
+const CSRF_COOKIE = 'nudgeway_csrf';
 
 export async function api<T = unknown>(path: string, opts: ApiOptions = {}): Promise<T> {
   const method: HttpMethod = opts.method ?? 'GET';

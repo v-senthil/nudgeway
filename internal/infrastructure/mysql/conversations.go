@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/conversation"
-	dgroup "github.com/fullwa/fullwa/internal/domain/group"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/session"
-	dusr "github.com/fullwa/fullwa/internal/domain/user"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/conversation"
+	dgroup "github.com/v-senthil/nudgeway/internal/domain/group"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/session"
+	dusr "github.com/v-senthil/nudgeway/internal/domain/user"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // Conversations implements repository.ConversationRepo.

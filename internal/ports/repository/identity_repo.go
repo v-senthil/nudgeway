@@ -3,9 +3,9 @@ package repository
 import (
 	"context"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/identity"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/identity"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // IdentityRepo persists ContactIdentity rows.

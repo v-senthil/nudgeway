@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/ports/channel"
+	"github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/ports/channel"
 )
 
 // ---------- Meta wire types (adapter-local; NEVER leak out of this package) ----------

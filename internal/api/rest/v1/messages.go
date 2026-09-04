@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"strconv"
 
-	appmsg "github.com/fullwa/fullwa/internal/application/message"
-	"github.com/fullwa/fullwa/internal/domain/conversation"
-	msgdom "github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	appmsg "github.com/v-senthil/nudgeway/internal/application/message"
+	"github.com/v-senthil/nudgeway/internal/domain/conversation"
+	msgdom "github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // ConversationSummary is the compact conversation row returned by the

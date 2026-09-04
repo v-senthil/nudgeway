@@ -1,6 +1,6 @@
 # Flow: Outbound WhatsApp call
 
-An outbound call is a business-initiated call placed via the fullWA
+An outbound call is a business-initiated call placed via the Nudgeway
 operator UI. The full lifecycle spans a synchronous REST request that
 persists a queued row + kicks off the Meta initiate, followed by an
 asynchronous stream of webhooks that advance the row through the state

@@ -8,10 +8,10 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	tmpldom "github.com/fullwa/fullwa/internal/domain/template"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	tmpldom "github.com/v-senthil/nudgeway/internal/domain/template"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // ProviderTemplateSummary is the provider-neutral view of one row returned

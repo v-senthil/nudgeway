@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/fullwa/fullwa/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
 )
 
 // WebhookEventRepo persists raw webhook deliveries for idempotency + audit.

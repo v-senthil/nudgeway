@@ -23,7 +23,7 @@ type Argon2Params struct {
 	KeyBytes    uint32
 }
 
-// DefaultArgon2Params returns the fullWA defaults.
+// DefaultArgon2Params returns the Nudgeway defaults.
 func DefaultArgon2Params() Argon2Params {
 	return Argon2Params{
 		MemoryKiB:   64 * 1024,

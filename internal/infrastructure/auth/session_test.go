@@ -29,7 +29,7 @@ func TestSetSessionCookie_FlagsAreSafe(t *testing.T) {
 	t.Parallel()
 	w := httptest.NewRecorder()
 	SetSessionCookie(w, SessionID("abc"), CookieOptions{
-		Name: "fullwa_session", MaxAge: time.Hour, Secure: true,
+		Name: "nudgeway_session", MaxAge: time.Hour, Secure: true,
 	})
 	resp := w.Result()
 	defer func() { _ = resp.Body.Close() }()
@@ -55,7 +55,7 @@ func TestSetSessionCookie_FlagsAreSafe(t *testing.T) {
 func TestClearSessionCookie_ExpiresImmediately(t *testing.T) {
 	t.Parallel()
 	w := httptest.NewRecorder()
-	ClearSessionCookie(w, CookieOptions{Name: "fullwa_session"})
+	ClearSessionCookie(w, CookieOptions{Name: "nudgeway_session"})
 	c := w.Result().Cookies()[0]
 	if c.MaxAge != -1 {
 		t.Errorf("MaxAge = %d, want -1", c.MaxAge)

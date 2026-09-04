@@ -1,6 +1,6 @@
 # Phase 2 — Multi-provider readiness + operator trust
 
-Status: **in progress**. Phase 2 broadens fullWA from a WhatsApp inbox MVP into a multi-provider platform with the operator-trust surfaces (audit trail, per-provider call telemetry, richer RBAC) that make it safe to run in production.
+Status: **in progress**. Phase 2 broadens Nudgeway from a WhatsApp inbox MVP into a multi-provider platform with the operator-trust surfaces (audit trail, per-provider call telemetry, richer RBAC) that make it safe to run in production.
 
 ## Goal (from the master plan)
 

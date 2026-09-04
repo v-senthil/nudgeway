@@ -4,9 +4,9 @@ import (
 	"context"
 	"log/slog"
 
-	daudit "github.com/fullwa/fullwa/internal/domain/audit"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	daudit "github.com/v-senthil/nudgeway/internal/domain/audit"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // Deps bundles the application service's dependencies. Repo is required;

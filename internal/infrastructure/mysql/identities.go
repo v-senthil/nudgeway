@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/identity"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/identity"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // Identities implements repository.IdentityRepo against contact_identities.

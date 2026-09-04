@@ -1,6 +1,6 @@
-# fullWA runbook
+# Nudgeway runbook
 
-Operational procedures for the fullWA platform. Expands per phase — Phase 0 lands the skeleton.
+Operational procedures for the Nudgeway platform. Expands per phase — Phase 0 lands the skeleton.
 
 ## Local dev bring-up
 
@@ -17,15 +17,15 @@ Operational procedures for the fullWA platform. Expands per phase — Phase 0 la
 
 ## Metrics
 
-- `GET /metrics` — Prometheus / OpenMetrics exposition served from the fullWA registry (`internal/infrastructure/metrics`).
-- All metric names follow `fullwa_<subsystem>_<name>_<unit>`. The full enumeration — labels, unit, and what triggers each — lives in [`docs/observability/metric-catalog.md`](observability/metric-catalog.md).
+- `GET /metrics` — Prometheus / OpenMetrics exposition served from the Nudgeway registry (`internal/infrastructure/metrics`).
+- All metric names follow `nudgeway_<subsystem>_<name>_<unit>`. The full enumeration — labels, unit, and what triggers each — lives in [`docs/observability/metric-catalog.md`](observability/metric-catalog.md).
 - Families emitted:
-  - **HTTP** — `fullwa_http_requests_total`, `fullwa_http_request_duration_seconds` (labels: method, path, status). Recorded by `metrics.Metrics.HTTPMiddleware`.
-  - **Providers** — `fullwa_provider_calls_total`, `fullwa_provider_call_duration_seconds` (labels: provider, operation, outcome). Recorded inside each provider adapter under `internal/providers/*`.
-  - **Workers** — `fullwa_worker_jobs_total`, `fullwa_worker_job_duration_seconds`, `fullwa_worker_job_retries_total` (labels: lane, group, outcome). Recorded by the worker pool.
-  - **Webhooks** — `fullwa_webhook_events_received_total` (labels: provider, integration_id). Incremented by the webhook ingress.
-  - **Kafka** — `fullwa_kafka_producer_batch_bytes_total` (labels: topic), `fullwa_kafka_consumer_lag_records` (labels: topic, partition, group). Recorded by the Kafka producer/consumer.
-  - **WebSocket** — `fullwa_websocket_connections` (label: org_id_short). Tracked by the WS server around Connect/Disconnect.
+  - **HTTP** — `nudgeway_http_requests_total`, `nudgeway_http_request_duration_seconds` (labels: method, path, status). Recorded by `metrics.Metrics.HTTPMiddleware`.
+  - **Providers** — `nudgeway_provider_calls_total`, `nudgeway_provider_call_duration_seconds` (labels: provider, operation, outcome). Recorded inside each provider adapter under `internal/providers/*`.
+  - **Workers** — `nudgeway_worker_jobs_total`, `nudgeway_worker_job_duration_seconds`, `nudgeway_worker_job_retries_total` (labels: lane, group, outcome). Recorded by the worker pool.
+  - **Webhooks** — `nudgeway_webhook_events_received_total` (labels: provider, integration_id). Incremented by the webhook ingress.
+  - **Kafka** — `nudgeway_kafka_producer_batch_bytes_total` (labels: topic), `nudgeway_kafka_consumer_lag_records` (labels: topic, partition, group). Recorded by the Kafka producer/consumer.
+  - **WebSocket** — `nudgeway_websocket_connections` (label: org_id_short). Tracked by the WS server around Connect/Disconnect.
 - Standard `GoCollector` + `ProcessCollector` are also registered — Go runtime and process stats come for free.
 - Scrape config: point Prometheus at `http://<host>:8080/metrics`. No authentication in local; expose behind an internal-only listener in prod.
 

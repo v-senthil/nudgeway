@@ -6,7 +6,7 @@ package eventbus
 import (
 	"context"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
 )
 
 // Publisher accepts events and returns after the event has been durably

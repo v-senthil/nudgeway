@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/call"
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/conversation"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/call"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/conversation"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // CallListFilter narrows a CallRepo.List query. All fields are optional;

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // UpdateStatusByProviderMessageID advances a message's status by looking it up

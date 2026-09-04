@@ -16,7 +16,7 @@ export function App() {
   return (
     <main className="min-h-screen flex items-center justify-center">
       <div className="rounded-2xl border bg-white p-8 shadow-sm text-center max-w-md">
-        <h1 className="text-2xl font-semibold">fullWA</h1>
+        <h1 className="text-2xl font-semibold">Nudgeway</h1>
         <p className="text-sm text-slate-500 mt-1">Phase 0 — walking skeleton.</p>
         <div className="mt-6 text-sm">
           {err !== null && <div className="text-rose-600">/healthz error: {err}</div>}

@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/conversation"
-	"github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/conversation"
+	"github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // MessageListFilter narrows a Message listing.

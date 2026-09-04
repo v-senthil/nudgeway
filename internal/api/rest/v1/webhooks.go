@@ -3,7 +3,7 @@ package v1
 import (
 	"net/http"
 
-	"github.com/fullwa/fullwa/internal/webhook"
+	"github.com/v-senthil/nudgeway/internal/webhook"
 )
 
 // WebhookDeps bundles what the webhook routes need. The ingress helper owns

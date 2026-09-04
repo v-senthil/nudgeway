@@ -5,10 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/rbac"
-	dusr "github.com/fullwa/fullwa/internal/domain/user"
-	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/rbac"
+	dusr "github.com/v-senthil/nudgeway/internal/domain/user"
+	infauth "github.com/v-senthil/nudgeway/internal/infrastructure/auth"
 )
 
 // UserFinder locates a user by normalized email for authentication.

@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/ports/calling"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/ports/calling"
 )
 
 // ---------- Provider port implementation ----------

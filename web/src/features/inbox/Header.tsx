@@ -55,7 +55,7 @@ export function Header({ me }: Props) {
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white">
           <span className="text-[11px] font-bold">fW</span>
         </div>
-        <span className="text-sm font-semibold tracking-tight text-slate-900">fullWA</span>
+        <span className="text-sm font-semibold tracking-tight text-slate-900">Nudgeway</span>
       </div>
 
       <nav aria-label="Primary" className="flex items-center gap-1">

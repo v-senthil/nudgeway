@@ -1,4 +1,4 @@
-// Package config loads runtime configuration from YAML, applies FULLWA_*
+// Package config loads runtime configuration from YAML, applies NUDGEWAY_*
 // environment-variable overrides, and validates the result.
 //
 // Precedence: env vars > config file > defaults.
@@ -88,7 +88,7 @@ func (w WorkerConfig) EffectiveConcurrency() int {
 
 // KafkaConfig configures the durable event log + job queue backend.
 // Brokers list is the bootstrap set; TopicsPrefix namespaces every topic
-// (default "fullwa") so multiple deploys can share a cluster without
+// (default "nudgeway") so multiple deploys can share a cluster without
 // colliding. ReplicationFactor and DefaultPartitions are applied when
 // EnsureTopics creates a missing topic.
 type KafkaConfig struct {
@@ -173,7 +173,7 @@ type FrontendConfig struct {
 	ViteDevProxy  string
 }
 
-// Load reads YAML from path, applies FULLWA_* overrides, and validates.
+// Load reads YAML from path, applies NUDGEWAY_* overrides, and validates.
 func Load(path string) (Config, error) {
 	cfg := defaults()
 	if path != "" {
@@ -205,13 +205,13 @@ func defaults() Config {
 			ShutdownTimeout: 20 * time.Second,
 		},
 		Auth: AuthConfig{
-			SessionCookieName: "fullwa_session",
+			SessionCookieName: "nudgeway_session",
 			SessionTTL:        720 * time.Hour,
-			CSRFCookieName:    "fullwa_csrf",
+			CSRFCookieName:    "nudgeway_csrf",
 		},
 		MySQL: MySQLConfig{MaxOpenConns: 32, MaxIdleConns: 8, ConnMaxLifetime: 30 * time.Minute},
 		Redis: RedisConfig{Addr: "127.0.0.1:6379", PoolSize: 32},
-		HBase: HBaseConfig{ZNodeParent: "/hbase", Namespace: "fullwa"},
+		HBase: HBaseConfig{ZNodeParent: "/hbase", Namespace: "nudgeway"},
 		Log:   LogConfig{Level: "info", Format: "json"},
 		Metrics: MetricsConfig{Enabled: true, Path: "/metrics"},
 		WebSocket: WebSocketConfig{
@@ -223,8 +223,8 @@ func defaults() Config {
 		Attachments: AttachmentsConfig{Root: "./attachments"},
 		Kafka: KafkaConfig{
 			Brokers:           []string{"127.0.0.1:9092"},
-			ClientID:          "fullwa",
-			TopicsPrefix:      "fullwa",
+			ClientID:          "nudgeway",
+			TopicsPrefix:      "nudgeway",
 			ReplicationFactor: 1,
 			DefaultPartitions: 6,
 		},
@@ -508,22 +508,22 @@ func parseList(s string) []string {
 }
 
 func applyEnv(cfg *Config) {
-	if v := os.Getenv("FULLWA_HTTP_ADDR"); v != "" {
+	if v := os.Getenv("NUDGEWAY_HTTP_ADDR"); v != "" {
 		cfg.HTTP.Addr = v
 	}
-	if v := os.Getenv("FULLWA_MYSQL_DSN"); v != "" {
+	if v := os.Getenv("NUDGEWAY_MYSQL_DSN"); v != "" {
 		cfg.MySQL.DSN = v
 	}
-	if v := os.Getenv("FULLWA_REDIS_ADDR"); v != "" {
+	if v := os.Getenv("NUDGEWAY_REDIS_ADDR"); v != "" {
 		cfg.Redis.Addr = v
 	}
-	if v := os.Getenv("FULLWA_LOG_LEVEL"); v != "" {
+	if v := os.Getenv("NUDGEWAY_LOG_LEVEL"); v != "" {
 		cfg.Log.Level = v
 	}
-	if v := os.Getenv("FULLWA_ENV"); v != "" {
+	if v := os.Getenv("NUDGEWAY_ENV"); v != "" {
 		cfg.Env = v
 	}
-	if v := os.Getenv("FULLWA_KAFKA_BROKERS"); v != "" {
+	if v := os.Getenv("NUDGEWAY_KAFKA_BROKERS"); v != "" {
 		parts := strings.Split(v, ",")
 		out := make([]string, 0, len(parts))
 		for _, p := range parts {

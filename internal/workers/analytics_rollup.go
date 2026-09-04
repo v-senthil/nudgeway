@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	appanalytics "github.com/fullwa/fullwa/internal/application/analytics"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	appanalytics "github.com/v-senthil/nudgeway/internal/application/analytics"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // AnalyticsRollupJobName is the bookmark key persisted in

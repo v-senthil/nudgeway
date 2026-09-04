@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/analytics"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/analytics"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // AnalyticsSource implements repository.AnalyticsSource by reading the

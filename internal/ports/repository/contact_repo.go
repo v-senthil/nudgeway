@@ -3,8 +3,8 @@ package repository
 import (
 	"context"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // ContactListFilter is an org-scoped list filter.

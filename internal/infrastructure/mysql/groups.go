@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	dgroup "github.com/fullwa/fullwa/internal/domain/group"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	dgroup "github.com/v-senthil/nudgeway/internal/domain/group"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // Groups implements repository.GroupRepo against the `groups` +

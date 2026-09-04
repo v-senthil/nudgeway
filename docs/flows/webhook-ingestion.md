@@ -1,6 +1,6 @@
 # Webhook ingestion — generic ingress + provider dispatch
 
-fullWA exposes a single generic webhook ingress at `internal/webhook/` mounted by the REST router at:
+Nudgeway exposes a single generic webhook ingress at `internal/webhook/` mounted by the REST router at:
 
 - `GET  /webhooks/{provider}/{integration_id}` — Meta-style subscription verification handshake.
 - `POST /webhooks/{provider}/{integration_id}` — signed delivery.
@@ -15,7 +15,7 @@ sequenceDiagram
     participant Repo as IntegrationRepo (mysql)
     participant Adapter as provider.<name> SignatureVerifier
     participant DB as MySQL webhook_events
-    participant Queue as Kafka fullwa.jobs.webhook.process
+    participant Queue as Kafka nudgeway.jobs.webhook.process
     participant Worker as workers/webhook
     participant App as internal/application/*
     participant Bus as event bus

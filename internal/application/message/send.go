@@ -10,17 +10,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/conversation"
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/domain/identity"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	msgdom "github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/channel"
-	"github.com/fullwa/fullwa/internal/ports/eventbus"
-	"github.com/fullwa/fullwa/internal/ports/queue"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/conversation"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/domain/identity"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	msgdom "github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/channel"
+	"github.com/v-senthil/nudgeway/internal/ports/eventbus"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // SendLane is the queue lane that carries outbound send jobs to the send

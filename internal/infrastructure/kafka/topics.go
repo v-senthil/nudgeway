@@ -23,7 +23,7 @@ const (
 // under the given prefix.
 func TopicName(prefix string, kind TopicKind, name string) string {
 	if prefix == "" {
-		prefix = "fullwa"
+		prefix = "nudgeway"
 	}
 	return fmt.Sprintf("%s.%s.%s", prefix, string(kind), name)
 }

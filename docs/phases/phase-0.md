@@ -24,7 +24,7 @@ Repo is real. Local dev works against the developer's native MySQL + Redis (no D
   - `internal/infrastructure/{mysql,redis,hbase,websocket,http,auth,logging,metrics,tracing}`
   - `internal/{events,workers,scheduler,webhook,api/{rest/v1,ws,openapi}}`
   - `web/` (Vite + React + TS + Tailwind)
-- Go module `github.com/fullwa/fullwa` initialised.
+- Go module `github.com/v-senthil/nudgeway` initialised.
 - **Skeleton with real content, not just stubs**:
   - `cmd/server/main.go` — boots stdlib HTTP server, `/healthz`, `/readyz`, `/metrics`, structured slog, graceful shutdown.
   - `internal/infrastructure/config/` — YAML loader + env overrides + validation, unit-tested against `config/example.yaml`.

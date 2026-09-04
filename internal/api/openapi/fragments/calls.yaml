@@ -6,7 +6,7 @@
 
 openapi: 3.1.0
 info:
-  title: fullWA Calls API fragment
+  title: Nudgeway Calls API fragment
   version: 0.3.0-calls
 
 paths:
@@ -191,7 +191,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: fullwa_session
+      name: nudgeway_session
 
   responses:
     Unauthorized:

@@ -12,7 +12,7 @@ import (
 )
 
 // ClientOptions tunes the timing knobs of a single Client connection. Zero
-// values fall back to sensible defaults chosen for the fullWA inbox use case.
+// values fall back to sensible defaults chosen for the Nudgeway inbox use case.
 type ClientOptions struct {
 	// SendBuffer is the depth of the per-client outbound queue. When the
 	// queue is full the frame is dropped and the drop counter is incremented

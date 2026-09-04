@@ -12,14 +12,14 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // ID identifies a ContactIdentity row.
 type ID string
 
-// Type enumerates the kinds of identity values fullWA recognises.
+// Type enumerates the kinds of identity values Nudgeway recognises.
 type Type string
 
 // Type values.

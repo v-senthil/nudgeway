@@ -12,11 +12,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	"github.com/fullwa/fullwa/internal/ports/queue"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // MaxWebhookBodyBytes caps how much we will read from an inbound webhook
@@ -414,7 +414,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"type":       "https://fullwa.dev/errors/" + title,
+		"type":       "https://nudgeway.dev/errors/" + title,
 		"title":      title,
 		"status":     status,
 		"detail":     detail,

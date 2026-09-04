@@ -1,4 +1,4 @@
-# fullWA
+# Nudgeway
 
 Open-source, multi-tenant WhatsApp Business Platform. Provider-agnostic core — WhatsApp today, Zoho / OpenAI / Anthropic / Freshdesk / others plug in as adapters.
 
@@ -40,8 +40,8 @@ Optionally: a public HTTPS tunnel (cloudflared / ngrok) — needed only to expos
 ## 1. Clone + configure
 
 ```bash
-git clone https://github.com/v-senthil/whatsapp-cloud-api.git fullWA
-cd fullWA
+git clone https://github.com/v-senthil/nudgeway.git nudgeway
+cd nudgeway
 
 # Copy the example config; edit for your local services.
 cp config/example.yaml config/local.yaml
@@ -53,7 +53,7 @@ openssl rand -hex 32
 
 Point the DSNs at your local services (defaults assume `127.0.0.1` with default ports):
 
-- `mysql.dsn` — `root:root@tcp(127.0.0.1:3306)/fullwa?parseTime=true&multiStatements=true`
+- `mysql.dsn` — `root:root@tcp(127.0.0.1:3306)/nudgeway?parseTime=true&multiStatements=true`
 - `redis.addr` — `127.0.0.1:6379`
 - `kafka.brokers` — `["127.0.0.1:9092"]`
 - `hbase.zookeeper_quorum` — `["127.0.0.1:2181"]`
@@ -68,11 +68,11 @@ make check-infra
 
 ```bash
 # Create the database.
-mysql -u root -proot -e 'CREATE DATABASE IF NOT EXISTS fullwa CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;'
+mysql -u root -proot -e 'CREATE DATABASE IF NOT EXISTS nudgeway CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;'
 
 # Apply schema migrations.
 migrate -path migrations \
-  -database 'mysql://root:root@tcp(127.0.0.1:3306)/fullwa?parseTime=true&multiStatements=true' \
+  -database 'mysql://root:root@tcp(127.0.0.1:3306)/nudgeway?parseTime=true&multiStatements=true' \
   up
 ```
 
@@ -81,17 +81,17 @@ migrate -path migrations \
 Build the CLI:
 
 ```bash
-go build -o bin/fullwa-cli ./cmd/cli
+go build -o bin/nudgeway-cli ./cmd/cli
 ```
 
 Then:
 
 ```bash
 # Create an organization.
-./bin/fullwa-cli tenant create --slug acme --name "Acme Co"
+./bin/nudgeway-cli tenant create --slug acme --name "Acme Co"
 
 # Create the first admin user (grants the built-in admin role — every permission).
-./bin/fullwa-cli user create \
+./bin/nudgeway-cli user create \
   --org-slug acme --email you@acme.com --password password123 --admin
 ```
 
@@ -109,7 +109,7 @@ Or run them separately:
 
 ```bash
 # terminal 1 — backend
-FULLWA_CONFIG=config/local.yaml go run ./cmd/server
+NUDGEWAY_CONFIG=config/local.yaml go run ./cmd/server
 
 # terminal 2 — frontend
 cd web && npm install && npm run dev
@@ -126,31 +126,31 @@ Meta prerequisites you'll need from https://developers.facebook.com:
 - A **Business phone number** — grab the `Phone Number ID` + `Display phone number`.
 - A **System User Access Token** with `whatsapp_business_messaging` + `whatsapp_business_management` scopes.
 - The App's **App Secret** (Settings → Basic → App Secret).
-- A **Verify Token** you pick yourself (any string; you'll paste it into both Meta and fullWA).
+- A **Verify Token** you pick yourself (any string; you'll paste it into both Meta and Nudgeway).
 
-In the fullWA UI:
+In the Nudgeway UI:
 
 1. Go to **Settings → Integrations → Connect WhatsApp**.
 2. Paste the six fields (Name, Phone Number ID, WABA ID, Access Token, App Secret, Verify Token).
-3. Save. fullWA envelope-encrypts the secrets and stores them.
+3. Save. Nudgeway envelope-encrypts the secrets and stores them.
 4. Copy the **Webhook URL** shown on the integration row (e.g. `https://<your-tunnel>.trycloudflare.com/webhooks/whatsapp/<integration_id>`).
 
 In the Meta App dashboard → **WhatsApp → Configuration**:
 
 1. Paste the webhook URL into **Callback URL**.
 2. Paste the Verify Token you chose in step 2.
-3. Click **Verify and save** — fullWA responds with the `hub.challenge`.
+3. Click **Verify and save** — Nudgeway responds with the `hub.challenge`.
 4. Subscribe to at least: `messages`, `message_status`, `calls`, `call_settings_update`.
 
 ### Sanity checks
 
-- **Outbound:** open the Inbox in fullWA → pick a conversation with a customer who has messaged you (a 24-hour open session is required for non-template sends) → type a message → Send. It should arrive on the customer's WhatsApp within a second.
+- **Outbound:** open the Inbox in Nudgeway → pick a conversation with a customer who has messaged you (a 24-hour open session is required for non-template sends) → type a message → Send. It should arrive on the customer's WhatsApp within a second.
 - **Inbound:** send a WhatsApp message from your phone → the conversation appears in the Inbox, message renders live via WebSocket.
 - **Calls:** trigger an inbound call → an accept/reject popup appears bottom-right. Clicking Accept prompts for mic permission, negotiates WebRTC, and connects audio.
 
 ### Dev-mode webhook signature
 
-For local development the webhook accepts payloads that match the configured `phone_number_id` + `waba_id` (Meta App Secret is unreliable across some networks). Set `FULLWA_REQUIRE_SIGNATURE=1` in the env to force HMAC-SHA256 `X-Hub-Signature-256` verification (recommended for production).
+For local development the webhook accepts payloads that match the configured `phone_number_id` + `waba_id` (Meta App Secret is unreliable across some networks). Set `NUDGEWAY_REQUIRE_SIGNATURE=1` in the env to force HMAC-SHA256 `X-Hub-Signature-256` verification (recommended for production).
 
 ## Repo layout
 
@@ -184,9 +184,9 @@ make test-int                 # integration tests (real MySQL/Redis/HBase)
 make verify                   # fmt + vet + lint + arch-lint + all tests
 
 # CLI
-./bin/fullwa-cli tenant create --slug X --name Y
-./bin/fullwa-cli user create --org-slug X --email E --password P [--admin]
-./bin/fullwa-cli integration create --org-slug X --provider whatsapp \
+./bin/nudgeway-cli tenant create --slug X --name Y
+./bin/nudgeway-cli user create --org-slug X --email E --password P [--admin]
+./bin/nudgeway-cli integration create --org-slug X --provider whatsapp \
     --name N --phone-number-id P --waba-id W --access-token T \
     --app-secret A --verify-token V
 ```

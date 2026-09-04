@@ -3,7 +3,7 @@ package integration
 import (
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // WebhookEventID identifies a persisted webhook_events row.

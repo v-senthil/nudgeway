@@ -30,7 +30,7 @@ Real WhatsApp messages flow in and out through the canonical domain, visible in 
 - **Provider adapter**: `internal/providers/whatsapp` — send/receive/mark-as-read/upload/download/verify-signature/parse-webhook; `channel.Provider` interface + `providers` registry.
 - **Application services**: `SendService` (RequestSend + ProcessSend), `InboundService` (ProcessRaw), `ReadService` (MarkRead + MarkConversationRead), `IntegrationService` (List/Create/Test/Delete).
 - **REST v1**: auth, integrations (CRUD + test), messages (send + list-by-conversation + mark-as-read), conversations (list), attachments (upload + serve), webhooks (Meta ingress + verify handshake).
-- **Dev-mode webhook fallback**: `webhook.Ingress.RequireSignature` gate switches from HMAC to payload-claims match (`phone_number_id` + `waba_id` in `integration.Config`). `FULLWA_REQUIRE_SIGNATURE=1` re-enables HMAC.
+- **Dev-mode webhook fallback**: `webhook.Ingress.RequireSignature` gate switches from HMAC to payload-claims match (`phone_number_id` + `waba_id` in `integration.Config`). `NUDGEWAY_REQUIRE_SIGNATURE=1` re-enables HMAC.
 
 ### BSUID rollout support
 Meta is migrating from `wa_id` (phone-number-based) to BSUID (business-scoped user id, e.g. `IN.10173928811470384`). Full doc at `~/Documents/whatsapp_doc_tracker/docs/business-scoped-user-ids.md`.
@@ -47,13 +47,13 @@ Meta is migrating from `wa_id` (phone-number-based) to BSUID (business-scoped us
 - **Rendering**: `TextBubble`, `MediaBubble` (image/video/audio/document/sticker), `LocationBubble`, `ContactCardBubble`, `InteractiveBubble`, `UnknownBubble`; reactions overlaid as chip on the target bubble.
 - **Real-time**: `useInboxSocket` opens `/ws/inbox`, invalidates `['messages', <conversation_id>]` on any `message.*` frame.
 - **Auto mark-as-read**: `Thread` fires `MarkConversationRead` on mount / conversation change with 5s throttle per conversation.
-- **Header**: fullWA wordmark, org name, settings gear icon (opens `/settings/integrations`), user avatar dropdown with logout.
+- **Header**: Nudgeway wordmark, org name, settings gear icon (opens `/settings/integrations`), user avatar dropdown with logout.
 - **Settings**: Integrations page with WhatsApp connect wizard (form → test → save); status badges (Connected / Not connected / Pending / Degraded / Auth failed / Rate limited / Disabled / Unknown).
 
 ## Notable follow-ups deferred
 - Contact 360 hydration is stubbed (right pane). Real profile / tags / custom fields / activity timeline lands in Phase 2.
 - Frontend Settings only exposes Integrations. Templates / canned responses / automations / roles / audit ship in Phase 2 / 4.
-- HBase namespace is currently the default; `fullwa:attachments` awaits a gohbase namespace-RPC fix. Table name is `fullwa_attachments` in the default namespace.
+- HBase namespace is currently the default; `nudgeway:attachments` awaits a gohbase namespace-RPC fix. Table name is `nudgeway_attachments` in the default namespace.
 - BSUID promoted-to-primary on send once Meta portfolio-side accepts all BSUIDs (currently phone-first with BSUID fallback).
 - The 30-day / 7-day media-URL expiry (Meta doc) — reconciler + refresh path lands with the archival worker in Phase 4.
 
@@ -66,26 +66,26 @@ Replaces the Phase 0 placeholder metric handler with the real Prometheus surface
 
 **What landed**
 
-- `internal/infrastructure/metrics/metrics.go` — dedicated `*prometheus.Registry`, canonical fullWA metric families (see the catalog below), and `Metrics.Handler()` serving the OpenMetrics exposition.
+- `internal/infrastructure/metrics/metrics.go` — dedicated `*prometheus.Registry`, canonical Nudgeway metric families (see the catalog below), and `Metrics.Handler()` serving the OpenMetrics exposition.
 - `internal/infrastructure/metrics/http.go` — `Metrics.HTTPMiddleware(route)` — wraps a handler with a status-capturing `ResponseWriter` and records the HTTP counter + histogram.
 - `internal/infrastructure/health/kafka.go` — `KafkaProbe(brokers)` — TCP dials each broker with a 500 ms timeout; green if any answers. Deeper metadata probe is Phase 2.
 - `scripts/check-infra.sh` — Kafka section added: parses the inline `kafka.brokers` list from the config file (same style used for `hbase.zookeeper_quorum`) and TCP-checks each broker; `[skip]` when the key is absent.
 
-**Metric families** (all names `fullwa_<subsystem>_<name>_<unit>`; full catalog in `docs/observability/metric-catalog.md`)
+**Metric families** (all names `nudgeway_<subsystem>_<name>_<unit>`; full catalog in `docs/observability/metric-catalog.md`)
 
 | Family | Kind | Labels |
 |---|---|---|
-| `fullwa_http_requests_total` | counter | method, path, status |
-| `fullwa_http_request_duration_seconds` | histogram | method, path, status |
-| `fullwa_provider_calls_total` | counter | provider, operation, outcome |
-| `fullwa_provider_call_duration_seconds` | histogram | provider, operation, outcome |
-| `fullwa_worker_jobs_total` | counter | lane, group, outcome |
-| `fullwa_worker_job_duration_seconds` | histogram | lane, group, outcome |
-| `fullwa_worker_job_retries_total` | counter | lane, group |
-| `fullwa_webhook_events_received_total` | counter | provider, integration_id |
-| `fullwa_kafka_producer_batch_bytes_total` | counter | topic |
-| `fullwa_kafka_consumer_lag_records` | gauge | topic, partition, group |
-| `fullwa_websocket_connections` | gauge | org_id_short |
+| `nudgeway_http_requests_total` | counter | method, path, status |
+| `nudgeway_http_request_duration_seconds` | histogram | method, path, status |
+| `nudgeway_provider_calls_total` | counter | provider, operation, outcome |
+| `nudgeway_provider_call_duration_seconds` | histogram | provider, operation, outcome |
+| `nudgeway_worker_jobs_total` | counter | lane, group, outcome |
+| `nudgeway_worker_job_duration_seconds` | histogram | lane, group, outcome |
+| `nudgeway_worker_job_retries_total` | counter | lane, group |
+| `nudgeway_webhook_events_received_total` | counter | provider, integration_id |
+| `nudgeway_kafka_producer_batch_bytes_total` | counter | topic |
+| `nudgeway_kafka_consumer_lag_records` | gauge | topic, partition, group |
+| `nudgeway_websocket_connections` | gauge | org_id_short |
 
 Standard `GoCollector` and `ProcessCollector` are also registered on the same registry.
 
@@ -178,7 +178,7 @@ Ships the durable transport for `queue.Enqueuer` / `queue.Consumer` / `eventbus.
 - **`internal/infrastructure/kafka/eventbus.go`** — `NewEventBus(cfg, group, logger)` implements `eventbus.Subscriber`. First `Subscribe` for a Type starts a managed background goroutine; further subscribes for the same Type share it. `Close` cancels every goroutine and waits.
 - **`internal/infrastructure/kafka/codec.go`** — JSON `EncodeJob` / `DecodeJob` / `EncodeEnvelope` / `DecodeEnvelope`. Protobuf is a follow-up.
 - **`internal/infrastructure/kafka/probe.go`** — `Probe(client)` returns a `health.Probe` for `/readyz`.
-- `KafkaConfig` added to `internal/infrastructure/config/config.go`: `Brokers`, `ClientID`, `TopicsPrefix`, `ReplicationFactor`, `DefaultPartitions`. YAML `kafka:` section + `FULLWA_KAFKA_BROKERS` env override.
+- `KafkaConfig` added to `internal/infrastructure/config/config.go`: `Brokers`, `ClientID`, `TopicsPrefix`, `ReplicationFactor`, `DefaultPartitions`. YAML `kafka:` section + `NUDGEWAY_KAFKA_BROKERS` env override.
 - `config/example.yaml` + `config/local.yaml` gain the `kafka:` section pointing at `127.0.0.1:9092`.
 
 ### WebSocket real-time — Task 6 (2026-09-04)
@@ -314,7 +314,7 @@ to concrete adapters purely through the `channel.Provider` port.
 - **CLI `integration create`** — new subcommand in `cmd/cli/main.go`:
 
   ```bash
-  fullwa-cli integration create \
+  nudgeway-cli integration create \
     --org-slug acme --provider whatsapp --name "Acme Support" \
     --phone-number-id 123 --waba-id 456 \
     --access-token EAA... --app-secret ... --verify-token ...

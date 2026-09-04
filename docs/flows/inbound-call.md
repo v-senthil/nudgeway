@@ -11,7 +11,7 @@ sequenceDiagram
     autonumber
     participant User as WhatsApp user
     participant Meta as Meta Cloud API
-    participant Ingress as fullWA<br/>webhook ingress
+    participant Ingress as Nudgeway<br/>webhook ingress
     participant Parser as whatsapp<br/>ParseCallWebhook
     participant Svc as application/call<br/>Service
     participant Repo as MySQL calls

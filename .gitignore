@@ -1,8 +1,8 @@
 # binaries
 /bin/
 /dist/
-fullwa
-fullwa-cli
+nudgeway
+nudgeway-cli
 
 # go
 *.test

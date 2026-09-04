@@ -5,8 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	fws "github.com/fullwa/fullwa/internal/infrastructure/websocket"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
+	fws "github.com/v-senthil/nudgeway/internal/infrastructure/websocket"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
 	"nhooyr.io/websocket"
 )
 
@@ -116,7 +116,7 @@ func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, det
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"type":       "https://fullwa.dev/errors/" + title,
+		"type":       "https://nudgeway.dev/errors/" + title,
 		"title":      title,
 		"status":     status,
 		"detail":     detail,

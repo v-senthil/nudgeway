@@ -4,7 +4,7 @@ Status: Accepted (2026-09-03)
 
 ## Context
 
-fullWA needs a language that supports high-concurrency networking, cheap goroutines, first-class WebSocket + webhook workloads, a good single-binary story, and a small deployment footprint. It also needs to be pleasant to write with AI assistance and to review.
+Nudgeway needs a language that supports high-concurrency networking, cheap goroutines, first-class WebSocket + webhook workloads, a good single-binary story, and a small deployment footprint. It also needs to be pleasant to write with AI assistance and to review.
 
 ## Decision
 

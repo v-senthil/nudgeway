@@ -3,7 +3,7 @@ package analytics
 import (
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // SeriesKind names one of the read-side time-series a dashboard chart

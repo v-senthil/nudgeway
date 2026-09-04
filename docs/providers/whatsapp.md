@@ -23,7 +23,7 @@ Operators can wire a WhatsApp phone number in one of two ways: the settings UI o
 ### CLI (headless / bootstrap / CI)
 
 ```bash
-fullwa-cli integration create \
+nudgeway-cli integration create \
   --org-slug acme --provider whatsapp --name "Acme Support" \
   --phone-number-id 106540352242922 \
   --waba-id 102290129340398 \

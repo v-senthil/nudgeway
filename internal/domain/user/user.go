@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // ID identifies a platform user (agent/admin).

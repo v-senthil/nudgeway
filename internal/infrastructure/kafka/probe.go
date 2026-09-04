@@ -6,7 +6,7 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kgo"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/health"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/health"
 )
 
 // Probe returns a readiness Probe that checks broker connectivity by

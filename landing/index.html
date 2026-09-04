@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nudgeway — open-source WhatsApp Business Platform</title>
+    <meta
+      name="description"
+      content="Open-source, multi-tenant WhatsApp Business Platform. Real-time inbox, calls with WebRTC in the browser, template management, groups, analytics — single Go binary, MySQL + Redis + Kafka + HBase."
+    />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='28'%3E%F0%9F%92%AC%3C/text%3E%3C/svg%3E" />
+    <meta property="og:title" content="Nudgeway" />
+    <meta
+      property="og:description"
+      content="Open-source WhatsApp Business Platform — inbox, calls, templates, groups, analytics, multi-tenant, single binary."
+    />
+    <meta property="og:type" content="website" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              waGreen: "#25D366",
+              waTeal: "#128C7E",
+              slateInk: "#0f172a",
+            },
+            fontFamily: {
+              sans: [
+                "Inter",
+                "system-ui",
+                "-apple-system",
+                "Segoe UI",
+                "Roboto",
+                "sans-serif",
+              ],
+              mono: ["JetBrains Mono", "SFMono-Regular", "Menlo", "monospace"],
+            },
+          },
+        },
+      };
+    </script>
+    <link
+      rel="preconnect"
+      href="https://fonts.googleapis.com"
+    />
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        font-family: "Inter", system-ui, sans-serif;
+        background:
+          radial-gradient(1200px 600px at 100% -10%, rgba(37, 211, 102, 0.14), transparent 60%),
+          radial-gradient(900px 500px at -10% 20%, rgba(18, 140, 126, 0.12), transparent 60%),
+          #ffffff;
+      }
+      .grid-bg {
+        background-image:
+          linear-gradient(rgba(15, 23, 42, 0.05) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+        background-size: 40px 40px;
+      }
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+      }
+      .card {
+        background: white;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 1rem;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+      }
+      .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.18);
+        border-color: rgba(37, 211, 102, 0.35);
+      }
+      .code {
+        font-family: "JetBrains Mono", monospace;
+        font-size: 0.85rem;
+      }
+      details > summary {
+        list-style: none;
+        cursor: pointer;
+      }
+      details > summary::-webkit-details-marker {
+        display: none;
+      }
+      .pulse-dot {
+        position: relative;
+      }
+      .pulse-dot::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        background: currentColor;
+        opacity: 0.4;
+        animation: pulse 1.8s ease-out infinite;
+      }
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+          opacity: 0.5;
+        }
+        100% {
+          transform: scale(2.6);
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="text-slateInk antialiased">
+    <!-- Nav -->
+    <header class="sticky top-0 z-30 backdrop-blur bg-white/70 border-b border-slate-200/70">
+      <div class="max-w-6xl mx-auto flex items-center justify-between px-5 py-3">
+        <a href="#" class="flex items-center gap-2 font-bold text-lg">
+          <span class="inline-flex h-8 w-8 rounded-lg bg-gradient-to-br from-waGreen to-waTeal items-center justify-center text-white">
+            <!-- speech-bubble mark -->
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4">
+              <path
+                d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v9A2.5 2.5 0 0 1 17.5 17H10l-4.2 3.4A.6.6 0 0 1 4.8 20V17H6.5A2.5 2.5 0 0 1 4 14.5v-9Z"
+                fill="currentColor"
+              />
+            </svg>
+          </span>
+          <span>Nudgeway</span>
+        </a>
+        <nav class="hidden md:flex items-center gap-6 text-sm text-slate-600">
+          <a href="#features" class="hover:text-slateInk">Features</a>
+          <a href="#stack" class="hover:text-slateInk">Stack</a>
+          <a href="#quickstart" class="hover:text-slateInk">Quick start</a>
+          <a href="#faq" class="hover:text-slateInk">FAQ</a>
+        </nav>
+        <div class="flex items-center gap-2">
+          <a
+            href="https://github.com/v-senthil/nudgeway"
+            class="hidden sm:inline-flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-50"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4">
+              <path
+                d="M12 .5a11.5 11.5 0 0 0-3.63 22.4c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18a11 11 0 0 1 5.74 0c2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.73.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.15v3.19c0 .31.21.67.8.55A11.5 11.5 0 0 0 12 .5Z"
+              />
+            </svg>
+            GitHub
+          </a>
+          <a
+            href="#quickstart"
+            class="inline-flex text-sm px-3 py-1.5 rounded-lg bg-slateInk text-white hover:bg-slate-800"
+          >
+            Get started
+          </a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="relative overflow-hidden">
+      <div class="absolute inset-0 grid-bg opacity-60 pointer-events-none"></div>
+      <div class="relative max-w-6xl mx-auto px-5 pt-16 pb-20 grid lg:grid-cols-2 gap-10 items-center">
+        <div>
+          <span class="chip bg-emerald-50 text-emerald-700 border border-emerald-200/70">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 pulse-dot text-emerald-500"></span>
+            Open source · MIT
+          </span>
+          <h1 class="mt-4 text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.05]">
+            The open-source
+            <span class="bg-gradient-to-r from-waGreen to-waTeal bg-clip-text text-transparent">
+              WhatsApp Business
+            </span>
+            Platform.
+          </h1>
+          <p class="mt-5 text-lg text-slate-600 max-w-xl">
+            Real-time inbox, in-browser WebRTC calls, template management, groups, and analytics — multi-tenant, provider-agnostic, single Go binary. Meta today; Zoho / OpenAI / others plug in as adapters.
+          </p>
+          <div class="mt-7 flex flex-wrap gap-3">
+            <a
+              href="#quickstart"
+              class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-waGreen text-white font-semibold hover:brightness-95"
+            >
+              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4">
+                <path
+                  d="M8 5v14l11-7z"
+                  fill="currentColor"
+                />
+              </svg>
+              Run it locally
+            </a>
+            <a
+              href="https://github.com/v-senthil/nudgeway"
+              class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-300 font-semibold hover:bg-slate-50"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4">
+                <path
+                  d="M12 .5a11.5 11.5 0 0 0-3.63 22.4c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.36-3.87-1.36-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.05 0 0 .96-.31 3.15 1.18a11 11 0 0 1 5.74 0c2.19-1.49 3.15-1.18 3.15-1.18.62 1.59.23 2.76.11 3.05.73.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.15v3.19c0 .31.21.67.8.55A11.5 11.5 0 0 0 12 .5Z"
+                />
+              </svg>
+              View on GitHub
+            </a>
+          </div>
+          <div class="mt-8 flex items-center gap-5 text-xs text-slate-500">
+            <div class="flex items-center gap-1.5">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              Multi-tenant
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              Provider-agnostic
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              Single binary
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+              No Docker required
+            </div>
+          </div>
+        </div>
+
+        <!-- Mocked inbox illustration -->
+        <div class="relative">
+          <div class="absolute -inset-6 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-3xl blur-2xl opacity-70"></div>
+          <div class="relative card p-3 shadow-xl">
+            <div class="flex gap-3">
+              <!-- conv list -->
+              <div class="w-40 shrink-0 border-r border-slate-100 pr-3 space-y-2">
+                <div class="text-[10px] uppercase tracking-wide text-slate-400 px-1">Inbox</div>
+                <div class="p-2 rounded-lg bg-slate-100">
+                  <div class="text-xs font-semibold">Aditi Rao</div>
+                  <div class="text-[10px] text-slate-500 truncate">Order shipped 📦</div>
+                </div>
+                <div class="p-2 rounded-lg hover:bg-slate-50">
+                  <div class="text-xs font-semibold">+91 98800 12345</div>
+                  <div class="text-[10px] text-slate-500 truncate">Yes please, tomorrow works</div>
+                </div>
+                <div class="p-2 rounded-lg hover:bg-slate-50">
+                  <div class="text-xs font-semibold">Support · Group</div>
+                  <div class="text-[10px] text-slate-500 truncate">Rahul joined the group</div>
+                </div>
+                <div class="p-2 rounded-lg hover:bg-slate-50">
+                  <div class="text-xs font-semibold">Karan Patel</div>
+                  <div class="text-[10px] text-slate-500 truncate">📞 Missed voice call</div>
+                </div>
+              </div>
+              <!-- thread -->
+              <div class="flex-1 min-w-0 pt-1 space-y-3">
+                <div class="flex items-center gap-2">
+                  <div class="h-7 w-7 rounded-full bg-gradient-to-br from-waGreen to-waTeal text-white font-bold flex items-center justify-center text-[11px]">AR</div>
+                  <div class="text-sm font-semibold">Aditi Rao</div>
+                  <span class="chip bg-emerald-50 text-emerald-700 text-[10px]">online</span>
+                </div>
+                <div class="max-w-[80%] bg-slate-100 text-sm rounded-2xl rounded-tl-sm p-3">
+                  Hi! Just checking on my order status.
+                  <div class="text-[10px] text-slate-500 mt-1">10:24 AM</div>
+                </div>
+                <div class="max-w-[80%] ml-auto bg-emerald-100 text-sm rounded-2xl rounded-tr-sm p-3">
+                  Shipped this morning ✅ Tracking on the way.
+                  <div class="text-[10px] text-emerald-800/70 mt-1 flex items-center gap-1 justify-end">
+                    10:25 AM
+                    <svg viewBox="0 0 16 16" class="h-3 w-3" fill="currentColor">
+                      <path d="M11.7 4.3a1 1 0 0 0-1.4 0L6 8.6 4.7 7.3a1 1 0 0 0-1.4 1.4l2 2a1 1 0 0 0 1.4 0l5-5a1 1 0 0 0 0-1.4Z" />
+                      <path d="M15.7 4.3a1 1 0 0 0-1.4 0L10 8.6 8.7 7.3a1 1 0 0 0-1.4 1.4l2 2a1 1 0 0 0 1.4 0l5-5a1 1 0 0 0 0-1.4Z" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="max-w-[85%] bg-white border border-slate-200 text-sm rounded-2xl rounded-tl-sm p-3">
+                  <div class="text-[10px] uppercase tracking-wide text-slate-400 mb-1">Template · order_shipped</div>
+                  Your order <b>#4821</b> is on the way. Estimated delivery: <b>Sat, Sep 6</b>.
+                  <div class="mt-2 flex gap-2">
+                    <span class="chip bg-slate-100 text-slate-700">🔗 Track</span>
+                    <span class="chip bg-slate-100 text-slate-700">📞 Call us</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- floating call popup -->
+          <div class="absolute -bottom-4 -right-4 card p-3 w-64 shadow-xl">
+            <div class="flex items-center gap-2">
+              <div class="h-9 w-9 rounded-full bg-emerald-500 text-white flex items-center justify-center">
+                <svg viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor">
+                  <path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1v3.4a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.4a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.24 1L6.6 10.8Z" />
+                </svg>
+              </div>
+              <div class="min-w-0">
+                <div class="text-xs font-semibold">Incoming call</div>
+                <div class="text-[11px] text-slate-500 truncate">Aditi Rao · WhatsApp</div>
+              </div>
+            </div>
+            <div class="mt-3 flex gap-2">
+              <button class="flex-1 text-xs py-1.5 rounded-lg bg-emerald-500 text-white">Accept</button>
+              <button class="flex-1 text-xs py-1.5 rounded-lg border border-slate-300">Decline</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="py-20">
+      <div class="max-w-6xl mx-auto px-5">
+        <div class="max-w-2xl">
+          <span class="chip bg-slate-100 text-slate-600">What ships today</span>
+          <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight">
+            Everything you need to run WhatsApp for business.
+          </h2>
+          <p class="mt-3 text-slate-600">
+            Nudgeway is the platform, not a wrapper. Every feature is wired end-to-end — canonical domain, real-time UI, audit trail, observability.
+          </p>
+        </div>
+
+        <div class="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- feature cards -->
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v9A2.5 2.5 0 0 1 17.5 17H10l-4.2 3.4A.6.6 0 0 1 4.8 20V17h1.7A2.5 2.5 0 0 1 4 14.5v-9Z" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Real-time inbox</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              WebSocket-driven three-pane inbox. Optimistic sends, WhatsApp-style ticks (queued → sent → delivered → read), typing + presence.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1v3.4a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.4a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.24 1L6.6 10.8Z" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Calls with WebRTC</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Accept WhatsApp Business calls right in the browser. Inbound popup, one-tap accept, recording + transcript persisted to HBase.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M3 9h18M8 4v16" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Templates, WhatsApp-native</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Create, sync from Meta, submit for review. Renders in the thread the way WhatsApp renders it — header, body, footer, buttons.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <circle cx="9" cy="8" r="3" />
+                <circle cx="17" cy="10" r="2.5" />
+                <path d="M3 20c1-3 3.5-4.5 6-4.5s5 1.5 6 4.5M14.5 20c.6-2 2.2-3 3.5-3s2.9 1 3.5 3" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Groups</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              List, sync, and create WhatsApp groups when your number is OBA-eligible. Group threads land in the same inbox.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M4 4h16v6H4zM4 14h16v6H4z" />
+                <path d="M7 7h1M7 17h1" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Audit + Meta telemetry</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Every mutation logged. Every Meta Graph call captured with request, response, latency, and status — searchable at <span class="code">/settings/provider-calls</span>.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M3 20V10M9 20V4M15 20v-8M21 20v-14" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Analytics that update</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Sparkline KPIs for messages, delivery rate, response time, and calls. Rollups every 15 minutes; on-boot refresh so cards aren't empty.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <rect x="4" y="3" width="16" height="18" rx="2" />
+                <path d="M8 8h8M8 12h8M8 16h5" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">OBA · Profile · Username · QR</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Business account status, profile CRUD, call settings, business username with QR — one drawer per integration.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M12 3v18M3 12h18" />
+                <circle cx="12" cy="12" r="9" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Provider-agnostic core</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              WhatsApp today. Zoho Desk, OpenAI, Anthropic, Freshdesk — plug in as adapters. The domain never learns provider strings.
+            </p>
+          </div>
+
+          <div class="card p-5">
+            <div class="h-10 w-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.75">
+                <path d="M4 7l4-3h8l4 3v10l-4 3H8l-4-3z" />
+                <path d="M9 12l2 2 4-4" />
+              </svg>
+            </div>
+            <div class="mt-4 font-semibold">Multi-tenant + RBAC</div>
+            <p class="mt-1.5 text-sm text-slate-600">
+              Every query is org-scoped. Session cookies, argon2id passwords, per-permission gating, envelope-encrypted credentials.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture strip -->
+    <section id="stack" class="py-20 bg-slateInk text-white">
+      <div class="max-w-6xl mx-auto px-5">
+        <div class="max-w-2xl">
+          <span class="chip bg-white/10 text-white/80">Under the hood</span>
+          <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight">
+            One binary. Boring, proven infra.
+          </h2>
+          <p class="mt-3 text-white/70">
+            A modular Go monolith serves REST + WebSocket + workers + scheduler + embedded frontend. No microservices tax. Runs on your laptop against native MySQL / Redis / Kafka / HBase — no Docker required.
+          </p>
+        </div>
+
+        <div class="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="rounded-2xl bg-white/5 border border-white/10 p-5">
+            <div class="text-xs uppercase text-white/50">Backend</div>
+            <div class="mt-2 font-semibold">Go modular monolith</div>
+            <div class="mt-1 text-sm text-white/70">chi router, WebSocket hub, workers, scheduler — one process, one deploy.</div>
+          </div>
+          <div class="rounded-2xl bg-white/5 border border-white/10 p-5">
+            <div class="text-xs uppercase text-white/50">Frontend</div>
+            <div class="mt-2 font-semibold">React 18 + Vite + TanStack</div>
+            <div class="mt-1 text-sm text-white/70">Router + Query + Tailwind. Built to <span class="code">web/dist</span> and embedded via <span class="code">//go:embed</span>.</div>
+          </div>
+          <div class="rounded-2xl bg-white/5 border border-white/10 p-5">
+            <div class="text-xs uppercase text-white/50">Storage</div>
+            <div class="mt-2 font-semibold">MySQL + Redis + Kafka</div>
+            <div class="mt-1 text-sm text-white/70">MySQL is the source of truth. Redis for cache / locks / rate limits. Kafka for event log + job queues.</div>
+          </div>
+          <div class="rounded-2xl bg-white/5 border border-white/10 p-5">
+            <div class="text-xs uppercase text-white/50">Media + events</div>
+            <div class="mt-2 font-semibold">HBase</div>
+            <div class="mt-1 text-sm text-white/70">Attachments, call recordings, transcripts, and the append-only activity stream.</div>
+          </div>
+        </div>
+
+        <!-- flow diagram -->
+        <div class="mt-10 rounded-2xl bg-white/5 border border-white/10 p-6 overflow-x-auto">
+          <div class="text-xs uppercase text-white/50 mb-4">
+            The prime directive
+          </div>
+          <div class="flex items-stretch gap-3 min-w-max text-sm">
+            <div class="flex flex-col items-center">
+              <div class="px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-semibold">Canonical domain</div>
+              <div class="text-[10px] text-white/40 mt-1">org · contact · session · conversation · message</div>
+            </div>
+            <div class="self-center text-white/40">→</div>
+            <div class="self-center px-3 py-2 rounded-lg bg-white/10 border border-white/15">Persist (MySQL + HBase)</div>
+            <div class="self-center text-white/40">→</div>
+            <div class="self-center px-3 py-2 rounded-lg bg-white/10 border border-white/15">Event</div>
+            <div class="self-center text-white/40">→</div>
+            <div class="self-center px-3 py-2 rounded-lg bg-white/10 border border-white/15">Async worker</div>
+            <div class="self-center text-white/40">→</div>
+            <div class="self-center px-3 py-2 rounded-lg bg-white/10 border border-white/15">Provider (Meta)</div>
+            <div class="self-center text-white/40">→</div>
+            <div class="self-center px-3 py-2 rounded-lg bg-white/10 border border-white/15">Result event</div>
+            <div class="self-center text-white/40">→</div>
+            <div class="self-center px-3 py-2 rounded-lg bg-emerald-500/20 border border-emerald-500/40 font-semibold">Real-time UI</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick start -->
+    <section id="quickstart" class="py-20">
+      <div class="max-w-6xl mx-auto px-5">
+        <div class="max-w-2xl">
+          <span class="chip bg-slate-100 text-slate-600">Zero to sent-message</span>
+          <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight">
+            Running in about ten minutes.
+          </h2>
+          <p class="mt-3 text-slate-600">
+            Assumes local MySQL 8+, Redis 7+, Kafka 3+, HBase 2+ already installed on your machine. See the README for full detail.
+          </p>
+        </div>
+
+        <div class="mt-10 grid lg:grid-cols-2 gap-4">
+          <div class="card p-5">
+            <div class="flex items-center gap-2 text-sm">
+              <span class="h-6 w-6 rounded-md bg-slate-900 text-white text-xs flex items-center justify-center">1</span>
+              <span class="font-semibold">Clone + configure</span>
+            </div>
+            <pre class="mt-3 bg-slate-900 text-emerald-200 rounded-lg p-4 code overflow-x-auto">git clone https://github.com/v-senthil/nudgeway.git
+cd nudgeway
+cp config/example.yaml config/local.yaml
+# generate a 32-byte KEK
+openssl rand -hex 32   # paste into auth.credential_kek_hex</pre>
+          </div>
+
+          <div class="card p-5">
+            <div class="flex items-center gap-2 text-sm">
+              <span class="h-6 w-6 rounded-md bg-slate-900 text-white text-xs flex items-center justify-center">2</span>
+              <span class="font-semibold">Database + migrations</span>
+            </div>
+            <pre class="mt-3 bg-slate-900 text-emerald-200 rounded-lg p-4 code overflow-x-auto">mysql -u root -proot -e \
+  'CREATE DATABASE IF NOT EXISTS nudgeway
+   CHARACTER SET utf8mb4;'
+migrate -path migrations \
+  -database "$MYSQL_DSN" up</pre>
+          </div>
+
+          <div class="card p-5">
+            <div class="flex items-center gap-2 text-sm">
+              <span class="h-6 w-6 rounded-md bg-slate-900 text-white text-xs flex items-center justify-center">3</span>
+              <span class="font-semibold">Create an org + admin</span>
+            </div>
+            <pre class="mt-3 bg-slate-900 text-emerald-200 rounded-lg p-4 code overflow-x-auto">go build -o bin/nudgeway-cli ./cmd/cli
+./bin/nudgeway-cli tenant create \
+  --slug acme --name "Acme Co"
+./bin/nudgeway-cli user create \
+  --org-slug acme \
+  --email you@acme.com \
+  --password password123 --admin</pre>
+          </div>
+
+          <div class="card p-5">
+            <div class="flex items-center gap-2 text-sm">
+              <span class="h-6 w-6 rounded-md bg-slate-900 text-white text-xs flex items-center justify-center">4</span>
+              <span class="font-semibold">Run the app</span>
+            </div>
+            <pre class="mt-3 bg-slate-900 text-emerald-200 rounded-lg p-4 code overflow-x-auto">make dev
+# backend  → :8080
+# frontend → :5173
+# open http://localhost:5173</pre>
+          </div>
+        </div>
+
+        <div class="mt-6 text-sm text-slate-600">
+          Then paste your Meta phone-number ID + WABA ID + access token in
+          <span class="code">Settings → Integrations → Connect WhatsApp</span>, wire the webhook URL into the Meta app dashboard, and send yourself a message.
+        </div>
+      </div>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="py-20 bg-slate-50">
+      <div class="max-w-3xl mx-auto px-5">
+        <span class="chip bg-slate-100 text-slate-600">FAQ</span>
+        <h2 class="mt-3 text-3xl font-extrabold tracking-tight">Common questions</h2>
+        <div class="mt-8 space-y-3">
+          <details class="card p-5">
+            <summary class="flex items-center justify-between font-semibold">
+              Is this a fork of an existing WhatsApp library?
+              <span class="text-slate-400">＋</span>
+            </summary>
+            <p class="mt-3 text-sm text-slate-600">
+              No. Nudgeway is a first-principles platform — canonical domain (org / contact / session / conversation / message / call), pluggable providers, real-time UI. It happens to ship a WhatsApp Business Cloud API adapter first because that's what most teams need most urgently.
+            </p>
+          </details>
+          <details class="card p-5">
+            <summary class="flex items-center justify-between font-semibold">
+              Do I need Docker or Kubernetes?
+              <span class="text-slate-400">＋</span>
+            </summary>
+            <p class="mt-3 text-sm text-slate-600">
+              No. Dev workflow runs native MySQL / Redis / Kafka / HBase installs. Production is a single Go binary plus those four services. Containerise if you want; nothing requires it.
+            </p>
+          </details>
+          <details class="card p-5">
+            <summary class="flex items-center justify-between font-semibold">
+              Can I add providers other than WhatsApp?
+              <span class="text-slate-400">＋</span>
+            </summary>
+            <p class="mt-3 text-sm text-slate-600">
+              Yes. Implement the port interfaces in <span class="code">internal/ports/</span> (channel, ticketing, bot, AI, calling) inside a new <span class="code">internal/providers/&lt;name&gt;/</span> package, register it, done. The domain and application layers never learn provider strings.
+            </p>
+          </details>
+          <details class="card p-5">
+            <summary class="flex items-center justify-between font-semibold">
+              What's the license?
+              <span class="text-slate-400">＋</span>
+            </summary>
+            <p class="mt-3 text-sm text-slate-600">
+              MIT — see <a class="text-emerald-700 underline" href="https://github.com/v-senthil/nudgeway/blob/main/LICENSE">LICENSE</a> on GitHub. Use it, fork it, ship it.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-10 border-t border-slate-200">
+      <div class="max-w-6xl mx-auto px-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex h-6 w-6 rounded-md bg-gradient-to-br from-waGreen to-waTeal items-center justify-center text-white">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="h-3.5 w-3.5">
+              <path
+                d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v9A2.5 2.5 0 0 1 17.5 17H10l-4.2 3.4A.6.6 0 0 1 4.8 20V17H6.5A2.5 2.5 0 0 1 4 14.5v-9Z"
+              />
+            </svg>
+          </span>
+          <span>Nudgeway · open source WhatsApp Business Platform</span>
+        </div>
+        <div class="flex items-center gap-4">
+          <a href="https://github.com/v-senthil/nudgeway" class="hover:text-slateInk">GitHub</a>
+          <a href="https://github.com/v-senthil/nudgeway/blob/main/README.md" class="hover:text-slateInk">Docs</a>
+          <a href="https://github.com/v-senthil/nudgeway/blob/main/LICENSE" class="hover:text-slateInk">License</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -35,7 +35,7 @@ type Section = {
   items: Item[];
 };
 
-// Whatomate-style sidebar section layout adapted to the routes fullWA has
+// Whatomate-style sidebar section layout adapted to the routes Nudgeway has
 // today. Items without a live route are rendered as "Coming soon" and are
 // not click-through.
 const TOP_SECTIONS: Section[] = [
@@ -81,7 +81,7 @@ const SETTINGS_SECTION: Section = {
   ],
 };
 
-const STORAGE_KEY = 'fullwa.sidebar.collapsed';
+const STORAGE_KEY = 'nudgeway.sidebar.collapsed';
 
 function readCollapsed(): boolean {
   try {
@@ -214,7 +214,7 @@ export function Sidebar() {
               <span className="text-[11px] font-bold">fW</span>
             </div>
             <span className="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-              fullWA
+              Nudgeway
             </span>
           </div>
         )}

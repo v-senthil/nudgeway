@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/ports/queue"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/ports/queue"
 )
 
 // jobRecord is the wire form of queue.Job. Kept JSON to keep the round

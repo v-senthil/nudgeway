@@ -23,7 +23,7 @@ func NewCSRFToken() (string, error) {
 // readable by JavaScript so the frontend can echo it in the X-CSRF-Token header.
 func SetCSRFCookie(w http.ResponseWriter, token string, opts CookieOptions) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     defaultStr(opts.Name, "fullwa_csrf"),
+		Name:     defaultStr(opts.Name, "nudgeway_csrf"),
 		Value:    token,
 		Path:     defaultStr(opts.Path, "/"),
 		Domain:   opts.Domain,

@@ -11,8 +11,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	"github.com/fullwa/fullwa/internal/ports/attachments"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/ports/attachments"
 )
 
 // MaxAttachmentSize is the largest media blob accepted via the multipart

@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	wsapi "github.com/fullwa/fullwa/internal/api/ws"
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	fws "github.com/fullwa/fullwa/internal/infrastructure/websocket"
+	wsapi "github.com/v-senthil/nudgeway/internal/api/ws"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	fws "github.com/v-senthil/nudgeway/internal/infrastructure/websocket"
 )
 
 // Deps bundles everything required to mount the v1 REST API.
@@ -64,7 +64,7 @@ type Registrar interface {
 }
 
 // Mount registers every /api/v1/* route on mux, wrapping each with the
-// standard fullWA middleware chain, and installs the provider-agnostic
+// standard Nudgeway middleware chain, and installs the provider-agnostic
 // /webhooks/* ingress routes with a minimal middleware chain (no auth, no
 // CSRF — external providers cannot present our cookies).
 //

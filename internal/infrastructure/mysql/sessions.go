@@ -9,7 +9,7 @@ import (
 	"net"
 	"time"
 
-	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
+	infauth "github.com/v-senthil/nudgeway/internal/infrastructure/auth"
 )
 
 // Sessions implements infrastructure/auth.SessionStore against web_sessions.

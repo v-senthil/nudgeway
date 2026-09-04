@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/fullwa/fullwa/internal/infrastructure/http/middleware"
-	"github.com/fullwa/fullwa/internal/ports/attachments"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
+	"github.com/v-senthil/nudgeway/internal/ports/attachments"
 )
 
 // AttachmentsDeps bundles the runtime dependencies of the media REST

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	dintegration "github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/domain/session"
-	"github.com/fullwa/fullwa/internal/ports/channel"
-	"github.com/fullwa/fullwa/internal/ports/repository"
-	"github.com/fullwa/fullwa/internal/providers"
+	dintegration "github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/session"
+	"github.com/v-senthil/nudgeway/internal/ports/channel"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/providers"
 )
 
 // ErrNotFound is returned when the requested integration does not exist

@@ -1,10 +1,10 @@
-# fullWA configuration template.
+# Nudgeway configuration template.
 # Copy to config/local.yaml and edit for your machine. Never commit local.yaml.
 #
-# Precedence: CLI flags > env vars (FULLWA_*) > config file > defaults.
+# Precedence: CLI flags > env vars (NUDGEWAY_*) > config file > defaults.
 # Env-var override examples:
-#   FULLWA_HTTP_ADDR=:9090
-#   FULLWA_MYSQL_DSN=root:pw@tcp(127.0.0.1:3306)/fullwa?parseTime=true&multiStatements=true
+#   NUDGEWAY_HTTP_ADDR=:9090
+#   NUDGEWAY_MYSQL_DSN=root:pw@tcp(127.0.0.1:3306)/nudgeway?parseTime=true&multiStatements=true
 
 env: local                     # local | dev | staging | prod
 
@@ -19,9 +19,9 @@ http:
     allowed_headers: ["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"]
 
 auth:
-  session_cookie_name: fullwa_session
+  session_cookie_name: nudgeway_session
   session_ttl: 720h            # 30 days sliding
-  csrf_cookie_name: fullwa_csrf
+  csrf_cookie_name: nudgeway_csrf
   argon2:
     memory_kib: 65536
     iterations: 3
@@ -33,7 +33,7 @@ auth:
   credential_kek_hex: "REPLACE_ME_WITH_32_BYTES_HEX"
 
 mysql:
-  dsn: "root:@tcp(127.0.0.1:3306)/fullwa?parseTime=true&multiStatements=true&charset=utf8mb4,utf8&collation=utf8mb4_0900_ai_ci"
+  dsn: "root:@tcp(127.0.0.1:3306)/nudgeway?parseTime=true&multiStatements=true&charset=utf8mb4,utf8&collation=utf8mb4_0900_ai_ci"
   max_open_conns: 32
   max_idle_conns: 8
   conn_max_lifetime: 30m
@@ -45,13 +45,13 @@ redis:
   pool_size: 32
   min_idle_conns: 4
   streams:
-    consumer_group: fullwa
+    consumer_group: nudgeway
     consumer_name_prefix: worker-
 
 kafka:
   brokers: ["127.0.0.1:9092"]
-  client_id: fullwa
-  topics_prefix: fullwa
+  client_id: nudgeway
+  topics_prefix: nudgeway
   replication_factor: 1
   default_partitions: 6
 
@@ -59,7 +59,7 @@ hbase:
   # Native Java client via Zookeeper quorum, or Thrift.
   zookeeper_quorum: ["127.0.0.1:2181"]
   zookeeper_znode_parent: /hbase
-  namespace: fullwa
+  namespace: nudgeway
   # If your HBase is running via Thrift instead, set thrift_addr and leave zookeeper_quorum empty.
   thrift_addr: ""
 
@@ -74,7 +74,7 @@ metrics:
 
 tracing:
   enabled: false
-  service_name: fullwa
+  service_name: nudgeway
   otlp_endpoint: "http://127.0.0.1:4318"
 
 websocket:

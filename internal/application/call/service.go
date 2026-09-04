@@ -13,17 +13,17 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/call"
-	"github.com/fullwa/fullwa/internal/domain/contact"
-	"github.com/fullwa/fullwa/internal/domain/events"
-	"github.com/fullwa/fullwa/internal/domain/identity"
-	"github.com/fullwa/fullwa/internal/domain/integration"
-	"github.com/fullwa/fullwa/internal/domain/message"
-	"github.com/fullwa/fullwa/internal/domain/organization"
-	"github.com/fullwa/fullwa/internal/ports/attachments"
-	"github.com/fullwa/fullwa/internal/ports/calling"
-	"github.com/fullwa/fullwa/internal/ports/eventbus"
-	"github.com/fullwa/fullwa/internal/ports/repository"
+	"github.com/v-senthil/nudgeway/internal/domain/call"
+	"github.com/v-senthil/nudgeway/internal/domain/contact"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/domain/identity"
+	"github.com/v-senthil/nudgeway/internal/domain/integration"
+	"github.com/v-senthil/nudgeway/internal/domain/message"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/ports/attachments"
+	"github.com/v-senthil/nudgeway/internal/ports/calling"
+	"github.com/v-senthil/nudgeway/internal/ports/eventbus"
+	"github.com/v-senthil/nudgeway/internal/ports/repository"
 )
 
 // AttachmentDownloader resolves a provider-native media handle to a byte

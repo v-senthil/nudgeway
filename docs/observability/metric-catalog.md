@@ -1,24 +1,24 @@
-# fullWA metric catalog
+# Nudgeway metric catalog
 
-Every metric emitted by the fullWA binary. Registered onto the dedicated
+Every metric emitted by the Nudgeway binary. Registered onto the dedicated
 `*prometheus.Registry` owned by `internal/infrastructure/metrics.Metrics`
 and served from `GET /metrics` in the standard Prometheus /
 OpenMetrics exposition format.
 
-Naming convention (enforced by review): `fullwa_<subsystem>_<name>_<unit>`.
+Naming convention (enforced by review): `nudgeway_<subsystem>_<name>_<unit>`.
 Never use raw provider names as label values that could explode
 cardinality — stick to the fixed labels documented here.
 
 ## HTTP
 
-### `fullwa_http_requests_total`
+### `nudgeway_http_requests_total`
 
 - **Kind:** counter
 - **Labels:** `method` (uppercase HTTP verb), `path` (route template — never the raw URL), `status` (numeric HTTP status code as a string)
 - **Unit:** requests
 - **Trigger:** incremented once per request served by any handler wrapped with `metrics.Metrics.HTTPMiddleware(route)`.
 
-### `fullwa_http_request_duration_seconds`
+### `nudgeway_http_request_duration_seconds`
 
 - **Kind:** histogram (default Prometheus buckets)
 - **Labels:** `method`, `path`, `status`
@@ -27,14 +27,14 @@ cardinality — stick to the fixed labels documented here.
 
 ## Providers
 
-### `fullwa_provider_calls_total`
+### `nudgeway_provider_calls_total`
 
 - **Kind:** counter
 - **Labels:** `provider` (e.g. `whatsapp`, `zoho_desk`), `operation` (e.g. `send_message`, `download_media`), `outcome` (`ok`, `error`, `rate_limited`, `auth`)
 - **Unit:** calls
 - **Trigger:** every outbound call to a third-party API from an adapter under `internal/providers/*`. Recorded after the call completes (success or failure).
 
-### `fullwa_provider_call_duration_seconds`
+### `nudgeway_provider_call_duration_seconds`
 
 - **Kind:** histogram (default Prometheus buckets)
 - **Labels:** `provider`, `operation`, `outcome`
@@ -43,21 +43,21 @@ cardinality — stick to the fixed labels documented here.
 
 ## Workers
 
-### `fullwa_worker_jobs_total`
+### `nudgeway_worker_jobs_total`
 
 - **Kind:** counter
 - **Labels:** `lane` (e.g. `message.send`, `webhook.process`, `campaign.job`), `group` (Redis Streams / Kafka consumer group), `outcome` (`ok`, `error`, `dead_letter`)
 - **Unit:** jobs
 - **Trigger:** incremented once per job the worker pool finishes processing.
 
-### `fullwa_worker_job_duration_seconds`
+### `nudgeway_worker_job_duration_seconds`
 
 - **Kind:** histogram (default Prometheus buckets)
 - **Labels:** `lane`, `group`, `outcome`
 - **Unit:** seconds
 - **Trigger:** observed per job — wall-clock from `handler.Handle` entry to return.
 
-### `fullwa_worker_job_retries_total`
+### `nudgeway_worker_job_retries_total`
 
 - **Kind:** counter
 - **Labels:** `lane`, `group`
@@ -66,7 +66,7 @@ cardinality — stick to the fixed labels documented here.
 
 ## Webhooks
 
-### `fullwa_webhook_events_received_total`
+### `nudgeway_webhook_events_received_total`
 
 - **Kind:** counter
 - **Labels:** `provider`, `integration_id` (opaque tenant integration id — cardinality caps once every tenant integration is stable; if this becomes a problem, hash + truncate)
@@ -75,14 +75,14 @@ cardinality — stick to the fixed labels documented here.
 
 ## Kafka
 
-### `fullwa_kafka_producer_batch_bytes_total`
+### `nudgeway_kafka_producer_batch_bytes_total`
 
 - **Kind:** counter
 - **Labels:** `topic`
 - **Unit:** bytes
 - **Trigger:** the Kafka producer records the batch size (serialized payload bytes) on every successful produce ack.
 
-### `fullwa_kafka_consumer_lag_records`
+### `nudgeway_kafka_consumer_lag_records`
 
 - **Kind:** gauge
 - **Labels:** `topic`, `partition`, `group`
@@ -91,7 +91,7 @@ cardinality — stick to the fixed labels documented here.
 
 ## WebSocket
 
-### `fullwa_websocket_connections`
+### `nudgeway_websocket_connections`
 
 - **Kind:** gauge
 - **Labels:** `org_id_short` — first 8 hex chars of the org id (bounded cardinality; still lets us alert per-tenant on abandonment or storms)
@@ -100,7 +100,7 @@ cardinality — stick to the fixed labels documented here.
 
 ## Runtime + process (free)
 
-Registered alongside the fullWA families:
+Registered alongside the Nudgeway families:
 
 - `go_*` — provided by `prometheus.NewGoCollector()` — goroutines, GC pauses, heap, stack, and Go build info.
 - `process_*` — provided by `prometheus.NewProcessCollector()` — RSS, open FDs, CPU seconds, start time.

@@ -9,7 +9,7 @@ package channel
 import (
 	"context"
 
-	"github.com/fullwa/fullwa/internal/domain/events"
+	"github.com/v-senthil/nudgeway/internal/domain/events"
 )
 
 // Capabilities declares what a specific ChannelProvider instance can do,

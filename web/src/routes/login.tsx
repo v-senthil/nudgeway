@@ -71,7 +71,7 @@ function LoginPage() {
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-white">
             <span className="text-sm font-bold">fW</span>
           </div>
-          <h1 className="text-xl font-semibold text-slate-900">Sign in to fullWA</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Sign in to Nudgeway</h1>
           <p className="mt-1 text-sm text-slate-500">Welcome back. Enter your credentials to continue.</p>
         </div>
 

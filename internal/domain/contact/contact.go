@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fullwa/fullwa/internal/domain/organization"
+	"github.com/v-senthil/nudgeway/internal/domain/organization"
 )
 
 // ID uniquely identifies a Contact within an organization. Stored as
