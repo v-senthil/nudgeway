@@ -55,10 +55,14 @@ type businessProfileEnvelope struct {
 // Reference:
 //   - Meta webhooks override: https://developers.facebook.com/docs/whatsapp/embedded-signup/webhooks
 func (p *Provider) SetWebhookOverride(ctx context.Context, callbackURL, verifyToken string) error {
-	if p.cfg.WABAID == "" {
-		return fmt.Errorf("whatsapp: WABAID required to set webhook override")
+	if p.cfg.PhoneNumberID == "" {
+		return fmt.Errorf("whatsapp: PhoneNumberID required to set webhook override")
 	}
-	url := fmt.Sprintf("%s/%s/%s", p.cfg.baseURL(), p.cfg.version(), p.cfg.WABAID)
+	// webhook_configuration.override_callback_uri is set per phone number
+	// (not per WABA). Pin v24.0 here regardless of the adapter's default
+	// version so operators on older DefaultGraphVersion pins can still
+	// push webhooks.
+	url := fmt.Sprintf("%s/v24.0/%s", p.cfg.baseURL(), p.cfg.PhoneNumberID)
 	payload := map[string]any{
 		"webhook_configuration": map[string]any{
 			"override_callback_uri": callbackURL,
