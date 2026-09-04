@@ -58,6 +58,10 @@ const (
 	// UsernameDeleted is emitted after DELETE
 	// /api/v1/integrations/{id}/username releases the username.
 	UsernameDeleted Action = "integration.username.deleted"
+	// WebhookConfigured is emitted after POST
+	// /api/v1/integrations/{id}/webhook pushes a webhook callback
+	// override to the provider (Meta).
+	WebhookConfigured Action = "integration.webhook.configured"
 	// CallPermissionRequested is emitted after POST
 	// /api/v1/calls/permission-request sends an interactive
 	// call_permission_request message to prompt the user to grant call

@@ -136,3 +136,38 @@ export function useDeleteIntegration() {
     },
   });
 }
+
+export type SetWebhookInput = { id: string; public_url: string };
+export type SetWebhookResult = { webhook_url: string; verify_token?: string };
+
+/** useSetIntegrationWebhook pushes the caller-supplied public base URL
+ * to the provider as its webhook callback override. The backend appends
+ * the canonical /webhooks/<provider>/<id> path and reuses the stored
+ * verify token, so the operator only supplies the public host. */
+export function useSetIntegrationWebhook() {
+  const qc = useQueryClient();
+  return useMutation<SetWebhookResult, ApiError, SetWebhookInput>({
+    mutationFn: async ({ id, public_url }) => {
+      return api<SetWebhookResult>(`/integrations/${id}/webhook`, {
+        method: 'POST',
+        body: { public_url },
+      });
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: INTEGRATIONS_KEY });
+    },
+  });
+}
+
+/** detectNgrokTunnel is a fire-and-forget best-effort helper that queries
+ * the backend, which in turn queries the local ngrok inspector API.
+ * Returns an empty string when ngrok isn't running or the shape doesn't
+ * match — never throws for that case. */
+export async function detectNgrokTunnel(): Promise<string> {
+  try {
+    const res = await api<{ public_url?: string }>('/tools/ngrok-tunnel');
+    return res.public_url ?? '';
+  } catch {
+    return '';
+  }
+}

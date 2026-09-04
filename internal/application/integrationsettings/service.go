@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	dintegration "github.com/v-senthil/nudgeway/internal/domain/integration"
 	"github.com/v-senthil/nudgeway/internal/domain/organization"
@@ -105,6 +106,20 @@ type ProviderClient interface {
 	DeleteUsername(ctx context.Context) error
 	GetUsernameSuggestions(ctx context.Context) ([]string, error)
 	GetPhoneNumber(ctx context.Context) (PhoneNumberDTO, error)
+	// SetWebhookOverride writes a provider-level webhook callback URL +
+	// verify token. For WhatsApp this maps to Meta's
+	// /{waba_id}?webhook_configuration override.
+	SetWebhookOverride(ctx context.Context, callbackURL, verifyToken string) error
+}
+
+// WebhookConfigDTO is the outcome of a Set-webhook call: the fully-
+// qualified provider webhook URL that was pushed to the provider, plus
+// the verify token used. The verify token is returned as a convenience
+// so operators can paste it into the provider console if the console
+// UI wants it separately.
+type WebhookConfigDTO struct {
+	WebhookURL  string `json:"webhook_url"`
+	VerifyToken string `json:"verify_token,omitempty"`
 }
 
 // Resolver builds a ProviderClient for a given integration + secrets
@@ -333,6 +348,53 @@ func (s *Service) GetUsernameSuggestions(ctx context.Context, orgID organization
 	}
 	return pc.GetUsernameSuggestions(ctx)
 }
+
+// SetWebhook pushes the current integration's webhook callback URL +
+// verify token to the provider. The caller supplies the public base
+// URL (e.g. "https://a1b2.ngrok-free.app"); this method appends the
+// canonical webhook path for the integration and pulls the verify
+// token from the stored secrets. Returns the fully-qualified URL that
+// was pushed so the caller can echo it back to the operator.
+//
+// A blank publicBaseURL is rejected with ErrValidation — Meta requires
+// an https URL. Trailing slashes on publicBaseURL are stripped.
+func (s *Service) SetWebhook(ctx context.Context, orgID organization.ID, id dintegration.ID, publicBaseURL string) (WebhookConfigDTO, error) {
+	publicBaseURL = strings.TrimRight(strings.TrimSpace(publicBaseURL), "/")
+	if publicBaseURL == "" {
+		return WebhookConfigDTO{}, &ErrValidation{Msg: "public_url is required"}
+	}
+	if !strings.HasPrefix(publicBaseURL, "https://") && !strings.HasPrefix(publicBaseURL, "http://") {
+		return WebhookConfigDTO{}, &ErrValidation{Msg: "public_url must start with https:// (or http:// for local dev)"}
+	}
+	row, secrets, err := s.integrations.GetWithSecrets(ctx, orgID, id)
+	if err != nil {
+		return WebhookConfigDTO{}, fmt.Errorf("integrationsettings: load integration: %w", err)
+	}
+	if row.ID == "" {
+		return WebhookConfigDTO{}, ErrNotFound
+	}
+	verifyToken := secrets["verify_token"]
+	if verifyToken == "" {
+		return WebhookConfigDTO{}, &ErrValidation{Msg: "integration has no verify_token stored; recreate with a verify token"}
+	}
+	callbackURL := publicBaseURL + "/webhooks/" + row.Provider + "/" + string(row.ID)
+
+	pc, err := s.resolve(ctx, orgID, id)
+	if err != nil {
+		return WebhookConfigDTO{}, err
+	}
+	if err := pc.SetWebhookOverride(ctx, callbackURL, verifyToken); err != nil {
+		return WebhookConfigDTO{}, err
+	}
+	return WebhookConfigDTO{WebhookURL: callbackURL, VerifyToken: verifyToken}, nil
+}
+
+// ErrValidation is returned by SetWebhook when the caller-supplied input
+// is missing / malformed. Translated to 422 at the REST edge.
+type ErrValidation struct{ Msg string }
+
+// Error implements error.
+func (e *ErrValidation) Error() string { return e.Msg }
 
 // GetPhoneNumber returns the Meta phone-number record for the
 // integration's configured phone number id. A zero-value DTO with nil

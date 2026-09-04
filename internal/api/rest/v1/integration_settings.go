@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"time"
 
 	appaudit "github.com/v-senthil/nudgeway/internal/application/audit"
 	appsettings "github.com/v-senthil/nudgeway/internal/application/integrationsettings"
@@ -79,6 +80,9 @@ func mountIntegrationSettings(mux Registrar, base func(http.Handler) http.Handle
 	mux.Handle("GET /api/v1/integrations/{id}/username/suggestions", readGate(http.HandlerFunc(h.getUsernameSuggestions)))
 
 	mux.Handle("GET /api/v1/integrations/{id}/phone-number", readGate(http.HandlerFunc(h.getPhoneNumber)))
+
+	mux.Handle("POST /api/v1/integrations/{id}/webhook", writeGate(http.HandlerFunc(h.setWebhook)))
+	mux.Handle("GET /api/v1/tools/ngrok-tunnel", readGate(http.HandlerFunc(h.getNgrokTunnel)))
 }
 
 // pathID extracts and validates the {id} path segment.
@@ -398,6 +402,89 @@ func (h *integrationSettingsHandler) getPhoneNumber(w http.ResponseWriter, r *ht
 		return
 	}
 	writeJSON(w, http.StatusOK, pn)
+}
+
+// setWebhook handles POST /webhook — pushes the caller-supplied public
+// URL to the provider as its webhook callback override. Body is
+// {"public_url":"https://..."}. The response echoes the fully-qualified
+// URL that was pushed so the UI can render it.
+func (h *integrationSettingsHandler) setWebhook(w http.ResponseWriter, r *http.Request) {
+	pr, _ := middleware.PrincipalFrom(r.Context())
+	id, ok := h.pathID(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		PublicURL string `json:"public_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeProblem(w, r, http.StatusBadRequest, "bad_request", "invalid JSON body")
+		return
+	}
+	out, err := h.d.Service.SetWebhook(r.Context(), organization.ID(pr.OrgID), id, body.PublicURL)
+	if err != nil {
+		var vErr *appsettings.ErrValidation
+		if errors.As(err, &vErr) {
+			writeProblem(w, r, http.StatusUnprocessableEntity, "validation", vErr.Error())
+			return
+		}
+		h.writeErr(w, r, "set_webhook", err)
+		return
+	}
+	h.audit(r, pr, daudit.WebhookConfigured, "integration", string(id), map[string]any{
+		"webhook_url": out.WebhookURL,
+	})
+	writeJSON(w, http.StatusOK, out)
+}
+
+// getNgrokTunnel is a best-effort helper that queries the local ngrok
+// agent's inspector API (default http://127.0.0.1:4040) and returns the
+// first https tunnel URL. When ngrok isn't running or the shape doesn't
+// match, returns 200 with an empty public_url — the UI treats this as
+// "not detected" and prompts the operator to paste the URL manually.
+func (h *integrationSettingsHandler) getNgrokTunnel(w http.ResponseWriter, _ *http.Request) {
+	type tunnel struct {
+		PublicURL string `json:"public_url"`
+		Proto     string `json:"proto"`
+	}
+	type resp struct {
+		Tunnels []tunnel `json:"tunnels"`
+	}
+	client := &http.Client{Timeout: 750 * time.Millisecond}
+	req, _ := http.NewRequest(http.MethodGet, "http://127.0.0.1:4040/api/tunnels", nil)
+	out := struct {
+		PublicURL string `json:"public_url"`
+	}{}
+	res, err := client.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	var body resp
+	if err := json.NewDecoder(res.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusOK, out)
+		return
+	}
+	// Prefer https tunnels; fall back to any tunnel with a public url.
+	for _, t := range body.Tunnels {
+		if t.Proto == "https" && t.PublicURL != "" {
+			out.PublicURL = t.PublicURL
+			writeJSON(w, http.StatusOK, out)
+			return
+		}
+	}
+	for _, t := range body.Tunnels {
+		if t.PublicURL != "" {
+			out.PublicURL = t.PublicURL
+			break
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // writeErr maps an application-layer error to a problem+json body.

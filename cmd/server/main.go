@@ -1223,6 +1223,11 @@ func (a whatsappSettingsAdapter) GetUsernameSuggestions(ctx context.Context) ([]
 	return a.p.GetUsernameSuggestions(ctx)
 }
 
+// SetWebhookOverride implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) SetWebhookOverride(ctx context.Context, callbackURL, verifyToken string) error {
+	return a.p.SetWebhookOverride(ctx, callbackURL, verifyToken)
+}
+
 // GetPhoneNumber implements appsettings.ProviderClient.
 func (a whatsappSettingsAdapter) GetPhoneNumber(ctx context.Context) (appsettings.PhoneNumberDTO, error) {
 	pn, err := a.p.GetPhoneNumber(ctx)

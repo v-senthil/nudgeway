@@ -46,6 +46,33 @@ type businessProfileEnvelope struct {
 	Data []BusinessProfile `json:"data"`
 }
 
+// SetWebhookOverride writes a WABA-level webhook callback override to Meta.
+// Meta uses the value at POST /{waba_id} with a `webhook_configuration`
+// object; when set, it takes precedence over the App-level webhook
+// callback for this WABA's events. Empty callbackURL clears the override
+// server-side. Both fields are otherwise required.
+//
+// Reference:
+//   - Meta webhooks override: https://developers.facebook.com/docs/whatsapp/embedded-signup/webhooks
+func (p *Provider) SetWebhookOverride(ctx context.Context, callbackURL, verifyToken string) error {
+	if p.cfg.WABAID == "" {
+		return fmt.Errorf("whatsapp: WABAID required to set webhook override")
+	}
+	url := fmt.Sprintf("%s/%s/%s", p.cfg.baseURL(), p.cfg.version(), p.cfg.WABAID)
+	payload := map[string]any{
+		"webhook_configuration": map[string]any{
+			"override_callback_uri": callbackURL,
+			"verify_token":          verifyToken,
+		},
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("whatsapp: encode webhook override: %w", err)
+	}
+	var resp map[string]any
+	return p.client.doJSON(ctx, "set_webhook_override", http.MethodPost, url, body, &resp)
+}
+
 // GetBusinessProfile returns the current business profile for the
 // integration's phone number.
 func (p *Provider) GetBusinessProfile(ctx context.Context) (BusinessProfile, error) {
