@@ -3,18 +3,82 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Nudgeway — open-source WhatsApp Business Platform</title>
+    <title>Nudgeway — open-source WhatsApp Business Platform + MCP for AI agents</title>
     <meta
       name="description"
-      content="Open-source, multi-tenant WhatsApp Business Platform. Real-time inbox, calls with WebRTC in the browser, template management, groups, analytics — single Go binary, MySQL + Redis + Kafka + HBase."
+      content="Nudgeway is the open-source, multi-tenant WhatsApp Business Platform for teams and AI agents. Real-time inbox, in-browser WebRTC calls, templates, groups, analytics — plus a native Model Context Protocol (MCP) server that exposes every REST endpoint as an LLM tool. Single Go binary. MySQL + Redis + Kafka + HBase. MIT licensed."
     />
+    <meta name="keywords" content="Nudgeway, WhatsApp Business Platform, WhatsApp Cloud API, open source WhatsApp, WhatsApp inbox, WhatsApp templates, WhatsApp calling, WebRTC WhatsApp, MCP, Model Context Protocol, AI agent WhatsApp, Claude MCP server, WhatsApp analytics, self-hosted WhatsApp, multi-tenant WhatsApp" />
+    <meta name="author" content="Nudgeway contributors" />
+    <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+    <meta name="theme-color" content="#128C7E" />
+    <link rel="canonical" href="https://v-senthil.github.io/nudgeway/" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
-    <meta property="og:title" content="Nudgeway" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nudgeway" />
+    <meta property="og:title" content="Nudgeway — open-source WhatsApp Business Platform + MCP" />
     <meta
       property="og:description"
-      content="Open-source WhatsApp Business Platform — inbox, calls, templates, groups, analytics, multi-tenant, single binary."
+      content="Real-time inbox, in-browser WebRTC calls, templates, groups, analytics — plus a native MCP server so any LLM can drive your WhatsApp business. Single Go binary. MIT."
     />
-    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://v-senthil.github.io/nudgeway/" />
+    <meta property="og:image" content="https://v-senthil.github.io/nudgeway/favicon.svg" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Nudgeway — open-source WhatsApp Business Platform + MCP" />
+    <meta
+      name="twitter:description"
+      content="Open-source WhatsApp Business Platform with a native MCP server. Real-time inbox, WebRTC calls, templates, groups, analytics. MIT."
+    />
+    <meta name="twitter:image" content="https://v-senthil.github.io/nudgeway/favicon.svg" />
+
+    <!-- JSON-LD: SoftwareApplication + SoftwareSourceCode -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "name": "Nudgeway",
+            "applicationCategory": "CommunicationApplication",
+            "operatingSystem": "Linux, macOS, Windows",
+            "description": "Open-source, multi-tenant WhatsApp Business Platform with a native Model Context Protocol (MCP) server that exposes every REST endpoint as an AI-agent tool.",
+            "url": "https://v-senthil.github.io/nudgeway/",
+            "image": "https://v-senthil.github.io/nudgeway/favicon.svg",
+            "author": { "@type": "Organization", "name": "Nudgeway contributors" },
+            "license": "https://opensource.org/licenses/MIT",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": "5",
+              "reviewCount": "1"
+            }
+          },
+          {
+            "@type": "SoftwareSourceCode",
+            "name": "Nudgeway",
+            "codeRepository": "https://github.com/v-senthil/nudgeway",
+            "programmingLanguage": ["Go", "TypeScript"],
+            "runtimePlatform": "Go 1.27+, Node 20+",
+            "license": "https://opensource.org/licenses/MIT",
+            "description": "Open-source WhatsApp Business Platform + MCP server."
+          },
+          {
+            "@type": "WebSite",
+            "name": "Nudgeway",
+            "url": "https://v-senthil.github.io/nudgeway/",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "https://github.com/v-senthil/nudgeway/search?q={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          }
+        ]
+      }
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -147,6 +211,7 @@
         <nav class="hidden md:flex items-center gap-6 text-sm text-slate-600">
           <a href="#features" class="hover:text-slateInk">Features</a>
           <a href="#ai" class="hover:text-slateInk">AI + MCP</a>
+          <a href="./api.html" class="hover:text-slateInk">API</a>
           <a href="#stack" class="hover:text-slateInk">Stack</a>
           <a href="#quickstart" class="hover:text-slateInk">Quick start</a>
           <a href="#faq" class="hover:text-slateInk">FAQ</a>

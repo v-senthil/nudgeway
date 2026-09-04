@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://v-senthil.github.io/nudgeway/sitemap.xml

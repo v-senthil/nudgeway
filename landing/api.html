@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>API — Nudgeway</title>
+    <meta
+      name="description"
+      content="Nudgeway REST + MCP API reference. Every endpoint (auto-derived from the OpenAPI 3.1 spec) is also an MCP tool — same shape for humans and for AI agents."
+    />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="https://v-senthil.github.io/nudgeway/api.html" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Nudgeway" />
+    <meta property="og:title" content="Nudgeway API reference" />
+    <meta
+      property="og:description"
+      content="Every REST endpoint + its matching MCP tool, rendered live from the OpenAPI spec."
+    />
+    <meta property="og:url" content="https://v-senthil.github.io/nudgeway/api.html" />
+
+    <style>
+      body {
+        margin: 0;
+      }
+      #topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        border-bottom: 1px solid #e2e8f0;
+        background: #fff;
+        font: 14px/1.4 Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      #topbar a {
+        color: #0f172a;
+        text-decoration: none;
+      }
+      #topbar .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 700;
+      }
+      #topbar .brand-mark {
+        display: inline-flex;
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+        background: linear-gradient(135deg, #25d366, #128c7e);
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+      }
+      #topbar .brand-mark svg {
+        width: 14px;
+        height: 14px;
+      }
+      #topbar nav {
+        display: flex;
+        gap: 20px;
+        color: #475569;
+      }
+      #topbar nav a:hover {
+        color: #0f172a;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="topbar">
+      <a class="brand" href="./">
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v9A2.5 2.5 0 0 1 17.5 17H10l-4.2 3.4A.6.6 0 0 1 4.8 20V17H6.5A2.5 2.5 0 0 1 4 14.5v-9Z"
+            />
+          </svg>
+        </span>
+        Nudgeway · API
+      </a>
+      <nav>
+        <a href="./">Home</a>
+        <a href="./#ai">AI + MCP</a>
+        <a href="https://github.com/v-senthil/nudgeway">GitHub</a>
+        <a href="https://github.com/v-senthil/nudgeway/blob/main/docs/mcp.md">MCP setup</a>
+      </nav>
+    </div>
+
+    <!-- Scalar renders the OpenAPI spec as interactive API reference. -->
+    <script id="api-reference" data-url="./openapi.yaml"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+
+    <script>
+      // Configure Scalar via a global before the script boot completes.
+      window.__SCALAR__ = {
+        theme: "default",
+        showSidebar: true,
+        hideDownloadButton: false,
+        hideModels: false,
+        metaData: {
+          title: "Nudgeway API",
+          description:
+            "Every endpoint is also an MCP tool — auto-exposed by cmd/mcp for AI agents.",
+        },
+      };
+    </script>
+  </body>
+</html>
