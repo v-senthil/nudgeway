@@ -159,15 +159,12 @@ func parseDateRange(w http.ResponseWriter, r *http.Request) (time.Time, time.Tim
 		writeProblem(w, r, http.StatusBadRequest, "validation", "from and to are required (YYYY-MM-DD)")
 		return time.Time{}, time.Time{}, false
 	}
-	// Parse in Local so the range boundaries align with MySQL's
-	// session-tz-relative CURRENT_TIMESTAMP defaults (which is how
-	// created_at is stamped).
-	from, err := time.ParseInLocation("2006-01-02", fromStr, time.Local)
+	from, err := time.ParseInLocation("2006-01-02", fromStr, time.UTC)
 	if err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "validation", "from must be YYYY-MM-DD")
 		return time.Time{}, time.Time{}, false
 	}
-	to, err := time.ParseInLocation("2006-01-02", toStr, time.Local)
+	to, err := time.ParseInLocation("2006-01-02", toStr, time.UTC)
 	if err != nil {
 		writeProblem(w, r, http.StatusBadRequest, "validation", "to must be YYYY-MM-DD")
 		return time.Time{}, time.Time{}, false

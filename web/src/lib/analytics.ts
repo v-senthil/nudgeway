@@ -88,19 +88,19 @@ export function useCallsSeries(range: DateRange, provider?: string) {
   return useAnalyticsSeries('calls_daily', range, provider);
 }
 
-// defaultRange returns the last 14 UTC days ending today, formatted
-// for the analytics query params. Kept as a helper so multiple call
-// sites stay in sync.
+// defaultRange returns the last 14 days ending today, formatted for
+// the analytics query params. Uses local-tz dates so "today" matches
+// how the backend rollup timestamps its rows (server-local midnight).
 export function defaultRange(): DateRange {
   const today = new Date();
   const from = new Date(today);
-  from.setUTCDate(from.getUTCDate() - 13);
+  from.setDate(from.getDate() - 13);
   return { from: toISODate(from), to: toISODate(today) };
 }
 
 function toISODate(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
