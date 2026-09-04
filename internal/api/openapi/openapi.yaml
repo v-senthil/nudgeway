@@ -1021,6 +1021,123 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /api/v1/api-tokens/{id}/usage:
+    get:
+      tags: [api-tokens]
+      operationId: getAPITokenUsage
+      summary: List per-request execution-log rows for one API token.
+      description: |
+        Returns the operator-facing execution log of every bearer-
+        authenticated request served with this token, newest-first.
+        Every entry captures method, path, status, latency, remote IP,
+        user-agent, request + response bodies (capped at 8KB and JSON-
+        redacted for known secret keys), and true wire sizes.
+
+        Pagination is cursor-based; echo `next_cursor` back as `cursor`
+        on the next call. Absent `next_cursor` means the caller reached
+        the end. Callers see only rows owned by their own org — the
+        repo scopes every query on org_id.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: ULID of the api_tokens row.
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+          description: Only rows at or after this timestamp.
+        - in: query
+          name: until
+          required: false
+          schema: { type: string, format: date-time }
+          description: Only rows strictly before this timestamp.
+        - in: query
+          name: status_min
+          required: false
+          schema: { type: integer, minimum: 0, maximum: 599 }
+          description: Lower bound (inclusive) on HTTP status code.
+        - in: query
+          name: status_max
+          required: false
+          schema: { type: integer, minimum: 0, maximum: 599 }
+          description: Upper bound (inclusive) on HTTP status code.
+        - in: query
+          name: cursor
+          required: false
+          schema: { type: string }
+          description: Opaque cursor from the previous response's next_cursor.
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: A page of usage entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/APITokenUsageList' }
+        '400':
+          description: Bad request (invalid cursor / filter).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/api-tokens/{id}/metrics:
+    get:
+      tags: [api-tokens]
+      operationId: getAPITokenMetrics
+      summary: Aggregate KPIs + per-day series for one API token.
+      description: |
+        Returns aggregate counters (total requests, error count, average
+        latency, bytes in/out), a per-day series drawn from the
+        api_token_usage_daily rollup, a per-status-code histogram, and
+        the top-10 hit paths for the token over the requested window.
+        Default window is the last 30 days when `since` / `until` are
+        omitted.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: ULID of the api_tokens row.
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Aggregate metrics for the token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/APITokenMetrics' }
+        '400':
+          description: Bad request (invalid since/until).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /api/v1/api-tokens/{id}:
     delete:
       tags: [api-tokens]
@@ -1677,6 +1794,151 @@ components:
           type: string
           format: date-time
           nullable: true
+
+    APITokenUsageEntry:
+      type: object
+      description: |
+        One per-request execution-log row for an API token. Request +
+        response bodies are capped at 8KB (see `request_bytes` /
+        `response_bytes` for the true wire size) and JSON-redacted for
+        known secret keys (`password`, `access_token`, `token`, ...).
+      required: [id, token_id, occurred_at, method, path, status_code, latency_ms, remote_ip, request_bytes, response_bytes]
+      properties:
+        id:
+          type: string
+          description: ULID of the usage row.
+        token_id:
+          type: string
+          description: ULID of the api_tokens row that authenticated the request.
+        occurred_at:
+          type: string
+          format: date-time
+        request_id:
+          type: string
+          description: Request ID stitching this row to the request-scoped log lines.
+        method:
+          type: string
+          description: HTTP method (GET, POST, ...).
+        path:
+          type: string
+          description: Request URL path — query string is never persisted.
+          maxLength: 500
+        status_code:
+          type: integer
+          minimum: 0
+          maximum: 599
+        latency_ms:
+          type: integer
+          description: Handler duration in milliseconds.
+        remote_ip:
+          type: string
+          maxLength: 45
+        user_agent:
+          type: string
+          maxLength: 500
+        request_body:
+          type: string
+          description: Base64-encoded captured request body (up to 8KB after redaction).
+        response_body:
+          type: string
+          description: Base64-encoded captured response body (up to 8KB).
+        request_body_text:
+          type: string
+          description: Best-effort UTF-8 rendering of the request body when it decodes as text.
+        response_body_text:
+          type: string
+          description: Best-effort UTF-8 rendering of the response body when it decodes as text.
+        request_bytes:
+          type: integer
+          description: True wire size of the request body, before truncation.
+        response_bytes:
+          type: integer
+          description: True wire size of the response body, before truncation.
+        error_message:
+          type: string
+          description: Short failure summary — populated only for 4xx/5xx responses.
+          maxLength: 1000
+
+    APITokenUsageList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/APITokenUsageEntry' }
+        next_cursor:
+          type: string
+          description: Opaque token to echo back as `cursor` on the next request; absent when the caller reached the end.
+
+    APITokenDailyPoint:
+      type: object
+      description: One (day, aggregate) tuple in an API-token metrics series.
+      required: [day, total_requests, error_count, avg_latency_ms, bytes_in, bytes_out]
+      properties:
+        day:
+          type: string
+          format: date
+          description: ISO calendar date (YYYY-MM-DD) in UTC.
+        total_requests:
+          type: integer
+          format: int64
+        error_count:
+          type: integer
+          format: int64
+          description: Subset of total_requests whose status_code >= 400.
+        avg_latency_ms:
+          type: integer
+          format: int64
+        bytes_in:
+          type: integer
+          format: int64
+        bytes_out:
+          type: integer
+          format: int64
+
+    APITokenPathHit:
+      type: object
+      description: One entry in the top-paths ranking.
+      required: [path, count]
+      properties:
+        path:
+          type: string
+        count:
+          type: integer
+          format: int64
+
+    APITokenMetrics:
+      type: object
+      description: Aggregate KPIs + per-day series + status histogram + top paths for one API token.
+      required: [total_requests, error_count, avg_latency_ms, bytes_in, bytes_out, by_day, by_status, top_paths]
+      properties:
+        total_requests:
+          type: integer
+          format: int64
+        error_count:
+          type: integer
+          format: int64
+        avg_latency_ms:
+          type: integer
+          format: int64
+        bytes_in:
+          type: integer
+          format: int64
+        bytes_out:
+          type: integer
+          format: int64
+        by_day:
+          type: array
+          items: { $ref: '#/components/schemas/APITokenDailyPoint' }
+        by_status:
+          type: object
+          description: Map of HTTP status code (as string) to count.
+          additionalProperties:
+            type: integer
+            format: int64
+        top_paths:
+          type: array
+          items: { $ref: '#/components/schemas/APITokenPathHit' }
 
     Problem:
       type: object

@@ -34,6 +34,7 @@ import (
 	attachmentsPort "github.com/v-senthil/nudgeway/internal/ports/attachments"
 	appanalytics "github.com/v-senthil/nudgeway/internal/application/analytics"
 	appapitoken "github.com/v-senthil/nudgeway/internal/application/apitoken"
+	appapitokenusage "github.com/v-senthil/nudgeway/internal/application/apitokenusage"
 	appaudit "github.com/v-senthil/nudgeway/internal/application/audit"
 	appauth "github.com/v-senthil/nudgeway/internal/application/auth"
 	appcall "github.com/v-senthil/nudgeway/internal/application/call"
@@ -43,6 +44,8 @@ import (
 	appmsg "github.com/v-senthil/nudgeway/internal/application/message"
 	appproviderc "github.com/v-senthil/nudgeway/internal/application/providercall"
 	apptmpl "github.com/v-senthil/nudgeway/internal/application/template"
+	dapitoken "github.com/v-senthil/nudgeway/internal/domain/apitoken"
+	dapitokenusage "github.com/v-senthil/nudgeway/internal/domain/apitokenusage"
 	dpc "github.com/v-senthil/nudgeway/internal/domain/providercall"
 	devents "github.com/v-senthil/nudgeway/internal/domain/events"
 	dintegration "github.com/v-senthil/nudgeway/internal/domain/integration"
@@ -151,6 +154,7 @@ func run() error {
 	analyticsRepo := fmysql.NewAnalytics(db)
 	analyticsSourceRepo := fmysql.NewAnalyticsSource(db)
 	apiTokensRepo := fmysql.NewAPITokens(db)
+	apiTokenUsageRepo := fmysql.NewAPITokenUsage(db)
 
 	// --- Kafka (best-effort at boot; server still runs without it) ---------
 	var kProducer *fkafka.Producer
@@ -555,6 +559,16 @@ func run() error {
 	})
 	bearerVerifier := bearerVerifierAdapter{svc: apiTokenSvc}
 
+	// Per-bearer-request execution log. The application service handles
+	// body redaction + truncation; the middleware feeds it through a
+	// tiny adapter (declared below) so infrastructure stays free of
+	// application imports (dependency rule).
+	apiTokenUsageSvc := appapitokenusage.NewService(appapitokenusage.Deps{
+		Repo:   apiTokenUsageRepo,
+		Logger: logger,
+	})
+	tokenUsageRecorder := tokenUsageRecorderAdapter{svc: apiTokenUsageSvc}
+
 	// --- Webhook ingress ----------------------------------------------------
 	// DEV MODE: signature verification is currently disabled. Meta's App
 	// Secret is not reliably configurable in this dev flow. The ingress
@@ -665,7 +679,12 @@ func run() error {
 			Service: apiTokenSvc,
 			Logger:  logger,
 		},
+		APITokenUsage: v1.APITokenUsageDeps{
+			Service: apiTokenUsageSvc,
+			Logger:  logger,
+		},
 		BearerVerifier:     bearerVerifier,
+		TokenUsageRecorder: tokenUsageRecorder,
 		PermissionResolver: perms,
 		Logger:             logger,
 		SlideEvery:         5 * time.Minute,
@@ -741,6 +760,22 @@ func run() error {
 	go func() {
 		if err := analyticsRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("analytics rollup exited", slog.Any("err", err))
+		}
+	}()
+
+	// --- API-token usage rollup runner -------------------------------------
+	// Same shape as the analytics rollup: tick every 15 minutes, re-roll
+	// yesterday + today + tomorrow per org so late-arriving requests
+	// converge into the correct api_token_usage_daily row.
+	apiTokenUsageRunner := workers.NewAPITokenUsageRollupRunner(workers.APITokenUsageRollupDeps{
+		Repo:     apiTokenUsageRepo,
+		Orgs:     orgLister{db: db},
+		Logger:   logger,
+		Interval: 15 * time.Minute,
+	})
+	go func() {
+		if err := apiTokenUsageRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("api-token usage rollup exited", slog.Any("err", err))
 		}
 	}()
 
@@ -1535,6 +1570,37 @@ func (a bearerVerifierAdapter) VerifyBearer(ctx context.Context, plaintext strin
 		UserID:  string(p.UserID),
 		TokenID: string(p.TokenID),
 	}, nil
+}
+
+// tokenUsageRecorderAdapter adapts *appapitokenusage.Service to
+// middleware.TokenUsageRecorder, translating the infrastructure-layer
+// TokenUsageEvent into the domain-layer Entry shape so the middleware
+// package can stay free of application + domain imports (dependency
+// rule).
+type tokenUsageRecorderAdapter struct{ svc *appapitokenusage.Service }
+
+// RecordUsage implements middleware.TokenUsageRecorder.
+func (a tokenUsageRecorderAdapter) RecordUsage(ctx context.Context, ev middleware.TokenUsageEvent) {
+	if a.svc == nil {
+		return
+	}
+	a.svc.Record(ctx, dapitokenusage.Entry{
+		OrgID:         organization.ID(ev.OrgID),
+		TokenID:       dapitoken.ID(ev.TokenID),
+		OccurredAt:    ev.OccurredAt,
+		RequestID:     ev.RequestID,
+		Method:        ev.Method,
+		Path:          ev.Path,
+		StatusCode:    ev.StatusCode,
+		LatencyMs:     ev.LatencyMs,
+		RemoteIP:      ev.RemoteIP,
+		UserAgent:     ev.UserAgent,
+		RequestBody:   ev.RequestBody,
+		ResponseBody:  ev.ResponseBody,
+		RequestBytes:  ev.RequestBytes,
+		ResponseBytes: ev.ResponseBytes,
+		ErrorMessage:  ev.ErrorMessage,
+	})
 }
 
 // orgLister satisfies workers.OrgLister by scanning the organizations

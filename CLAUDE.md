@@ -274,6 +274,7 @@ The rule is simple: **if a git diff changes runtime behaviour, at least three fi
 - Never log request bodies containing PII, tokens, or template variables.
 - No `eval`-shaped constructs in the automation DSL.
 - Every mutation writes an `AuditLog` row (see spec §50).
+- Bearer-authenticated requests are recorded to the `api_token_usage` execution log by a middleware that wraps `ResponseWriter`, caps request + response bodies at 8 KiB per direction, redacts known secret JSON keys (`password`, `access_token`, `app_secret`, `verify_token`, `secrets`, `plaintext`, `token`, `secret`) to `"[redacted]"`, and writes on a detached goroutine so bookkeeping never blocks the response. See [`docs/api-token-usage.md`](docs/api-token-usage.md).
 
 ---
 
@@ -283,6 +284,7 @@ The rule is simple: **if a git diff changes runtime behaviour, at least three fi
 - Every job carries a `correlation_id` — set from the originating request or webhook.
 - Every event carries a `causation_id` — the event or request that caused it.
 - Every provider call records latency + outcome as a Prometheus histogram + OTel span.
+- Every bearer-authenticated request produces an `api_token_usage` row keyed by `token_id` (timestamp, remote_ip, method, path, redacted request/response bodies, status code, latency_ms) with a daily rollup in `api_token_usage_daily`. See [`docs/api-token-usage.md`](docs/api-token-usage.md).
 - Slog fields always include `org_id`, `request_id`, `correlation_id` where present.
 - Traces stitch REST → worker → provider → webhook return.
 - Health probes at `/healthz` (liveness) and `/readyz` (readiness — checks DB, Redis, HBase).

@@ -145,7 +145,11 @@ Nudgeway (bootstrapping a second client, rotating tokens, etc.):
 ```
 
 The response body contains the plaintext `token` field once. Companion
-tools: `listAPITokens`, `revokeAPIToken`.
+tools: `listAPITokens`, `revokeAPIToken`, `getAPITokenUsage`
+(paginated per-token execution log), `getAPITokenMetrics` (KPIs +
+per-day series + top paths). See
+[`docs/api-token-usage.md`](api-token-usage.md) for what's captured
+and the redaction / cap rules.
 
 ### Session cookie (fallback for local dev)
 

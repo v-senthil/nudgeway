@@ -7,6 +7,7 @@ import { Spinner } from '../components/Spinner';
 import { CreateAPITokenModal } from '../features/settings/CreateAPITokenModal';
 import { APITokenCreatedModal } from '../features/settings/APITokenCreatedModal';
 import { RevokeTokenModal } from '../features/settings/RevokeTokenModal';
+import { APITokenUsageDrawer } from '../features/settings/APITokenUsageDrawer';
 import {
   useAPITokens,
   useRevokeAPIToken,
@@ -85,6 +86,7 @@ function APITokensPage() {
   const [createdToken, setCreatedToken] = useState<CreateAPITokenResponse | null>(null);
   const [pendingRevoke, setPendingRevoke] = useState<APIToken | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
+  const [usageToken, setUsageToken] = useState<APIToken | null>(null);
 
   const tokens = useAPITokens();
   const revoke = useRevokeAPIToken();
@@ -203,9 +205,15 @@ function APITokensPage() {
               {tokens.data.map((t) => {
                 const revoked =
                   t.revoked_at !== null && t.revoked_at !== undefined && t.revoked_at !== '';
-                const rowClass = revoked ? 'text-sm opacity-60' : 'text-sm';
+                const rowClass = revoked
+                  ? 'cursor-pointer text-sm opacity-60 hover:bg-slate-50'
+                  : 'cursor-pointer text-sm hover:bg-slate-50';
                 return (
-                  <tr key={t.id} className={rowClass}>
+                  <tr
+                    key={t.id}
+                    className={rowClass}
+                    onClick={() => setUsageToken(t)}
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-slate-900">{t.name}</span>
@@ -225,20 +233,32 @@ function APITokensPage() {
                       {formatRelative(t.expires_at)}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">{formatDate(t.created_at)}</td>
-                    <td className="px-4 py-3 text-right">
-                      {!revoked && (
+                    <td
+                      className="px-4 py-3 text-right"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
-                          onClick={() => {
-                            setRevokeError(null);
-                            setPendingRevoke(t);
-                          }}
-                          aria-label={`Revoke token ${t.name}`}
-                          className="text-rose-700 hover:bg-rose-50"
+                          onClick={() => setUsageToken(t)}
+                          aria-label={`View usage for token ${t.name}`}
                         >
-                          Revoke
+                          View usage
                         </Button>
-                      )}
+                        {!revoked && (
+                          <Button
+                            variant="ghost"
+                            onClick={() => {
+                              setRevokeError(null);
+                              setPendingRevoke(t);
+                            }}
+                            aria-label={`Revoke token ${t.name}`}
+                            className="text-rose-700 hover:bg-rose-50"
+                          >
+                            Revoke
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -272,6 +292,8 @@ function APITokensPage() {
         loading={revoke.isPending}
         errorMessage={revokeError ?? undefined}
       />
+
+      <APITokenUsageDrawer token={usageToken} onClose={() => setUsageToken(null)} />
     </div>
   );
 }

@@ -59,11 +59,20 @@ type Deps struct {
 	// programmatic-access tokens). Route is silently omitted when
 	// APITokens.Service is nil.
 	APITokens APITokensDeps
+	// APITokenUsage exposes /api/v1/api-tokens/{id}/usage +
+	// /api/v1/api-tokens/{id}/metrics. Route is silently omitted when
+	// APITokenUsage.Service is nil.
+	APITokenUsage APITokenUsageDeps
 	// BearerVerifier resolves Authorization: Bearer nk_... headers into
 	// a principal. When non-nil, the middleware chain adds a BearerAuth
 	// stage in front of SessionAuth so REST + WS callers can authenticate
 	// with either credential.
 	BearerVerifier middleware.BearerVerifier
+	// TokenUsageRecorder is the sink for per-request bearer-auth
+	// execution-log entries. When non-nil, a TokenRecording middleware
+	// is spliced into the base chain AFTER BearerAuth so only bearer-
+	// authenticated requests are recorded. Silently omitted when nil.
+	TokenUsageRecorder middleware.TokenUsageRecorder
 }
 
 // Registrar is the minimal surface Mount needs to install patterns. It is
@@ -98,10 +107,19 @@ func Mount(mux Registrar, deps Deps) {
 	// path. Either way RequireAuth downstream produces the 401 for
 	// truly unauthenticated callers.
 	base := func(next http.Handler) http.Handler {
+		// Token recording sits closest to the handler so it captures
+		// the final response status + body written by the handler
+		// itself (not by an outer middleware). It is guarded by
+		// IsBearer(ctx) internally, so wrapping unconditionally is
+		// safe — session-cookie requests pay only the wrapper cost.
+		wrapped := next
+		if deps.TokenUsageRecorder != nil {
+			wrapped = middleware.TokenRecording(deps.TokenUsageRecorder, deps.Logger)(wrapped)
+		}
 		inner := middleware.SessionAuth(
 			deps.Auth.Sessions, deps.Auth.SessionCookie,
 			slide, deps.PermissionResolver, deps.Logger,
-		)(next)
+		)(wrapped)
 		if deps.BearerVerifier != nil {
 			inner = middleware.BearerAuth(deps.BearerVerifier, deps.PermissionResolver, deps.Logger)(inner)
 		}
@@ -198,6 +216,11 @@ func Mount(mux Registrar, deps Deps) {
 	// exempt from CSRF via the shared middleware). Silently omitted
 	// when deps.APITokens.Service is nil.
 	mountAPITokens(mux, base, authed, deps.APITokens)
+
+	// API-token usage log + metrics — /api/v1/api-tokens/{id}/usage,
+	// /api/v1/api-tokens/{id}/metrics (auth-only). Silently omitted
+	// when deps.APITokenUsage.Service is nil.
+	mountAPITokenUsage(mux, base, deps.APITokenUsage)
 
 	// /ws/inbox — WebSocket real-time endpoint. Reuses the same session-auth
 	// middleware chain as REST so the upgrade sees a Principal on the
