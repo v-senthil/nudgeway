@@ -6,6 +6,7 @@ import {
 } from '../../lib/integrations';
 import { usePhoneNumber, type PhoneNumber } from '../../lib/integration-settings';
 import { PhoneNumberQRModal } from './PhoneNumberQRModal';
+import { SetWebhookModal } from '../settings/SetWebhookModal';
 
 /** DetailsTab is the read-only "at a glance" panel of the settings drawer.
  * Renders the WABA ID, Phone Number ID, and webhook URL with copy-to-
@@ -18,6 +19,7 @@ export function DetailsTab({ integration }: { integration: Integration }) {
   const waba = integrationWABAID(integration);
   const webhook = integration.webhook_url ?? '';
   const phoneNumberQuery = usePhoneNumber(integration.id);
+  const [webhookModalOpen, setWebhookModalOpen] = useState(false);
 
   return (
     <div className="space-y-4">
@@ -40,6 +42,21 @@ export function DetailsTab({ integration }: { integration: Integration }) {
         label="Webhook URL"
         value={webhook}
         hint="Paste into Meta App dashboard → WhatsApp → Configuration → Webhook."
+        action={
+          <button
+            type="button"
+            onClick={() => setWebhookModalOpen(true)}
+            className="rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+          >
+            Push to Meta
+          </button>
+        }
+      />
+
+      <SetWebhookModal
+        open={webhookModalOpen}
+        integration={integration}
+        onClose={() => setWebhookModalOpen(false)}
       />
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-[11px] text-slate-600">
@@ -312,10 +329,12 @@ function DetailRow({
   label,
   value,
   hint,
+  action,
 }: {
   label: string;
   value: string | undefined;
   hint?: string;
+  action?: ReactNode;
 }) {
   const [copied, setCopied] = useState(false);
   const empty = value === undefined || value === '';
@@ -338,15 +357,18 @@ function DetailRow({
         <label className="text-xs font-medium uppercase tracking-wide text-slate-500">
           {label}
         </label>
-        {!empty && (
-          <button
-            type="button"
-            onClick={() => void copy()}
-            className="text-xs font-medium text-emerald-700 hover:text-emerald-800"
-          >
-            {copied ? 'Copied' : 'Copy'}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {action}
+          {!empty && (
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className="text-xs font-medium text-emerald-700 hover:text-emerald-800"
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          )}
+        </div>
       </div>
       <div
         className={

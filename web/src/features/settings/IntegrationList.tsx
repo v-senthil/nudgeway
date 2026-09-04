@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { IntegrationStatusBadge } from './IntegrationStatusBadge';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { SetWebhookModal } from './SetWebhookModal';
 import {
   integrationPhoneNumberID,
   integrationWABAID,
@@ -21,7 +20,6 @@ export function IntegrationList({ items, onOpenSettings }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Integration | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [webhookFor, setWebhookFor] = useState<Integration | null>(null);
 
   const test = useTestIntegration();
   const del = useDeleteIntegration();
@@ -125,13 +123,6 @@ export function IntegrationList({ items, onOpenSettings }: Props) {
                   >
                     Test
                   </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => setWebhookFor(it)}
-                    aria-label={`Set webhook for ${it.name}`}
-                  >
-                    Set webhook
-                  </Button>
                   {onOpenSettings !== undefined && (
                     <button
                       type="button"
@@ -168,12 +159,6 @@ export function IntegrationList({ items, onOpenSettings }: Props) {
           ))}
         </tbody>
       </table>
-
-      <SetWebhookModal
-        open={webhookFor !== null}
-        integration={webhookFor}
-        onClose={() => setWebhookFor(null)}
-      />
 
       <DeleteConfirmModal
         open={pendingDelete !== null}
