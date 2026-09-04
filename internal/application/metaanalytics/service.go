@@ -355,6 +355,9 @@ func (s *Service) resolve(ctx context.Context, orgID organization.ID, id dintegr
 }
 
 // MessagingAnalytics is the passthrough for Meta's `analytics` field.
+// Callers pass display phone numbers (digits only, per Meta docs) via
+// req.PhoneNumbers to scope the response — same convention as Meta's
+// admin console (see reference imWabaAdminConsole.html).
 func (s *Service) MessagingAnalytics(ctx context.Context, orgID organization.ID, id dintegration.ID, req MessagingAnalyticsRequest) (MessagingAnalyticsResponse, error) {
 	pc, wabaID, err := s.resolve(ctx, orgID, id)
 	if err != nil {

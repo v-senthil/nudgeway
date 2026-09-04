@@ -7,6 +7,7 @@ import {
   useIntegrations,
   type Integration,
 } from '../../lib/integrations';
+import { usePhoneNumber } from '../../lib/integration-settings';
 import {
   defaultMetaRange,
   epochToISODay,
@@ -81,13 +82,15 @@ function MessagingSection({
   range,
   granularity,
   active,
+  phoneNumber,
 }: {
   integrationID: string;
   range: MetaRange;
   granularity: MetaGranularity;
   active: boolean;
+  phoneNumber?: string;
 }) {
-  const q = useMetaMessaging(integrationID, range, granularity, active);
+  const q = useMetaMessaging(integrationID, range, granularity, active, phoneNumber);
   const points: MetaMessagingPoint[] = q.data?.analytics.data_points ?? [];
 
   const totals = useMemo(() => {
@@ -148,13 +151,15 @@ function ConversationsSection({
   range,
   granularity,
   active,
+  phoneNumber,
 }: {
   integrationID: string;
   range: MetaRange;
   granularity: MetaGranularity;
   active: boolean;
+  phoneNumber?: string;
 }) {
-  const q = useMetaConversations(integrationID, range, granularity, active);
+  const q = useMetaConversations(integrationID, range, granularity, active, phoneNumber);
   const series = q.data?.conversation_analytics.data ?? [];
   const points: MetaConversationPoint[] = useMemo(
     () => series.flatMap((s) => s.data_points),
@@ -277,13 +282,15 @@ function CallsSection({
   range,
   granularity,
   active,
+  phoneNumber,
 }: {
   integrationID: string;
   range: MetaRange;
   granularity: MetaGranularity;
   active: boolean;
+  phoneNumber?: string;
 }) {
-  const q = useMetaCalls(integrationID, range, granularity, active);
+  const q = useMetaCalls(integrationID, range, granularity, active, phoneNumber);
   const points: MetaCallPoint[] = q.data?.call_analytics.data_points ?? [];
 
   const totals = useMemo(() => {
@@ -406,13 +413,15 @@ function PricingSection({
   range,
   granularity,
   active,
+  phoneNumber,
 }: {
   integrationID: string;
   range: MetaRange;
   granularity: MetaGranularity;
   active: boolean;
+  phoneNumber?: string;
 }) {
-  const q = useMetaPricing(integrationID, range, granularity, active);
+  const q = useMetaPricing(integrationID, range, granularity, active, phoneNumber);
   const series = q.data?.pricing_analytics.data ?? [];
   const points: MetaPricingPoint[] = useMemo(
     () => series.flatMap((s) => s.data_points),
@@ -602,13 +611,15 @@ function TemplatesSection({
   range,
   granularity,
   active,
+  phoneNumber,
 }: {
   integrationID: string;
   range: MetaRange;
   granularity: MetaGranularity;
   active: boolean;
+  phoneNumber?: string;
 }) {
-  const q = useMetaTemplates(integrationID, range, granularity, active);
+  const q = useMetaTemplates(integrationID, range, granularity, active, phoneNumber);
   const points: MetaTemplatePoint[] = useMemo(
     () => (q.data?.data ?? []).flatMap((s) => s.data_points),
     [q.data],
@@ -749,6 +760,16 @@ export function MetaAnalyticsTab({ active }: { active: boolean }) {
     return quick !== undefined ? rangeDaysAgo(quick.days) : defaultMetaRange();
   }, [rangeChoice, customRange]);
 
+  // Fetch the display phone number for the selected integration and
+  // pass its digits into the Meta filter. Meta scopes analytics per
+  // WABA by default; without this, sibling integrations sharing a WABA
+  // would return identical aggregates.
+  const phoneQuery = usePhoneNumber(effectiveID === '' ? null : effectiveID);
+  const phoneDigits = useMemo(() => {
+    const raw = phoneQuery.data?.display_phone_number ?? '';
+    return raw.replace(/[^\d]/g, '');
+  }, [phoneQuery.data]);
+
   if (integrations.isPending) {
     return (
       <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -866,30 +887,35 @@ export function MetaAnalyticsTab({ active }: { active: boolean }) {
             range={range}
             granularity={granularity}
             active={active}
+            phoneNumber={phoneDigits}
           />
           <ConversationsSection
             integrationID={effectiveID}
             range={range}
             granularity={granularity}
             active={active}
+            phoneNumber={phoneDigits}
           />
           <CallsSection
             integrationID={effectiveID}
             range={range}
             granularity={granularity}
             active={active}
+            phoneNumber={phoneDigits}
           />
           <PricingSection
             integrationID={effectiveID}
             range={range}
             granularity={granularity}
             active={active}
+            phoneNumber={phoneDigits}
           />
           <TemplatesSection
             integrationID={effectiveID}
             range={range}
             granularity={granularity}
             active={active}
+            phoneNumber={phoneDigits}
           />
         </>
       )}

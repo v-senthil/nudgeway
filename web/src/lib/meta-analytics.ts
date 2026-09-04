@@ -178,12 +178,24 @@ function retryPolicy(failureCount: number, err: unknown): boolean {
   return failureCount < 2;
 }
 
-function buildQuery(range: MetaRange, granularity: MetaGranularity): string {
-  return new URLSearchParams({
+function buildQuery(
+  range: MetaRange,
+  granularity: MetaGranularity,
+  phoneNumber?: string,
+): string {
+  const p = new URLSearchParams({
     since: range.since,
     until: range.until,
     granularity,
-  }).toString();
+  });
+  if (phoneNumber !== undefined && phoneNumber !== '') {
+    // Meta scopes at WABA by default; pass the display number (digits
+    // only) to narrow to a specific phone. See
+    // whatsapp_doc_tracker/docs/analytics.md and the reference admin
+    // console. Sent as CSV via the shared csvParam helper backend-side.
+    p.set('phone_numbers', phoneNumber);
+  }
+  return p.toString();
 }
 
 /** useMetaMessaging fetches the WABA-level messaging analytics via the
@@ -194,11 +206,12 @@ export function useMetaMessaging(
   range: MetaRange,
   granularity: MetaGranularity,
   enabled: boolean,
+  phoneNumber?: string,
 ) {
   return useQuery<MetaMessagingResponse, ApiError>({
-    queryKey: [...META_KEY, 'messaging', integrationID, range, granularity],
+    queryKey: [...META_KEY, 'messaging', integrationID, range, granularity, phoneNumber ?? ''],
     queryFn: async () => {
-      const qs = buildQuery(range, granularity);
+      const qs = buildQuery(range, granularity, phoneNumber);
       return api<MetaMessagingResponse>(
         `/integrations/${integrationID}/meta-analytics/messaging?${qs}`,
       );
@@ -215,11 +228,12 @@ export function useMetaConversations(
   range: MetaRange,
   granularity: MetaGranularity,
   enabled: boolean,
+  phoneNumber?: string,
 ) {
   return useQuery<MetaConversationResponse, ApiError>({
-    queryKey: [...META_KEY, 'conversations', integrationID, range, granularity],
+    queryKey: [...META_KEY, 'conversations', integrationID, range, granularity, phoneNumber ?? ''],
     queryFn: async () => {
-      const qs = buildQuery(range, granularity);
+      const qs = buildQuery(range, granularity, phoneNumber);
       return api<MetaConversationResponse>(
         `/integrations/${integrationID}/meta-analytics/conversations?${qs}`,
       );
@@ -236,11 +250,12 @@ export function useMetaPricing(
   range: MetaRange,
   granularity: MetaGranularity,
   enabled: boolean,
+  phoneNumber?: string,
 ) {
   return useQuery<MetaPricingResponse, ApiError>({
-    queryKey: [...META_KEY, 'pricing', integrationID, range, granularity],
+    queryKey: [...META_KEY, 'pricing', integrationID, range, granularity, phoneNumber ?? ''],
     queryFn: async () => {
-      const qs = buildQuery(range, granularity);
+      const qs = buildQuery(range, granularity, phoneNumber);
       return api<MetaPricingResponse>(
         `/integrations/${integrationID}/meta-analytics/pricing?${qs}`,
       );
@@ -257,11 +272,12 @@ export function useMetaCalls(
   range: MetaRange,
   granularity: MetaGranularity,
   enabled: boolean,
+  phoneNumber?: string,
 ) {
   return useQuery<MetaCallResponse, ApiError>({
-    queryKey: [...META_KEY, 'calls', integrationID, range, granularity],
+    queryKey: [...META_KEY, 'calls', integrationID, range, granularity, phoneNumber ?? ''],
     queryFn: async () => {
-      const qs = buildQuery(range, granularity);
+      const qs = buildQuery(range, granularity, phoneNumber);
       return api<MetaCallResponse>(
         `/integrations/${integrationID}/meta-analytics/calls?${qs}`,
       );
@@ -278,11 +294,12 @@ export function useMetaTemplates(
   range: MetaRange,
   granularity: MetaGranularity,
   enabled: boolean,
+  phoneNumber?: string,
 ) {
   return useQuery<MetaTemplateResponse, ApiError>({
-    queryKey: [...META_KEY, 'templates', integrationID, range, granularity],
+    queryKey: [...META_KEY, 'templates', integrationID, range, granularity, phoneNumber ?? ''],
     queryFn: async () => {
-      const qs = buildQuery(range, granularity);
+      const qs = buildQuery(range, granularity, phoneNumber);
       return api<MetaTemplateResponse>(
         `/integrations/${integrationID}/meta-analytics/templates?${qs}`,
       );
