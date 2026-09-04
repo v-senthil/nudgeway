@@ -1,37 +1,29 @@
 # API tokens
 
-An **API token** is an opaque bearer credential scoped to the minting user's org and RBAC permissions. Tokens are the recommended auth path for the MCP server, the CLI, and any external script that needs to hit `/api/v1/*` without a browser session.
+An **API token** is a credential you mint in Nudgeway and hand to an outside client — most often an MCP client (Claude Desktop, an agent framework, a vendor's automation) so it can act on your organisation's behalf without a browser session.
+
+You create tokens under **Settings → API tokens**. Each token is bound to the user who minted it and inherits that user's permissions. A token can never do more than its owner can.
 
 ## Format
 
-Plaintext shape: `nk_<8-char-prefix>_<40-char-secret>` (base32).
+Every token looks like `nk_<8-char-prefix>_<40-char-secret>`.
 
-- The **prefix** is stored in cleartext and used as the lookup key. It appears in `listAPITokens` responses and audit logs — treat it as an identifier, not a secret.
-- The **secret** is `argon2id`-hashed at rest. It is never persisted or logged in plaintext.
-- The full plaintext token is returned **exactly once**, in the response to `createAPIToken`. If lost, revoke and mint a new one — there is no recovery flow.
-
-## Bearer path skips CSRF
-
-When a request carries `Authorization: Bearer <token>`, the backend's bearer middleware short-circuits the CSRF double-submit check. This is intentional and matches the standard behaviour for token-authenticated APIs — CSRF is a browser-form-submission defence, and bearer tokens are not sent automatically by browsers.
-
-The session-cookie path continues to enforce CSRF on every `POST` / `PUT` / `PATCH` / `DELETE`.
+- The **prefix** is what you'll see in the tokens list and in usage rows. Treat it as an identifier — it's fine to share when someone needs to help you find the right row.
+- The **secret** is the sensitive part. Nudgeway shows the full plaintext value exactly once, at the moment of creation, and never again. If you lose it, revoke the token and mint a new one.
 
 ## What a token can do
 
-- Same RBAC scopes as the user that minted it. A token can never do more than its owner.
-- Revoking the owner's user account revokes all their tokens.
-- There is no wildcard, org-wide, or admin-bypass token. Every token is bound to a single user.
+- It carries the same permissions as the user who created it.
+- Deactivating or removing that user revokes all their tokens automatically.
+- There is no organisation-wide or admin-bypass token. Every token is tied to one person.
 
-## Where they're used
+## Where you'll use them
 
-- **MCP server** — `NUDGEWAY_API_TOKEN` env var on `./bin/nudgeway-mcp`. See [MCP server](/#/developer/mcp-server).
-- **CI + scripts** — `Authorization: Bearer <token>` on any `/api/v1/*` request.
-- **CLI clients** — any script that needs long-lived, revocable access.
+Hand the plaintext value to whoever needs programmatic access. In practice that means pasting it into an MCP client's configuration, a vendor's integration setup, or a script that runs on your behalf. The receiving system sends it back to Nudgeway as an `Authorization` header — you don't need to do anything special beyond copying the value across.
 
 ## Related
 
-- [Create a token](/#/api-tokens/create-token)
-- [Revoke a token](/#/api-tokens/revoke-token)
-- [Usage log + metrics](/#/api-tokens/usage-log-metrics)
-- [MCP server](/#/developer/mcp-server)
-- [REST API](/#/developer/rest-api)
+- [Create a token](#/api-tokens/create-token)
+- [Revoke a token](#/api-tokens/revoke-token)
+- [Usage log and metrics](#/api-tokens/usage-log-metrics)
+- [Troubleshooting](#/api-tokens/troubleshooting)

@@ -1,80 +1,35 @@
 # Create a token
 
-Mint a new API token from the settings UI or, if you already have a working MCP client, from the `createAPIToken` tool. The plaintext value is returned **exactly once** — copy it into your client immediately.
+Mint a token when an MCP client, vendor integration, or automation script needs to talk to Nudgeway on your behalf. The plaintext value is shown **once** — copy it before you close the dialog.
 
 ## How to use
 
 1. Sign into Nudgeway.
-2. Open **Settings → API tokens** (`/settings/api-tokens`).
+2. Go to **Settings → API tokens**.
 3. Click **New token**.
-4. Pick a name (e.g. `claude-desktop-laptop`, `gh-actions-ci`) and an optional expiry in days.
-5. Click **Create**.
-6. A modal displays the full plaintext token in the shape `nk_<8-char-prefix>_<40-char-secret>`. Copy it into a password manager or your MCP client config now.
-7. Click **Done**. The plaintext will not be shown again.
+4. Enter a **name** that identifies where the token will live — for example `Prod MCP`, `Claude Desktop — laptop`, or `CI`.
+5. Pick an **expiry** in days, or leave it blank for a non-expiring token. If you're unsure, 90 days is a good default; you can always mint a fresh one.
+6. Click **Create**.
+7. A dialog shows the full token in the shape `nk_<prefix>_<secret>`. Click the copy icon and paste it straight into the client that needs it, or into your password manager.
+8. Click **Done**. The plaintext will not appear again.
 
-The new token appears in the list with its prefix, name, creation timestamp, and (if set) expiry. `last_used_at` populates asynchronously the first time the token authenticates a request.
+The new token appears in the list with its prefix, name, creation time, and (if you set one) expiry. The **Last used** column stays blank until the receiving client makes its first request, then updates automatically.
 
-## API
+## Handing the token to whoever needs it
 
-```
-POST /api/v1/api-tokens
-```
+Most MCP clients and vendor tools have a field labelled something like "API token" or "Bearer token" — paste the full `nk_..._...` value into that field. Behind the scenes the client will send it in the request's `Authorization` header; you don't need to format anything yourself.
 
-Request body:
-
-```json
-{
-  "name": "claude-desktop-laptop",
-  "expires_in_days": 365
-}
-```
-
-`expires_in_days` is optional — omit for a non-expiring token.
-
-Response (200):
-
-```json
-{
-  "id": "01JC5XYZTOKENID",
-  "name": "claude-desktop-laptop",
-  "prefix": "abcd1234",
-  "plaintext": "nk_abcd1234_efghijklmnopqrstuvwxyz234567abcdefghijklmnop",
-  "created_at": "2026-09-05T10:15:00Z",
-  "expires_at": "2027-09-05T10:15:00Z"
-}
-```
-
-The `plaintext` field is the FULL token and is returned exactly once. It is never persisted server-side; only the prefix and an `argon2id` hash of the secret are stored.
-
-Guarded by the `api_tokens.manage` RBAC scope.
-
-## MCP
-
-```json
-{
-  "tool": "createAPIToken",
-  "arguments": {
-    "body": {
-      "name": "claude-desktop-laptop",
-      "expires_in_days": 365
-    }
-  }
-}
-```
-
-The response includes the plaintext `token` / `plaintext` field once. Paste it into the calling client's `NUDGEWAY_API_TOKEN` env var.
-
-Common pattern: use an existing session-cookie MCP setup to mint a proper token, then rotate the client onto bearer auth.
+If you're passing the token to a vendor or a teammate, share it over a secure channel (password manager, secrets vault) — never in plain email or chat.
 
 ## Troubleshooting
 
-- **`400 name: required`** — the request body was missing `name`, or `name` was empty.
-- **`403`** — the calling user lacks the `api_tokens.manage` scope.
-- **I closed the modal before copying the plaintext.** There's no recovery flow. Revoke the token via [Revoke a token](/#/api-tokens/revoke-token) and create a new one.
+- **I closed the dialog before copying the plaintext.** There is no way to recover it. Revoke the token and create a new one — see [Revoke a token](#/api-tokens/revoke-token).
+- **The Create button is disabled or greyed out.** You need the API-tokens permission on your account. Ask an organisation admin to mint the token for you, or to grant you the permission.
+- **The name field rejects my input.** Names must be non-empty. Pick something short and descriptive.
 
 ## Related
 
-- [Overview](/#/api-tokens/overview)
-- [Revoke a token](/#/api-tokens/revoke-token)
-- [Usage log + metrics](/#/api-tokens/usage-log-metrics)
-- [MCP server](/#/developer/mcp-server)
+- [Overview](#/api-tokens/overview)
+- [Revoke a token](#/api-tokens/revoke-token)
+- [Usage log and metrics](#/api-tokens/usage-log-metrics)
+- [Troubleshooting](#/api-tokens/troubleshooting)

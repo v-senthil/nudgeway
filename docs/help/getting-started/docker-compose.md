@@ -4,7 +4,7 @@ The repo ships a [`docker-compose.yml`](https://github.com/v-senthil/nudgeway/bl
 
 ## Prerequisites
 
-- **Docker Desktop** (macOS, Windows, Linux), **Podman** (Linux + macOS, no Desktop app), or **Apple Containers** (see the [Apple Containers](/#/getting-started/apple-containers) page for the macOS 26+ native runtime).
+- **Docker Desktop** (macOS, Windows, Linux), **Podman** (Linux + macOS, no Desktop app), or **Apple Containers** (see the [Apple Containers](#/getting-started/apple-containers) page for the macOS 26+ native runtime).
 - Do not mix with native services — pick one path, ports collide otherwise.
 
 ## Bring the stack up
@@ -52,7 +52,7 @@ make migrate up               # apply SQL migrations
 make dev                      # backend on :8080, Vite on :5173
 ```
 
-See [First run](/#/getting-started/first-run) for the full walkthrough.
+See [First run](#/getting-started/first-run) for the full walkthrough.
 
 ## Troubleshooting
 
@@ -64,6 +64,6 @@ See [First run](/#/getting-started/first-run) for the full walkthrough.
 
 ## Related
 
-- [Install services (native)](/#/getting-started/install-services) — Homebrew / apt / dnf path.
-- [Apple Containers](/#/getting-started/apple-containers) — macOS 26+ native OCI runtime.
-- [First run](/#/getting-started/first-run) — org + admin + first message.
+- [Install services (native)](#/getting-started/install-services) — Homebrew / apt / dnf path.
+- [Apple Containers](#/getting-started/apple-containers) — macOS 26+ native OCI runtime.
+- [First run](#/getting-started/first-run) — org + admin + first message.

@@ -1,70 +1,38 @@
 # Outbound calls
 
-Placing a call from the operator side is a single `initiateCall` invocation, gated on the recipient having granted call permission. The call queues, Meta rings the recipient's WhatsApp, and the resulting state transitions render as info messages in the thread just like inbound calls.
+Place a call from your side with a single click. The call queues, WhatsApp rings the recipient, and the resulting state transitions render as info messages in the thread just like inbound calls.
 
-## Preconditions
+## Before you start
 
-- The recipient's call permission for this integration is `permanent`, or `temporary` and unexpired.
-- The current user has the `calls.manage` permission.
-- The integration is connected + tested.
-
-Check the permission first — see [Call permissions](/#/calls/call-permissions).
+- The recipient must have granted you call permission — either **permanent** or **temporary** (unexpired). If they haven't, send a permission request first. See [Call permissions](#/calls/call-permissions).
+- Your role must include call management. Ask an admin if the Call button is missing.
+- The WhatsApp integration must be connected and healthy.
 
 ## How to use
 
-1. Open the contact's conversation.
-2. Right-pane → **Call** button. The button reflects the permission state (`permanent` / `temporary` / `no_permission`) — disabled with a `Request permission` chip when it's `no_permission`.
+1. Open the contact's conversation in the Inbox.
+2. Look at the right pane. The **Call** button shows the current permission state:
+   - **Green Call button** — permission is permanent or temporary and unexpired. You can call directly.
+   - **Greyed-out Call button with a "Request permission" chip** — the recipient hasn't granted permission. Click **Request permission** first (see [Call permissions](#/calls/call-permissions)) and wait for them to tap Accept.
 3. Click **Call**. The call queues, then rings the recipient.
-4. On answer, the browser tab hosts the WebRTC session (same as inbound — mic access required).
+4. When they answer, the live call bar appears at the top of the middle pane. Grant microphone permission if this is your first call.
+5. Hang up with the red button in the call bar when you're done. An info message appears in the thread; click it to open the call detail page with the recording and transcript.
 
-## API
+## Recording and transcript
 
-**operationId**: `initiateCall`
-
-```
-POST /api/v1/calls
-```
-
-```bash
-curl -sS -X POST 'http://127.0.0.1:8080/api/v1/calls' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "integration_id": "01M1MC4KFJQ33YQWKPT7HKZNYC",
-    "to": "918197002143",
-    "contact_id": "01M1…",
-    "idempotency_key": "call-01M1…",
-    "recording": { "enabled": true },
-    "transcription": { "enabled": true, "language": "en" }
-  }'
-```
-
-- **`to`** — E.164 without the leading `+`.
-- **`to_user_id`** — alternative to `to` when you have a BSUID (business-scoped user id).
-- **`recording`** / **`transcription`** — optional; Meta stores + Nudgeway proxies. See [Recording + transcript](/#/calls/recording-transcript).
-
-Response (`InitiateCallAccepted`):
-
-```json
-{ "call_id": "01M1…", "status": "queued" }
-```
-
-Status transitions arrive via `CallRinging` / `CallAnswered` / `CallCompleted` events over the WebSocket.
-
-## MCP
-
-Call the `initiateCall` tool with the same body shape. Precede with `getIntegrationCallPermission` when you're not sure the recipient has granted permission.
+Turn recording on for outbound calls in the call composer before you click Call — the toggle is next to the phone number. See [Recording and transcript](#/calls/recording-transcript) for how to access them afterwards.
 
 ## Troubleshooting
 
-- **`400 validation error`** — usually a bad `to` (had a leading `+`, contained spaces). Send digits only.
-- **`403 missing calls.manage`** — role doesn't grant call management. Admin can grant.
-- **`424 integration missing`** — the integration was deleted or disabled. Reconnect.
-- **`502 provider error`** — Meta rejected inline. The most common cause is `no_permission` on the recipient's user — call [`getIntegrationCallPermission`](/#/calls/call-permissions) first, or send a [`sendCallPermissionRequest`](/#/calls/call-permissions).
-- **Call goes to `no_answer` immediately** — recipient's WhatsApp had the call channel disabled, or the phone was off. Nothing to fix on our end; try again later.
+- **You see "Invalid phone number"** — the number contains spaces or a leading `+`. Enter digits only, in international format (for example `918197002143`, not `+91 8197 002143`).
+- **"Permission denied — call management"** — your role doesn't allow placing calls. Ask an admin.
+- **"Integration missing"** — the WhatsApp integration was disabled. Reconnect it in Settings → Integrations.
+- **Call fails immediately with a "no permission" reason** — the recipient hasn't granted call permission. Click **Request permission** on the Call button and wait for them to tap Accept.
+- **Call goes to "No answer" the instant it starts** — the recipient has WhatsApp calls disabled on their phone, or their phone is off. Try again later; there's nothing to fix on your side.
+- **You can hear them but they can't hear you** — your microphone is blocked at the operating-system level. Grant mic access in System Settings.
 
 ## Related
 
-- [Call permissions](/#/calls/call-permissions) — check + request before you can call.
-- [Inbound calls](/#/calls/inbound-call) — the popup + WebRTC accept flow.
-- [Recording + transcript](/#/calls/recording-transcript) — post-call artefacts.
+- [Call permissions](#/calls/call-permissions) — check or request before you call.
+- [Inbound calls](#/calls/inbound-call) — the popup and accept flow.
+- [Recording and transcript](#/calls/recording-transcript) — post-call artefacts.

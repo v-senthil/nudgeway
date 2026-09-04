@@ -6,9 +6,9 @@ Welcome to Nudgeway — an open-source, multi-tenant WhatsApp Business Platform.
 
 Nudgeway needs four backing services: **MySQL 8+**, **Redis 7+**, **Kafka 3+**, **HBase 2+**. Three ways to bring them up:
 
-- **[Native install](install-services)** — Homebrew / apt / dnf / WSL2. Recommended for day-to-day dev.
-- **[Docker Compose](docker-compose)** — one command, works with Docker Desktop, Podman, and Apple Containers.
-- **[Apple Containers](apple-containers)** — macOS 26+, no Docker Desktop VM.
+- **[Native install](#/getting-started/install-services)** — Homebrew / apt / dnf / WSL2. Recommended for day-to-day dev.
+- **[Docker Compose](#/getting-started/docker-compose)** — one command, works with Docker Desktop, Podman, and Apple Containers.
+- **[Apple Containers](#/getting-started/apple-containers)** — macOS 26+, no Docker Desktop VM.
 
 Then follow the shared steps:
 
@@ -18,7 +18,7 @@ Then follow the shared steps:
 4. `make dev` — backend on `:8080`, Vite frontend on `:5173`.
 5. Log in, connect a WhatsApp integration, send yourself a message.
 
-See [First run](first-run) for the full walkthrough.
+See [First run](#/getting-started/first-run) for the full walkthrough.
 
 ## What you'll need
 
@@ -29,6 +29,6 @@ See [First run](first-run) for the full walkthrough.
 
 ## Next
 
-- [Install services (native)](install-services)
-- [Docker Compose](docker-compose)
-- [First run](first-run)
+- [Install services (native)](#/getting-started/install-services)
+- [Docker Compose](#/getting-started/docker-compose)
+- [First run](#/getting-started/first-run)

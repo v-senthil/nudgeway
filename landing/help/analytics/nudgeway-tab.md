@@ -1,85 +1,39 @@
 # Nudgeway tab (local KPIs)
 
-The Nudgeway tab reads from the `analytics_*_daily` tables written by the rollup worker every 15 minutes. Reads are cheap — no ONLINE `SUM()` over raw `messages` / `calls` — and there are no third-party dependencies on the read path.
+The Nudgeway tab shows KPIs drawn from your own send / receive activity, rolled up every 15 minutes. Reads are instant — no third-party dependency, no waiting for Meta.
 
-## KPIs
+## KPI cards
 
-| Card | Definition |
+| Card | What it measures |
 |---|---|
-| **Messages total** | Sum of `messages_daily.count` over the range, pan-provider. |
-| **Delivery rate** | `delivered / sent` as an integer percentage in the 0..100 range. Zero when Sent is zero. |
-| **Response time p50** | Coarse p50 of the per-day average time (seconds) between an inbound message and the next outbound reply. |
-| **Conversations opened** | Sum of `conversations_daily.opened` over the range. |
-| **Calls total** | Sum of `calls_daily.total` over the range. |
-| **Calls answered** | Sum of `calls_daily.answered`. |
-| **Avg call duration** | Weighted average over answered calls only. |
+| **Messages total** | Every message sent or received in the selected range, across all your integrations. |
+| **Delivery rate** | Delivered messages divided by sent messages, as a percentage from 0 to 100. Shows zero if no messages were sent. |
+| **Response time p50** | The typical time between an inbound customer message and your next outbound reply, over the range. |
+| **Conversations opened** | How many new conversations began in the range. |
+| **Calls total** | Every call in the range, in either direction. |
+| **Calls answered** | The subset that were picked up. |
+| **Avg call duration** | Weighted average across answered calls only. |
 
 Each KPI has a matching sparkline underneath — one point per day in the range.
 
 ## How to use
 
-1. **Analytics** in the top nav → **Nudgeway** tab (default).
-2. Range picker in the top-right — the default is the last 14 days ending today.
-3. Cards refresh automatically as the range changes.
+1. Click **Analytics** in the top nav. The **Nudgeway** tab is selected by default.
+2. Use the range picker in the top-right to choose the window. Default is the last 14 days ending today.
+3. The cards and sparklines refresh automatically when you change the range.
 
-## API
+## Update cadence
 
-### Overview aggregate
-
-```
-GET /api/v1/analytics/overview?from=2026-08-22&to=2026-09-04
-```
-
-Response `200`:
-
-```json
-{
-  "messages_total": 61,
-  "delivery_rate_pct": 23,
-  "response_time_seconds_p50": 4176,
-  "conversations_opened": 2,
-  "calls_total": 6,
-  "calls_answered": 6,
-  "calls_avg_duration_seconds": 22
-}
-```
-
-### Series (one line chart)
-
-```
-GET /api/v1/analytics/series?kind=messages_daily&from=2026-08-22&to=2026-09-05
-```
-
-`kind` values: `messages_daily | delivery_rate | conversations_opened`.
-
-Response `200`:
-
-```json
-{
-  "name": "messages",
-  "points": [
-    {"day": "2026-09-05", "value": 12},
-    {"day": "2026-09-04", "value": 7}
-  ]
-}
-```
-
-Both endpoints require `analytics.read`.
-
-## Rollup timing
-
-Every 15 minutes the runner processes yesterday + today + tomorrow (local time) for every tenant to catch tz-boundary drift. Idempotent — writes are `ON DUPLICATE KEY UPDATE`. A missed tick simply defers by 15 minutes; nothing is ever lost. See `docs/flows/analytics-rollup.md`.
-
-For an immediate refresh in dev, restart the server: the runner fires a boot tick before the first 15-minute interval.
+A background job runs every 15 minutes and refreshes the rollups for yesterday, today, and tomorrow (so timezone edges settle correctly). If you just sent your first message, wait for one tick before the numbers appear. Rollups never lose data — a delayed tick simply catches up on the next run.
 
 ## Troubleshooting
 
-- **Cards all zero** — rollup has not fired yet (up to 15 minutes after first traffic). See [Analytics troubleshooting](/#/analytics/troubleshooting).
-- **Sparkline maxes at 2 on a flat line** — the chart has a floor of 1 with 15% headroom; all-zero data reads as "max 2", not real data.
-- **KPI fallback** — if a day's per-direction detail rows are present but the pan-direction "all" row is missing (older rollups), both KPI and series fold detail rows for that day.
+- **All cards show 0 or a dash** — the rollup has not fired yet since your first message. Wait 15 minutes and refresh. If the cards are still all zero after that, see [Analytics troubleshooting](#/analytics/troubleshooting).
+- **Sparkline sits flat at "max 2"** — that is the display floor when there is no activity. Send some real messages and wait 15 minutes.
+- **The range picker is set to a future date** — no data can exist there yet. Reset to the default.
 
 ## Related
 
-- [Analytics overview](/#/analytics/overview)
-- [Meta Analytics tab](/#/analytics/meta-analytics-tab)
-- [Analytics troubleshooting](/#/analytics/troubleshooting)
+- [Analytics overview](#/analytics/overview)
+- [Meta Analytics tab](#/analytics/meta-analytics-tab)
+- [Analytics troubleshooting](#/analytics/troubleshooting)

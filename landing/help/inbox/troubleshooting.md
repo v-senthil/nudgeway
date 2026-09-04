@@ -1,39 +1,39 @@
 # Inbox troubleshooting
 
-The common inbox failure modes and the one-line fix for each. For anything not here, check the [Provider calls log](/#/audit-telemetry/provider-calls) — every Meta invocation is recorded with the request + response.
+Common inbox problems and what you can do to fix them yourself. If the fix here doesn't work, ask an admin to check the [Provider calls log](#/audit-telemetry/provider-calls) — every WhatsApp call is captured there with the exact request and response.
 
 ## 24-hour window
 
-- **`422 outside 24h window`** on `postMessagesSend` with `type: text` — WhatsApp allows plain sends only within 24 hours of the customer's last inbound. Switch to a [template](/#/inbox/send-template).
-- **Composer stays greyed out even after a fresh inbound** — the frontend uses `session.last_inbound_at` to decide; if the WebSocket dropped it may not have refreshed. Reload.
-- **Template composer says "no approved templates"** — the integration has no `APPROVED` templates for its default language. Run [Sync from Meta](/#/templates/sync-from-meta) or [Create a template](/#/templates/create).
+- **"Message can't be sent — the 24-hour window has expired"** — WhatsApp allows plain text only within 24 hours of the customer's last inbound message. Click **Send template** in the composer and pick an approved [template](#/inbox/send-template).
+- **The composer is greyed out even after a fresh inbound message** — refresh the page. Your session missed the update that would have re-enabled it.
+- **The template picker says "No approved templates"** — this integration has no approved templates for its default language. Go to [Templates](#/templates/overview) and either [Sync from Meta](#/templates/sync-from-meta) or [create a new template](#/templates/create).
 
-## Authentication + CSRF
+## Authentication
 
-- **`401 not authenticated`** — session cookie expired (default 24h). Log in again, or use a bearer API token.
-- **`403 CSRF failure`** on any `POST` — the client didn't send the `X-CSRF-Token` header. Fetch `GET /api/v1/auth/csrf` first, or use a bearer token (which skips CSRF).
-- **`403 missing permission`** — the user's role doesn't grant `messages.send`. An admin can grant it under Settings → Users.
+- **You see a "Session expired" toast** — your login timed out (default is 24 hours). Log out and back in.
+- **You see a "Permission denied" toast on sending** — your role doesn't allow sending messages. Ask an admin to grant the messaging permission from Settings → Users.
+- **A red "action failed" toast on any button click** — refresh the page. Your browser lost its security token; reloading fetches a fresh one.
 
-## WebSocket disconnect
+## Real-time updates dropped
 
-- **Live updates stop; no error visible** — check DevTools Network for a dropped `wss://…/ws/inbox`. The client reconnects with exponential backoff (1s, 2s, 4s, ...). On reconnect it re-fetches the open thread to fill the gap.
-- **Frequent disconnects behind a corporate proxy** — many proxies close idle WebSockets after 60s. Nudgeway sends ping frames every 30s by default; if the proxy still kills the socket, whitelist the path.
-- **Delivery ticks never advance past one grey tick** — the send worker is running but the `messages/status` webhook isn't reaching you. Re-check [Push webhook to Meta](/#/integrations/webhook-setup) and Meta's subscriptions.
+- **Live updates stop; new messages don't appear** — your real-time connection dropped. If you don't see a "reconnecting" indicator within a few seconds, refresh the page. On refresh the client re-fetches the open conversation so nothing is lost.
+- **Frequent disconnects when using a corporate VPN or proxy** — some proxies close idle connections aggressively. Ask your IT team to whitelist WebSocket connections to the Nudgeway host.
+- **Delivery ticks never advance past one grey tick** — Meta isn't sending status updates to Nudgeway. Ask an admin to check webhook subscriptions via [Push webhook to Meta](#/integrations/webhook-setup).
 
-## Attachment upload fail
+## Attachment upload
 
-- **`413 Payload Too Large`** — file > 16 MiB. Compress or split; resumable uploads land in a later phase.
-- **Upload returns 201 but send returns `424` immediately after** — the conversation's integration was deleted between the two calls. Reconnect via [Integrations](/#/integrations/connect-whatsapp).
-- **Meta returns `media_not_reachable`** — Meta couldn't fetch the URL you handed it. Your public tunnel is down; restart `cloudflared` / `ngrok`.
-- **Wrong MIME on Meta's side** — pass an explicit `media.mime_type` on the send call; Meta trusts the header over the URL extension.
+- **Red toast "File too large"** — files must be 16 MiB or smaller. Compress or split.
+- **"Meta couldn't fetch the file"** — for local development, the public tunnel is down. For a hosted deployment, refresh and try again; if it still fails, ask an admin.
+- **Upload succeeds but send fails with "no active integration"** — the WhatsApp integration was disconnected. Reconnect via [Integrations](#/integrations/connect-whatsapp).
+- **The wrong file-type icon shows on the recipient's phone** — re-pick the file and send again. WhatsApp sometimes infers the wrong type from the extension.
 
 ## General
 
-- **`424` on a send that used to work** — the target conversation's integration was disabled or its access token expired. Run [Test the connection](/#/integrations/test-connection).
-- **Duplicate bubbles in the thread** — the frontend couldn't reconcile the optimistic row. Always pass an `idempotency_key` on `postMessagesSend`.
+- **A send that used to work suddenly fails** — the integration's access token likely expired. Go to Settings → Integrations, open the integration, and click **Test connection**.
+- **You see two copies of the same message in the thread** — refresh once. If it keeps happening, report it.
 
 ## Related
 
-- [Inbox overview](/#/inbox/overview) — three-pane layout, WebSocket.
-- [Provider calls log](/#/audit-telemetry/provider-calls) — every Meta invocation, with request + response.
-- [Integrations](/#/integrations/overview) — reconnect + rotate credentials.
+- [Inbox overview](#/inbox/overview) — three-pane layout and real-time updates.
+- [Provider calls log](#/audit-telemetry/provider-calls) — every Meta invocation, with request and response (admin-only).
+- [Integrations](#/integrations/overview) — reconnect or rotate credentials.

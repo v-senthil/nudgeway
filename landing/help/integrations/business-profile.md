@@ -1,79 +1,34 @@
 # Business profile
 
-The business profile is what customers see when they tap your business name in WhatsApp — about text, description, address, email, profile picture, vertical, and up to two websites. Nudgeway exposes read + write over the provider-agnostic `BusinessProfile` shape; today only the WhatsApp adapter maps into it, one-to-one.
-
-## How to use
-
-1. Settings → Integrations → the row → **Business profile** drawer.
-2. Edit fields. Save.
-3. The `PUT` response reflects the reconciled state — no second round-trip needed.
+The business profile is what your customers see when they tap your business name inside WhatsApp — a short "about" line, a description, an address, a contact email, a profile picture, a business vertical, and up to two websites.
 
 ## Fields
 
-| Field | Type | Notes |
-|---|---|---|
-| `about` | string | Short one-liner shown under the business name. |
-| `address` | string | Free-form. |
-| `description` | string | Longer paragraph. |
-| `email` | email | Contact email. |
-| `profile_picture_url` | URI | Publicly-reachable image URL. Meta re-hosts it. |
-| `vertical` | string | Meta vertical enum (e.g. `RETAIL`, `HEALTH`, `EDU`). |
-| `websites` | array of URI | Up to two. |
-
-## API
-
-### Read
-
-```
-GET /api/v1/integrations/{id}/business-profile
-```
-
-Response `200`:
-
-```json
-{
-  "about": "24/7 support.",
-  "address": "1 Market St, San Francisco",
-  "description": "Acme Cloud helps teams ship faster.",
-  "email": "hello@acme.example",
-  "profile_picture_url": "https://cdn.example.com/pic.jpg",
-  "vertical": "PROF_SERVICES",
-  "websites": ["https://acme.example"]
-}
-```
-
-Requires `integrations.manage`.
-
-### Write
-
-```
-PUT /api/v1/integrations/{id}/business-profile
-Content-Type: application/json
-
-{
-  "about": "Now open on Sundays.",
-  "websites": ["https://acme.example", "https://status.acme.example"]
-}
-```
-
-The response is the reconciled profile (Nudgeway performs a follow-up `GET` internally so the drawer can render without an extra round-trip).
-
-Requires CSRF + `integrations.manage`. Additional statuses: `400` invalid JSON, `404` integration not found, `502` Meta rejected the write.
-
-## MCP
-
-| operationId | Purpose |
+| Field | Notes |
 |---|---|
-| `getIntegrationBusinessProfile` | Read the current profile. |
-| `updateIntegrationBusinessProfile` | Write + return the reconciled profile. |
+| **About** | One-liner shown right under your business name. |
+| **Address** | Free-form. |
+| **Description** | A longer paragraph. |
+| **Email** | Contact email address. |
+| **Profile picture URL** | A publicly-reachable image URL. Meta re-hosts it. |
+| **Vertical** | Meta's business vertical (e.g. Retail, Health, Education). Pick from the drop-down. |
+| **Websites** | Up to two URLs. |
+
+## How to use
+
+1. Click **Settings** -> **Integrations** and pick the integration.
+2. Open the **Business profile** drawer.
+3. Edit the fields you want to change.
+4. Click **Save**. The drawer refreshes with the reconciled state so you can see exactly what Meta stored.
 
 ## Troubleshooting
 
-- **`502` on write** — Meta rejects unsupported vertical values or `websites` with more than two entries. Check the exact error in [Meta API execution log](/#/audit-telemetry/provider-calls) filtered on `operation=update_business_profile`.
-- **Profile picture stuck on old image** — Meta caches heavily on the customer side; the change is server-side within seconds but customer devices can take hours.
+- **Save fails with an error banner** — Meta rejects unsupported vertical values and rejects more than two entries in Websites. Check that the vertical you picked is in the drop-down and that Websites has at most two URLs.
+- **Profile picture URL saves fine but the picture doesn't change on the customer's phone** — Meta caches heavily on the customer device. The change is live on Meta's servers within seconds; the phone can take hours to pick it up. Nothing to fix in Nudgeway.
+- **A field you edited didn't stick** — Meta silently drops fields it deems invalid. Re-open the drawer to see the current state; if the field is empty, adjust the value (shorter, remove special characters, valid URL) and re-save.
 
 ## Related
 
-- [Integrations overview](/#/integrations/overview)
-- [Business username](/#/integrations/business-username)
-- [Phone number details + QR](/#/integrations/phone-number-details)
+- [Integrations overview](#/integrations/overview)
+- [Business username](#/integrations/business-username)
+- [Phone number details + QR](#/integrations/phone-number-details)

@@ -1,88 +1,37 @@
-# Recording + transcript
+# Recording and transcript
 
-When a call ends, Meta fires a webhook carrying a `recording_media_id` (and, if transcription was requested, a `transcription_ref`). Nudgeway does a two-hop download (media_id → short-lived URL → bytes), persists to HBase under a content-addressed key, and stamps the call row. The call detail page then renders an audio player + a transcript view.
+When a call ends, Nudgeway downloads the recording and (if you enabled it) the transcript, then makes both available on the call detail page.
 
-## The two-hop download
+## Turning on recording and transcription
 
-Meta media IDs are short-lived and require a Bearer token to fetch. To avoid the browser ever seeing that token, Nudgeway:
+- **For inbound calls** — defaults come from the integration's [Call settings](#/integrations/call-settings). Turn them on there once and every inbound call is recorded.
+- **For outbound calls** — the call composer has two toggles right below the phone number: **Record call** and **Transcribe**. Tick them before clicking Call.
 
-1. Receives `recording_media_id` on the `calls` webhook `terminate` event.
-2. Hits Meta's `/graph.facebook.com/{media_id}` endpoint with the integration's access token → gets a short-lived pre-signed URL.
-3. Downloads the audio bytes from that URL.
-4. Persists to HBase under `sha256:<content-hash>`.
-5. Stamps `calls.recording_url` on the row.
+## How to access after a call
 
-## How to use
+1. Open the conversation in the Inbox.
+2. Scroll to the info message that says **Completed**, **Missed**, or **Failed** for the call in question.
+3. Click it. The call detail page opens with:
+   - An audio player at the top. Press play to hear the call.
+   - A transcript below the player, if transcription was enabled.
+   - A download button to save the audio file locally.
 
-- **UI**: click the terminal info message in the thread (`completed` / `missed` / `failed`) — it deep-links to `/calls/{id}` where the audio player + transcript live.
-- **API**: `getCallRecording` streams the audio bytes; `getCallTranscript` streams the raw transcript JSON.
+Recordings take a few seconds to appear after the call ends (Nudgeway downloads them from Meta first). Transcripts take longer — typically 30 to 90 seconds.
 
-## API
+## Storage
 
-### Enable recording + transcription on outbound
-
-```bash
-curl -sS -X POST 'http://127.0.0.1:8080/api/v1/calls' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "integration_id": "01M1…",
-    "to": "918197002143",
-    "recording": { "enabled": true },
-    "transcription": { "enabled": true, "language": "en" }
-  }'
-```
-
-For inbound calls, recording + transcription defaults come from [Call settings](/#/integrations/call-settings) on the integration.
-
-### Stream the recording
-
-**operationId**: `getCallRecording`
-
-```
-GET /api/v1/calls/{id}/recording
-```
-
-Proxies the audio from the provider so the browser never sees the Meta short-lived URL.
-
-```bash
-curl -sS 'http://127.0.0.1:8080/api/v1/calls/01M1…/recording' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>' \
-  -o recording.ogg
-```
-
-Content-type is one of `audio/ogg`, `audio/mp4`, `audio/wav`, or `application/octet-stream` depending on what Meta returned.
-
-### Fetch the transcript
-
-**operationId**: `getCallTranscript`
-
-```
-GET /api/v1/calls/{id}/transcript
-```
-
-Returns the raw provider transcript JSON (opaque shape — pass through). Returns `409 not_available` when the `transcription_ref` isn't stamped yet, so the UI can render a "not available yet" affordance.
-
-## MCP
-
-- `getCall` — `{ "id": "<call-ULID>" }` to read the full call including `recording_url` and `transcription_ref`.
-- `getCallRecording` — streams bytes; use with a Bearer token and pipe to a file.
-- `getCallTranscript` — returns transcript JSON.
-
-## HBase storage
-
-Media persists in HBase under the `media` namespace, keyed by SHA-256 content hash. Deduplication is content-based — the same audio blob (e.g. the same voicemail replayed) stores once. The generic `GET /api/v1/media/{content_hash}` endpoint streams any media bytes (recording, attachment, transcript-adjacent).
+Recordings are stored inside Nudgeway. The customer's browser never sees Meta's URLs. Duplicate audio (for example, the same voicemail replayed) is stored once.
 
 ## Troubleshooting
 
-- **`409 transcript not available yet`** — Meta hasn't finished transcription. Polling every 10-30s usually resolves within a minute of call end.
-- **`404 call not found`** — wrong ULID, or the call belongs to another org.
-- **`424 integration missing`** — the integration was deleted; the two-hop can't run without the access token.
-- **`502 provider error`** on recording fetch — Meta's short-lived URL expired between webhook and download. Re-fire the webhook (or wait for our retry) — the two-hop is idempotent.
-- **Recording plays as static** — Meta occasionally returns `application/octet-stream` for an OGG blob. Save the bytes and inspect with `file`; `ffplay` reads it correctly regardless.
+- **The player shows "Transcript not available yet"** — Meta is still transcribing. Refresh the page every 15 to 30 seconds; it usually arrives within a minute.
+- **The player shows "Recording not available"** — either recording wasn't enabled for this call, or Meta hasn't delivered the file yet. Wait 30 seconds and refresh. If it's still missing after a minute, check the integration's [Call settings](#/integrations/call-settings) — recording may be off by default.
+- **The audio plays as static or won't play at all** — click **Download** and try opening the file in another player (VLC, Quicktime). Meta occasionally serves the audio with an unhelpful content type; the file itself is usually fine.
+- **"Call not found"** — the call belongs to another organization, or the URL was mistyped. Go back to the Inbox and click through from the info message.
+- **"Integration missing"** — the WhatsApp integration was deleted, so Nudgeway can't fetch the file. Reconnect the integration and re-fire the call from Meta (rare — most calls download successfully on the first try).
 
 ## Related
 
-- [Calls overview](/#/calls/overview) — lifecycle + info-message dedup.
-- [Inbound calls](/#/calls/inbound-call) — accept + WebRTC.
-- [Outbound calls](/#/calls/outbound-call) — set `recording.enabled` at initiate.
+- [Calls overview](#/calls/overview) — lifecycle and dedup rules.
+- [Inbound calls](#/calls/inbound-call) — accept flow.
+- [Outbound calls](#/calls/outbound-call) — set recording on before you dial.

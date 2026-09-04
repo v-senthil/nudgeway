@@ -72,7 +72,7 @@ make check-infra
 
 ## Troubleshooting
 
-- **`container: command not found`** — you're on macOS < 26. Use [Docker Compose](/#/getting-started/docker-compose) instead.
+- **`container: command not found`** — you're on macOS < 26. Use [Docker Compose](#/getting-started/docker-compose) instead.
 - **`container system start` hangs** — the Virtualization.framework needs Full Disk Access. Grant it in System Settings → Privacy & Security.
 - **Port collision with Docker Desktop** — Apple Containers and Docker Desktop can both listen on `127.0.0.1:3306`. Quit Docker Desktop or pick different host ports.
 - **HBase container restarts** — hostname must resolve. `--hostname hbase` is required; the compose file already sets it.
@@ -80,6 +80,6 @@ make check-infra
 
 ## Related
 
-- [Install services (native)](/#/getting-started/install-services) — Homebrew path.
-- [Docker Compose](/#/getting-started/docker-compose) — same compose file, Docker Desktop / Podman.
-- [First run](/#/getting-started/first-run) — org + admin + first message.
+- [Install services (native)](#/getting-started/install-services) — Homebrew path.
+- [Docker Compose](#/getting-started/docker-compose) — same compose file, Docker Desktop / Podman.
+- [First run](#/getting-started/first-run) — org + admin + first message.

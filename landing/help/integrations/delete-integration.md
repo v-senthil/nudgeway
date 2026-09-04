@@ -1,78 +1,45 @@
 # Delete an integration
 
-`deleteIntegration` is a **soft-disconnect**, not a hard delete. It flips the integration's `status` to `disconnected` so downstream workers stop picking it up; the row and the envelope-encrypted credentials remain in place for audit.
+**Disconnect** is a soft delete. Nudgeway stops sending and stops accepting webhooks for the integration, but the row and its encrypted credentials stay on file so audit history keeps working.
 
-## What "soft-disconnect" actually does
+## What "disconnect" does
 
-- **`Integration.status` → `disconnected`.** The send worker, webhook worker, and analytics rollup skip disconnected integrations.
-- **Credentials row preserved.** `integration_credentials` is untouched; the KEK-sealed `access_token` / `app_secret` / `verify_token` are still on disk.
-- **Webhook_events history preserved.** Every past delivery still lives in `webhook_events`.
-- **Provider_calls log preserved.** Every past Meta round-trip is still in `provider_calls` — [Meta API execution log](/#/audit-telemetry/provider-calls) keeps working.
-- **Messages / conversations preserved.** Threads still open in the Inbox as read-only.
-- **Meta side is untouched.** Nudgeway does not tell Meta to stop delivering webhooks. If you want Meta to stop calling us, remove the webhook subscription in Meta's console *first*.
-
-## When to actually hard-delete
-
-Reasons you'd want the row and credentials permanently gone:
-
-- Compliance requirement (retention window ended).
-- Preparing to re-add the same phone number under a new tenant.
-
-There is **no REST endpoint** for hard delete today. Options:
-
-- CLI (once implemented): `nudgeway-cli integration delete <id> --hard`.
-- SQL:
-
-  ```sql
-  DELETE FROM integration_credentials WHERE credentials_ref = (
-    SELECT credentials_ref FROM integrations WHERE id = ?
-  );
-  DELETE FROM integrations WHERE id = ?;
-  ```
-
-  Note: `webhook_events` / `messages` / `provider_calls` rows carry `integration_id`. Decide whether to keep them (audit) or cascade-delete separately.
+- The status pill flips to **Disconnected**. Nudgeway will not send new messages, pull analytics, or process incoming webhooks for this integration.
+- Past messages and conversations are preserved. You can still open those threads in the Inbox; they're read-only.
+- The Audit log and the [Meta API execution log](#/audit-telemetry/provider-calls) keep every historical entry for this integration.
+- Meta is **not** told to stop. Meta will keep trying to deliver webhooks to your Webhook URL — those deliveries are simply ignored. If you want Meta to actually stop, remove the webhook subscription in your Meta App Dashboard first.
 
 ## How to use
 
-1. Settings → Integrations → the row → **Disconnect** button.
-2. Confirm in the modal.
-3. The row now renders with `status: disconnected`. Send workers skip it immediately.
+1. Click **Settings** -> **Integrations**.
+2. Find the integration row you want to disconnect.
+3. Click **Disconnect**.
+4. Confirm in the modal.
 
-## API
-
-```
-DELETE /api/v1/integrations/{id}
-```
-
-No body. Response `204 No Content`. Requires CSRF + `integrations.manage`. Additional statuses: `404` if the id is unknown or belongs to another tenant.
-
-## MCP
-
-| operationId | Purpose |
-|---|---|
-| `deleteIntegration` | Soft-disconnect. Row + credentials preserved. |
-| `getIntegration` | Read the current status. |
+The row now shows a **Disconnected** pill.
 
 ## Re-connecting
 
-To re-enable a disconnected integration without recreating the row:
+There is no in-place "reconnect" button today. To bring a disconnected integration back:
 
-1. Currently there's no `PATCH /integrations/{id}` REST endpoint — flip the status via SQL:
+1. Delete the row (see below).
+2. Recreate the integration with the same credentials via [Connect a WhatsApp integration](#/integrations/connect-whatsapp).
+3. Click **Test connection**.
 
-   ```sql
-   UPDATE integrations SET status = 'active' WHERE id = ?;
-   ```
+If you need the disconnect to be undone without losing the row (for example, because it's referenced by many audit entries and you want history to stay linked), contact your admin — this requires a database change today.
 
-2. Run [Test the connection](/#/integrations/test-connection) to confirm Meta accepts the stored credentials.
+## Fully removing an integration
+
+Disconnect is intentionally reversible. To permanently delete the integration and its encrypted credentials — for compliance, or because you're re-adding the same phone number under a new workspace — contact your admin. There is no self-serve hard-delete button today.
 
 ## Troubleshooting
 
-- **Meta keeps delivering webhooks after disconnect** — expected. Meta doesn't know we soft-disconnected. Remove the webhook subscription in Meta's console.
-- **`404 not found` on delete** — the id belongs to another tenant, or you already deleted it.
-- **Messages still showing as `sending`** — the send worker flushed them before the disconnect landed. They'll transition to `failed` on retry.
+- **Meta keeps sending webhooks after I disconnect** — expected. Nudgeway ignores them, but you need to remove the webhook subscription in your Meta App Dashboard to stop the deliveries.
+- **"Not found" error on Disconnect** — the row was already deleted, or belongs to a different workspace. Refresh the integrations list.
+- **Messages I sent right before disconnecting still show "sending"** — the send worker had already dispatched them. They'll flip to "sent" or "failed" once WhatsApp responds, or the retry timer expires.
 
 ## Related
 
-- [Integrations overview](/#/integrations/overview)
-- [Test the connection](/#/integrations/test-connection)
-- [Audit log](/#/audit-telemetry/audit-log)
+- [Integrations overview](#/integrations/overview)
+- [Test the connection](#/integrations/test-connection)
+- [Audit log](#/audit-telemetry/audit-log)

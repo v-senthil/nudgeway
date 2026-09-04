@@ -1,74 +1,39 @@
 # Phone number details + QR
 
-Read-only view of Meta's phone-number metadata for the integration, plus the customer-facing QR code that opens a chat with your business.
-
-An **empty struct is a valid `200` response** when the Phone Number ID is not (yet) part of the WABA (mid-migration, or the id was mistyped).
+A read-only view of Meta's metadata for the phone number on this integration, plus a customer-facing QR code that opens a WhatsApp chat with your business.
 
 ## Fields
 
 | Field | Notes |
 |---|---|
-| `id` | The Phone Number ID (echoes `Integration.config.phone_number_id`). |
-| `display_phone_number` | The E.164 display number (e.g. `+1 555 123-4567`). |
-| `verified_name` | Meta-approved business name (what customers see). |
-| `status` | Meta phone-number status (`CONNECTED`, `MIGRATED`, `PENDING`, …). |
-| `quality_rating` | `GREEN` / `YELLOW` / `RED`. |
-| `country_code` | ISO 3166-1 alpha-2 (e.g. `US`, `IN`). |
-| `country_dial_code` | Numeric country code (e.g. `1`, `91`). |
-| `code_verification_status` | Whether the SMS / voice verification is complete. |
-| `account_mode` | Sandbox vs live. |
-| `host_platform` | Cloud API vs On-Prem. Always `CLOUD_API` for Nudgeway. |
-| `messaging_limit_tier` | `TIER_50`, `TIER_1K`, `TIER_10K`, `TIER_100K`, `TIER_UNLIMITED`. |
-| `is_official_business_account` | Green-checkmark indicator. Feeds the [OBA](/#/integrations/oba-status) section. |
+| **Phone Number ID** | The numeric id Meta uses to reference this number. |
+| **Display phone number** | The E.164 number your customers see, e.g. `+1 555 123-4567`. |
+| **Verified name** | The Meta-approved business name shown to customers. |
+| **Status** | Meta's phone-number status (Connected, Migrated, Pending, ...). |
+| **Quality rating** | Green, Yellow, or Red. See below. |
+| **Country code** | Two-letter country code. |
+| **Verification status** | Whether Meta's SMS / voice verification is complete. |
+| **Account mode** | Sandbox or live. |
+| **Host platform** | Always "Cloud API" for Nudgeway. |
+| **Messaging limit tier** | How many unique customers you can message per day (Tier 50, Tier 1K, Tier 10K, Tier 100K, Unlimited). Meta raises this automatically as your volume grows. |
+| **Official Business Account** | Whether the green checkmark badge is granted. Feeds the [OBA](#/integrations/oba-status) section. |
 
 ## How to use
 
-1. Settings → Integrations → the row → **Phone number** section.
-2. Read the fields — this is the authoritative Meta view.
-3. Below the fields, the QR code renders. Right-click → Save image to hand to customers.
-
-## API
-
-```
-GET /api/v1/integrations/{id}/phone-number
-```
-
-Response `200`:
-
-```json
-{
-  "id": "1017392881147...",
-  "display_phone_number": "+1 555 123-4567",
-  "verified_name": "Acme Support",
-  "status": "CONNECTED",
-  "quality_rating": "GREEN",
-  "country_code": "US",
-  "country_dial_code": "1",
-  "code_verification_status": "VERIFIED",
-  "account_mode": "LIVE",
-  "host_platform": "CLOUD_API",
-  "messaging_limit_tier": "TIER_1K",
-  "is_official_business_account": false
-}
-```
-
-Requires `integrations.manage`.
-
-## MCP
-
-| operationId | Purpose |
-|---|---|
-| `getIntegrationPhoneNumber` | Read Meta's phone-number metadata. |
+1. Click **Settings** -> **Integrations** and pick the integration.
+2. Open the **Phone number** section.
+3. Review the fields.
+4. Below the fields, right-click the QR code and choose **Save image** to hand it out to customers on posters, receipts, business cards, or anywhere physical.
 
 ## Troubleshooting
 
-- **Empty object returned** — the Phone Number ID is not part of the WABA. Re-check `Integration.config.phone_number_id` against Meta's API Setup page.
-- **`quality_rating: RED`** — customers are marking messages as spam. Slow down outbound sends; check template quality. Meta may throttle you.
-- **`messaging_limit_tier` low** — Meta ratchets this up as delivered volume grows. Nothing to do on the Nudgeway side.
-- **QR code missing** — the QR rendering is client-side (the browser draws it from the `display_phone_number`). If the field is empty, no QR.
+- **The panel is blank or the fields are all empty** — Meta says this Phone Number ID isn't part of the WABA. Double-check the Phone Number ID against the Meta App Dashboard -> WhatsApp -> API Setup page. If it's wrong, delete the integration and re-create it with the correct value.
+- **Quality rating is Red** — customers are marking your messages as spam. Slow down outbound sends, review your template quality, and stop sending to unengaged contacts. Meta will throttle a Red number.
+- **Messaging limit tier is low** — Meta raises this automatically as you deliver more messages with good quality. Nothing to click; keep quality up and volume will unlock.
+- **QR code isn't rendering** — the QR is generated from the display phone number field. If that field is empty (see the first bullet), the QR won't draw either. Fix the Phone Number ID first.
 
 ## Related
 
-- [Integrations overview](/#/integrations/overview)
-- [OBA status](/#/integrations/oba-status)
-- [Meta Analytics tab](/#/analytics/meta-analytics-tab)
+- [Integrations overview](#/integrations/overview)
+- [OBA status](#/integrations/oba-status)
+- [Meta Analytics tab](#/analytics/meta-analytics-tab)

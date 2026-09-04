@@ -1,63 +1,40 @@
 # Sync status from Meta
 
-Templates are mirrored from Meta. Meta pushes state transitions via webhook, but pushes can be missed (throttled, dropped, disabled webhook). `syncTemplates` reconciles the local mirror by pulling every template from Meta and upserting into the `templates` table.
+Templates are mirrored from Meta. Meta pushes status changes automatically, but pushes can be missed (throttled, dropped, or if webhooks were disabled). **Sync from Meta** reconciles the local list by pulling every template from Meta and updating what we have.
 
-## When to use
+## When to use it
 
-- A `PENDING` template has been stuck for more than a few minutes and you want to check if Meta already moved it.
-- After enabling a fresh integration — pulls the org's existing templates that were created outside Nudgeway.
-- After a suspected webhook gap (webhooks disabled, tunnel down, etc.).
-- Periodic reconciliation from a cron/scheduled job.
+- A **PENDING** template has been stuck for more than a few minutes.
+- You just connected a fresh integration and want to pull existing templates that were created outside Nudgeway.
+- You suspect a webhook gap (network issue, disabled webhook, tunnel down).
+- You just want to see the latest state.
 
-## When status flips
+## What can change on sync
 
-- `PENDING → APPROVED` — usable in the composer.
-- `PENDING → REJECTED` — Meta returned a reason; check the `reason` field in the template body.
-- `APPROVED → PAUSED` — quality gate; template still exists but Meta throttles sends.
-- `APPROVED → DISABLED` — quality gate fully tripped; sends will fail.
+- **PENDING → APPROVED** — sendable in the composer.
+- **PENDING → REJECTED** — Meta returned a reason; open the template to see it.
+- **APPROVED → PAUSED** — Meta throttled it for quality reasons.
+- **APPROVED → DISABLED** — Meta stopped accepting sends against it.
 
-Local `DRAFT` rows the provider does not know about are left alone — you won't lose in-progress drafts.
+Local **DRAFT** rows Meta doesn't know about are left alone — you won't lose in-progress drafts.
 
-## API
+## How to use
 
-**operationId**: `syncTemplates`
-
-```
-POST /api/v1/templates/sync
-```
-
-```bash
-curl -sS -X POST 'http://127.0.0.1:8080/api/v1/templates/sync' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>' \
-  -H 'Content-Type: application/json' \
-  -d '{ "integration_id": "01M1MC4KFJQ33YQWKPT7HKZNYC" }'
-```
-
-Response (`SyncTemplatesResponse`):
-
-```json
-{ "fetched": 24, "upserted": 24 }
-```
-
-`fetched` — templates Meta returned. `upserted` — rows we inserted or updated locally.
-
-## How to use (UI)
-
-Templates → **Sync from Meta**. A spinner runs while the reconciliation is in flight; the list refreshes with the new statuses on completion. Toast confirms `fetched` and `upserted` counts.
-
-## MCP
-
-Call the `syncTemplates` tool with `{ "body": { "integration_id": "<integration-ULID>" } }`.
+1. Go to **Settings → Templates**.
+2. Pick the integration in the filter dropdown (Sync is per-integration).
+3. Click **Sync from Meta** in the top-right.
+4. A spinner runs while the sync is in flight. A toast confirms how many templates were fetched and updated.
+5. The list refreshes with the new statuses.
 
 ## Troubleshooting
 
-- **`400 missing integration_id`** — the body is required, and `integration_id` is the only field.
-- **`0 fetched`** — Meta returned no templates. Either the WABA has none, or the access token doesn't have `whatsapp_business_management`.
-- **`502 provider error`** — Meta returned a transient error. Retry after a short back-off; check the [Provider calls log](/#/audit-telemetry/provider-calls) for the exact response.
-- **Sync succeeds but statuses look stale** — the response is the count, not the diff. Re-list via `getTemplates` to see the current state.
+- **"Missing integration" toast** — you didn't pick an integration before clicking Sync. Pick one from the filter dropdown.
+- **Toast says "0 fetched"** — either the WhatsApp Business Account has no templates, or the access token doesn't have the management scope. Go to Settings → Integrations, open the integration, and click **Test connection** — if it fails, re-enter the token with the correct scopes.
+- **"Provider error"** — Meta had a transient error. Wait 30 seconds and click Sync again.
+- **Statuses look stale even after Sync succeeded** — refresh the page. The list occasionally caches an old snapshot.
 
 ## Related
 
-- [Templates overview](/#/templates/overview) — lifecycle.
-- [Submit for Meta review](/#/templates/submit-for-review) — the flow that creates a `PENDING`.
-- [Troubleshooting](/#/templates/troubleshooting) — rejection + status issues.
+- [Templates overview](#/templates/overview) — lifecycle.
+- [Submit for Meta review](#/templates/submit-for-review) — the flow that creates a PENDING.
+- [Troubleshooting](#/templates/troubleshooting) — rejection and status issues.

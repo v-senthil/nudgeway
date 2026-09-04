@@ -1,95 +1,35 @@
 # Call settings
 
-Provider-agnostic per-integration call settings — WhatsApp call feature status, whether the call icon shows in the customer's chat header, weekly call hours, and callback-permission behaviour.
+Configure whether WhatsApp calls are enabled on this integration, whether the call icon appears in the customer's chat header, what your call hours are, and whether the business can request callbacks.
 
 ## Fields
 
 | Field | Notes |
 |---|---|
-| `status` | WhatsApp call feature status (e.g. `ENABLED`, `DISABLED_BY_USER`, `NOT_APPLICABLE`). |
-| `call_icon_visibility` | Whether the call icon is shown in the customer's chat header. |
-| `call_hours.status` | On / off toggle for the weekly hours schedule. |
-| `call_hours.timezone_id` | IANA tz id (e.g. `Asia/Kolkata`). |
-| `call_hours.weekly_operating_hours[]` | Array of `{day_of_week, open_time, close_time}`. Times are Meta's `HHMM` format (`0900` = 09:00). |
-| `callback_permission_status` | Whether the business is allowed to request callbacks. |
+| **Call feature status** | Enabled, disabled, or "not applicable" if Meta hasn't yet enabled calling on this WABA. |
+| **Call icon visibility** | Whether the phone-icon shows up in the customer's chat header. |
+| **Call hours toggle** | Turn the weekly hours schedule on or off. |
+| **Timezone** | IANA timezone name, e.g. `Asia/Kolkata`. Meta interprets your open / close times in this zone. |
+| **Weekly hours** | Per-day open and close times, in 24-hour format. |
+| **Callback permission** | Whether your business is allowed to request callbacks from customers. |
 
 ## How to use
 
-1. Settings → Integrations → the row → **Call settings** drawer.
-2. Toggle call feature status, call-icon visibility, and callback permission.
-3. Add / remove `WeeklyHours` rows for each day the business accepts calls.
-4. Save.
-
-## API
-
-### Read
-
-```
-GET /api/v1/integrations/{id}/call-settings
-```
-
-Response `200`:
-
-```json
-{
-  "status": "ENABLED",
-  "call_icon_visibility": "DEFAULT",
-  "call_hours": {
-    "status": "ENABLED_WITH_CUSTOM_HOURS",
-    "timezone_id": "Asia/Kolkata",
-    "weekly_operating_hours": [
-      {"day_of_week": "MONDAY", "open_time": "0900", "close_time": "1800"},
-      {"day_of_week": "TUESDAY", "open_time": "0900", "close_time": "1800"}
-    ]
-  },
-  "callback_permission_status": "ENABLED"
-}
-```
-
-Requires `integrations.manage`.
-
-### Write
-
-```
-PUT /api/v1/integrations/{id}/call-settings
-Content-Type: application/json
-
-{
-  "status": "ENABLED",
-  "call_icon_visibility": "DEFAULT",
-  "call_hours": {
-    "status": "ENABLED_WITH_CUSTOM_HOURS",
-    "timezone_id": "Asia/Kolkata",
-    "weekly_operating_hours": [
-      {"day_of_week": "MONDAY", "open_time": "0900", "close_time": "1800"}
-    ]
-  },
-  "callback_permission_status": "ENABLED"
-}
-```
-
-Response `200` returns the reconciled settings. Requires CSRF + `integrations.manage`.
-
-## Per-recipient call permission
-
-Separately, `GET /api/v1/integrations/{id}/call-permission?to=<E.164>` (operationId `getIntegrationCallPermission`) returns the recipient's current WhatsApp user-call-permission chip (`no_permission | temporary | permanent` + `expiration_time` for temporary). Used by the "New call" affordance to gate the Call button. Gated on `calls.read` rather than `integrations.manage`.
-
-## MCP
-
-| operationId | Purpose |
-|---|---|
-| `getIntegrationCallSettings` | Read call feature status + hours + callback state. |
-| `updateIntegrationCallSettings` | Write and return the reconciled state. |
-| `getIntegrationCallPermission` | Look up one recipient's call-permission chip. |
+1. Click **Settings** -> **Integrations** and pick the integration.
+2. Open the **Call settings** drawer.
+3. Toggle the call feature, call-icon visibility, and callback permission as needed.
+4. If you're using scheduled hours, set the timezone and add one row per day of the week you want to accept calls. Times are 24-hour (e.g. 09:00 to 18:00).
+5. Click **Save**.
 
 ## Troubleshooting
 
-- **`status` won't flip to `ENABLED`** — Meta gates the WhatsApp calling feature per-WABA. Contact your Meta rep.
-- **Hours look off by an hour** — verify `timezone_id`; Meta interprets `open_time` / `close_time` as local in that zone, not UTC.
-- **`501 not wired`** on `getIntegrationCallPermission` — expected when the adapter doesn't wire the call-permission lookup for this deployment (e.g. non-WhatsApp channel).
+- **Call feature status won't flip to Enabled** — Meta controls this per WABA. Contact your Meta representative to have calling enabled on your business account.
+- **Hours look off by an hour** — check the timezone field. Meta reads your open / close times as local to that zone, not UTC. Setting the timezone wrong shifts everything.
+- **Callback permission stays disabled after saving** — Meta gates this per WABA too. If you've toggled it on and it flips back, your WABA isn't approved for it — contact your Meta representative.
+- **"Not supported" banner on the drawer** — the integration isn't a WhatsApp integration (calling is WhatsApp-only in Nudgeway today).
 
 ## Related
 
-- [Integrations overview](/#/integrations/overview)
-- [Calls overview](/#/calls/overview)
-- [Call permissions](/#/calls/call-permissions)
+- [Integrations overview](#/integrations/overview)
+- [Calls overview](#/calls/overview)
+- [Call permissions](#/calls/call-permissions)

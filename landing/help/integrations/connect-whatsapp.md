@@ -1,85 +1,39 @@
 # Connect a WhatsApp integration
 
-Settings → Integrations → **Connect WhatsApp**. The six-field form covers everything the WhatsApp Business Cloud adapter needs; secrets are envelope-encrypted before the row hits MySQL.
+Adding a WhatsApp integration takes six fields, all of which come from your Meta App Dashboard. Nudgeway encrypts the secret fields before storing them and never shows them back.
 
 ## The six fields
 
-| Field | Where it comes from in Meta |
+| Field | Where to find it in Meta |
 |---|---|
-| **Name** | Any label. Displayed in the integration list. Example: "Acme India". |
-| **Phone Number ID** | developer.facebook.com → your App → **WhatsApp → API Setup** → the number under "From". Copy the numeric id, not the display number. |
-| **WABA ID** | Same **API Setup** page → the "WhatsApp Business Account ID" panel at the top. |
-| **Access Token** | Business Settings → **Users → System Users** → your system user → **Generate new token**. Scopes: `whatsapp_business_messaging` + `whatsapp_business_management`. Prefer a permanent System User token; temporary 24-hour tokens will break the integration when they expire. |
-| **App Secret** | developer.facebook.com → your App → **Settings → Basic** → **App Secret → Show**. Used to HMAC-verify incoming webhook bodies. |
-| **Verify Token** | Any string you choose (e.g. `openssl rand -hex 16`). Save the same value in the form and in Meta's webhook Callback URL panel — Meta echoes it back during the subscription handshake. |
+| **Name** | Any label you like — this is what shows in the Nudgeway integration list. Example: "Acme India". |
+| **Phone Number ID** | developer.facebook.com -> your App -> **WhatsApp -> API Setup** -> the number under "From". Copy the numeric id, not the display number. |
+| **WABA ID** | The same **API Setup** page, at the top under "WhatsApp Business Account ID". |
+| **Access Token** | Meta Business Settings -> **Users -> System Users** -> your system user -> **Generate new token**. Grant the scopes `whatsapp_business_messaging` and `whatsapp_business_management`. Use a permanent System User token, not the 24-hour test token — the test token will break your integration when it expires. |
+| **App Secret** | developer.facebook.com -> your App -> **Settings -> Basic** -> **App Secret -> Show**. Nudgeway uses this to verify that webhooks really came from Meta. |
+| **Verify Token** | Any random string you choose. You'll paste the same value into Meta's webhook Callback URL panel later. It's how Meta and Nudgeway confirm the webhook subscription. A password-generator string of ~32 characters is fine. |
 
 ## How to use
 
-1. Copy the six values from Meta.
-2. Settings → Integrations → **Connect WhatsApp**.
-3. Paste, save. The response returns the created `Integration` (secrets stripped) plus a `webhook_url` you'll paste into Meta.
-4. [Test the connection](/#/integrations/test-connection).
-5. [Push the webhook to Meta](/#/integrations/webhook-setup).
+1. Copy the six values above out of Meta into a scratch pad.
+2. In Nudgeway, click **Settings** -> **Integrations** -> **Connect WhatsApp**.
+3. Paste the six values into the form.
+4. Click **Save**.
 
-## API
+After saving, you'll see the new integration in the list with a Webhook URL displayed on its detail panel — you'll paste that URL into Meta as the next step. Then:
 
-```
-POST /api/v1/integrations
-Content-Type: application/json
-
-{
-  "type": "channel",
-  "provider": "whatsapp",
-  "name": "Acme India",
-  "config": {
-    "phone_number_id": "1017392881147...",
-    "waba_id": "1236225006237445"
-  },
-  "secrets": {
-    "access_token": "EAAECm...",
-    "app_secret": "89ab...",
-    "verify_token": "a0ea12cb..."
-  }
-}
-```
-
-Response `201`:
-
-```json
-{
-  "id": "01J…",
-  "org_id": "01J…",
-  "type": "channel",
-  "provider": "whatsapp",
-  "name": "Acme India",
-  "status": "connected",
-  "config": { "phone_number_id": "…", "waba_id": "…" },
-  "capabilities": { "text": true, "media": true, "template": true, "groups": true },
-  "webhook_url": "https://app.example.com/webhooks/whatsapp/01J…",
-  "created_at": "2026-09-05T09:14:00Z",
-  "updated_at": "2026-09-05T09:14:00Z"
-}
-```
-
-Requires CSRF + `integrations.manage`. Additional statuses: `400` bad request, `422` validation failure (unknown provider, missing config keys, secrets accidentally passed under `config`).
-
-## MCP
-
-| operationId | Purpose |
-|---|---|
-| `createIntegration` | Create a new integration. Body: `{type, provider, name, config, secrets}`. |
-| `listIntegrations` | List every integration; also returns the per-integration `webhook_url`. |
-| `getIntegration` | Fetch one by ULID. Secrets are stripped. |
+1. Click **Test connection** on the new row to confirm the credentials work. See [Test the connection](#/integrations/test-connection).
+2. Click **Push to Meta** (or paste the Webhook URL into Meta manually). See [Push webhook to Meta](#/integrations/webhook-setup).
 
 ## Gotchas
 
-- **Secrets under `config` are rejected with 422**. Always put `access_token` / `app_secret` / `verify_token` under `secrets`.
-- **`phone_number_id` collision** — creating a WhatsApp integration also upserts a `BusinessEndpoint` row keyed by phone_number_id. Two integrations with the same phone number collide.
-- **Temporary tokens expire**. Use a System User permanent token, not a 24-hour test token.
+- **Never paste secrets into the Name or ID fields**. The form validates and rejects that, but double-check that access token, app secret, and verify token each go into their own labelled field.
+- **Two integrations cannot share the same Phone Number ID**. If you're moving a number between workspaces, delete the old integration first.
+- **Temporary access tokens expire in 24 hours**. Use a permanent System User token.
 
 ## Related
 
-- [Integrations overview](/#/integrations/overview)
-- [Test the connection](/#/integrations/test-connection)
-- [Push webhook to Meta](/#/integrations/webhook-setup)
-- [First run](/#/getting-started/first-run)
+- [Integrations overview](#/integrations/overview)
+- [Test the connection](#/integrations/test-connection)
+- [Push webhook to Meta](#/integrations/webhook-setup)
+- [First run](#/getting-started/first-run)

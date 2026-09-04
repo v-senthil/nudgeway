@@ -1,45 +1,42 @@
 # Calls troubleshooting
 
-The common call failure modes and one-line fixes. Every provider invocation is captured in the [Provider calls log](/#/audit-telemetry/provider-calls); start there when the surface error isn't enough.
+Common call problems and what you can do to fix them yourself. When the on-screen error isn't enough, an admin can open the [Provider calls log](#/audit-telemetry/provider-calls) for the full Meta response.
 
 ## Permission denied
 
-- **`initiateCall` returns `502` with `no_permission` in the response detail** — the recipient hasn't granted call permission. Send a [`sendCallPermissionRequest`](/#/calls/call-permissions) and wait for them to tap Accept.
-- **Call button greyed out** — the UI checked `getIntegrationCallPermission` and got `no_permission`. Use the **Request permission** affordance on the button.
-- **Permanent permission suddenly `no_permission`** — the user revoked it in their WhatsApp settings, or blocked the business number. Nothing to do server-side.
-- **`403 missing calls.manage`** on `initiateCall` — role doesn't grant call management.
-- **`403 missing calls.read`** on `getIntegrationCallPermission` — role doesn't grant call reads.
+- **Call fails with "No permission from recipient"** — the customer hasn't granted call permission. Click **Request permission** on the Call button and wait for them to tap Accept. See [Call permissions](#/calls/call-permissions).
+- **Call button is greyed out** — the recipient has No permission. Use the **Request permission** chip on the button.
+- **Permanent permission suddenly shows No permission** — the customer revoked it in their WhatsApp Privacy settings, or blocked your business number. There's nothing to fix on your side.
+- **"Permission denied — call management"** — your role doesn't allow placing calls. Ask an admin.
+- **"Permission denied — call read"** — your role doesn't allow reading call state. Ask an admin.
 
-## WebRTC failed
+## Audio problems
 
-- **Meta error `138008`** on `answerCall` — SDP contained mDNS candidates or `a=ice-options:trickle`. Nudgeway strips these server-side; if you're still seeing 138008 the strip regressed. Check the call adapter logs + open an issue.
-- **`getCallSession` returns `404`** — the `connect` webhook hasn't landed yet, or Meta didn't send one for this call (rare). Retry after a second; if the offer never appears, the call can't be answered in-browser.
-- **Audio one-way** — browser mic permission missing. Click the padlock, grant mic. On macOS, System Settings → Privacy & Security → Microphone → Chrome/Safari.
-- **`getUserMedia` throws `NotAllowedError`** — user dismissed the mic prompt. Refresh the tab and re-accept.
-- **WebRTC works on localhost, fails in staging** — TLS required. WebRTC + mic access are blocked on plain HTTP outside localhost.
-- **ICE never completes** — a corporate firewall is blocking UDP or TURN. WhatsApp calls need working UDP outbound; whitelist Meta's STUN/TURN or route through an ICE relay.
+- **You clicked Accept but the audio never connects** — refresh the tab and take the next call. If it keeps happening, ask an admin to check the call adapter.
+- **One-way audio (you hear them but they don't hear you)** — your microphone is blocked at the operating-system level.
+  - **macOS**: System Settings → Privacy and Security → Microphone → enable your browser.
+  - **Windows**: Settings → Privacy → Microphone → allow apps and your browser.
+  - Then refresh the tab.
+- **Browser threw "microphone permission denied"** — click the padlock in the address bar, allow microphone access, refresh.
+- **Calls work locally but not on the deployed site** — the deployed URL must be HTTPS. Microphone access is blocked on plain HTTP outside of `localhost`. Ask an admin to configure TLS.
+- **Call connects but drops after a few seconds** — a corporate firewall may be blocking the audio stream. Ask your IT team to allow UDP outbound to Meta's calling servers.
 
 ## Recording missing
 
-- **Call ended but `recording_url` still empty** — the terminate webhook hasn't landed yet, or recording wasn't enabled. Check the integration's [Call settings](/#/integrations/call-settings) and the [Provider calls log](/#/audit-telemetry/provider-calls).
-- **`getCallRecording` returns `404`** — call ULID is wrong, or the call belongs to another org.
-- **`getCallRecording` returns `502`** — Meta's short-lived URL expired. The two-hop is idempotent; the retry worker will re-fetch, or you can re-trigger by re-firing the terminate webhook.
-- **Recording is silent** — the recipient never joined WebRTC (dropped mid-negotiation). Duration will be near zero; nothing to recover.
-- **`getCallTranscript` returns `409 not_available`** — transcription still running. Poll every 10-30s.
-
-## SDP validation
-
-- **Meta rejects the SDP with generic `bad_request`** — usually a media-line mismatch (offered audio, answered with video, etc.). Inspect the answer SDP in the DevTools console before it's POSTed.
-- **Chrome mDNS candidates leaking to Meta** — should be impossible after the server-side strip; if you see them in the outbound provider log, file a bug with the raw SDP.
+- **Call ended but recording is empty** — either recording wasn't enabled (check the integration's [Call settings](#/integrations/call-settings)), or Meta hasn't delivered the file yet. Wait 30 seconds and refresh.
+- **"Call not found"** — the call belongs to another organization, or the URL was mistyped.
+- **"Provider error" when playing the recording** — Meta's temporary URL expired. Refresh the page — Nudgeway will retry automatically.
+- **Recording plays as silence** — the recipient never fully joined (dropped mid-connect). Duration will be near zero; there's nothing to recover.
+- **"Transcript not available yet"** — transcription is still running. Refresh every 15 to 30 seconds.
 
 ## Call state stuck
 
-- **Info message stuck on `ringing`** — Meta didn't push the terminate webhook. `endCall` closes the row; the missing webhook will backfill later.
-- **Duplicate info messages** — the `(call_id, status)` dedup key regressed. File a bug with the two conflicting rows.
-- **Popup ghost — call already completed** — the `/ws/inbox` socket dropped and reconnected out of order. Refresh.
+- **Info message stuck on "Ringing"** — Meta didn't push the terminate event. Click **End call** if the live call bar is still open; otherwise refresh the thread — the missing update will backfill within a few minutes.
+- **Two info messages for the same call** — refresh once; report it if it persists.
+- **A "ghost" popup for a call that's already over** — your real-time connection dropped and reconnected out of order. Refresh.
 
 ## Related
 
-- [Calls overview](/#/calls/overview) — full lifecycle.
-- [Call permissions](/#/calls/call-permissions) — check + request.
-- [Recording + transcript](/#/calls/recording-transcript) — two-hop download.
+- [Calls overview](#/calls/overview) — full lifecycle.
+- [Call permissions](#/calls/call-permissions) — check and request.
+- [Recording and transcript](#/calls/recording-transcript) — how the download works.

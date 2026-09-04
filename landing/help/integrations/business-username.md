@@ -1,103 +1,34 @@
 # Business username
 
-The Business-Scoped Username (BSUID handle) is a `@handle` a customer can use to find the business. Adopting one lets you send messages using the username instead of the phone number (see the [BSUID send-order](/#/inbox/send-text) preference).
-
-Empty username is a **valid steady state** — you can operate without one.
+A Business-Scoped Username is a `@handle` a customer can use to find your business inside WhatsApp. Once adopted, you can also send messages by handle instead of by phone number. Running without a username is perfectly fine — it's optional.
 
 ## How to use
 
-1. Settings → Integrations → the row → **Username** section.
-2. Click **Suggestions** — Nudgeway asks Meta for candidate handles based on your verified name.
-3. Pick one or type your own. Save.
-4. If your desired handle is owned by another business, choose a `transfer_action` (see below) and re-save.
-5. To release the handle, click **Delete**.
+1. Click **Settings** -> **Integrations** and pick the integration.
+2. Open the **Username** section.
+3. Click **Suggestions** — Nudgeway asks Meta for candidate handles based on your verified business name. Pick one, or type a custom handle.
+4. Click **Save**.
+5. If the handle is already owned by another business, you'll see a conflict banner. Choose how to handle it (see below), then re-save.
+6. To release your handle later, click **Delete** in this section.
 
 ## Transfer semantics
 
-`SetUsernameRequest.transfer_action` controls conflict resolution when another business owns the handle:
+When another business already owns the handle you want, you'll see a conflict banner with a **Transfer action** drop-down:
 
-| Value | Behaviour |
-|---|---|
-| `none` (default) | Fail with a conflict error if the handle is taken. |
-| `force_transfer` | Take ownership away from the current owner. Only works when Meta considers you the rightful owner (trademark, prior claim, ...). Meta rejects with an error otherwise. |
+- **None (default)** — save fails; pick a different handle.
+- **Force transfer** — take the handle away from the current owner. Meta will only accept this if it believes you are the rightful owner (for example, you hold the trademark). If Meta accepts, the previous owner loses the handle.
 
-`force_transfer` is destructive to the losing business. Nudgeway does not verify entitlement — Meta does. If Meta accepts, the previous owner's handle is gone.
-
-## API
-
-### Read current username
-
-```
-GET /api/v1/integrations/{id}/username
-```
-
-Response `200`:
-
-```json
-{ "username": "acmesupport", "status": "approved" }
-```
-
-Empty `username` = no handle adopted. `status` is `"approved" | "reserved" | ""`.
-
-### Set / change
-
-```
-PUT /api/v1/integrations/{id}/username
-Content-Type: application/json
-
-{
-  "username": "acmesupport",
-  "transfer_action": "none"
-}
-```
-
-Response `200` — the adopted username. Requires CSRF + `integrations.manage`.
-
-### Delete (release)
-
-```
-DELETE /api/v1/integrations/{id}/username
-```
-
-Response `200`:
-
-```json
-{ "success": true }
-```
-
-Requires CSRF + `integrations.manage`.
-
-### Suggestions
-
-```
-GET /api/v1/integrations/{id}/username/suggestions
-```
-
-Response `200`:
-
-```json
-{ "suggestions": ["acmesupport", "acmehelp", "askacme"] }
-```
-
-May be empty. Requires `integrations.manage`.
-
-## MCP
-
-| operationId | Purpose |
-|---|---|
-| `getIntegrationUsername` | Read the current username. |
-| `setIntegrationUsername` | Adopt or change. |
-| `deleteIntegrationUsername` | Release the handle. |
-| `getIntegrationUsernameSuggestions` | Fetch provider-generated candidates. |
+Force transfer is destructive to the other business. Only use it if you know you are entitled and Meta will agree.
 
 ## Troubleshooting
 
-- **`400 missing username`** — the body's `username` field is empty. Use `DELETE` to release, not `PUT` with `""`.
-- **`502 conflict`** — someone else owns the handle. Try `force_transfer` only if you're entitled (Meta will verify).
-- **Suggestions list is empty** — Meta had no viable candidates. Type your own.
+- **"Username required" error** — the field is empty. To remove a username, use the **Delete** button, not an empty save.
+- **"Conflict" banner on save** — someone else owns the handle. Pick a different handle, or use **Force transfer** if you're entitled.
+- **Suggestions list is empty** — Meta didn't propose any handles for your business name. Type your own.
+- **Handle saved but customers still can't find you by it** — Meta takes a few hours to propagate a new handle to search. Give it up to a day.
 
 ## Related
 
-- [Integrations overview](/#/integrations/overview)
-- [Business profile](/#/integrations/business-profile)
-- [Phone number details + QR](/#/integrations/phone-number-details)
+- [Integrations overview](#/integrations/overview)
+- [Business profile](#/integrations/business-profile)
+- [Phone number details + QR](#/integrations/phone-number-details)

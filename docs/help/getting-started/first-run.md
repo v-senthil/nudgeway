@@ -1,6 +1,6 @@
 # First run — org + admin + first message
 
-Assumes MySQL / Redis / Kafka / HBase are already running (either native or containers — see [Overview](overview)).
+Assumes MySQL / Redis / Kafka / HBase are already running (either native or containers — see [Overview](#/getting-started/overview)).
 
 ## 1. Clone + configure
 
@@ -65,7 +65,7 @@ Settings → Integrations → **Connect WhatsApp**. Paste the six fields:
 | App Secret | Meta App → Settings → Basic |
 | Verify Token | Any string you pick; you'll paste the same value into Meta below |
 
-Save. Nudgeway envelope-encrypts the secrets. See [Connect a WhatsApp integration](/#/integrations/connect-whatsapp) for detail.
+Save. Nudgeway envelope-encrypts the secrets. See [Connect a WhatsApp integration](#/integrations/connect-whatsapp) for detail.
 
 ## 6. Point Meta at your webhook
 
@@ -74,7 +74,7 @@ The integration row shows its webhook URL (e.g. `https://<your-tunnel>.trycloudf
 - **From the UI**: click **Push to Meta** on the integration row's Details tab — auto-detects an ngrok tunnel and POSTs the `webhook_configuration` override for you.
 - **Manually**: paste the URL into Meta App → WhatsApp → Configuration → Callback URL, paste your verify token, click **Verify and save**, then subscribe to `messages`, `message_status`, `calls`, and `call_settings_update`.
 
-See [Push webhook to Meta](/#/integrations/webhook-setup) for the full flow.
+See [Push webhook to Meta](#/integrations/webhook-setup) for the full flow.
 
 ## 7. Send yourself a message
 
@@ -85,7 +85,7 @@ See [Push webhook to Meta](/#/integrations/webhook-setup) for the full flow.
 
 - **Login fails** → the admin user wasn't created; re-run step 3 with `--admin` set.
 - **Webhook verify returns 403** → the verify token you saved doesn't match what you're typing into Meta.
-- **Outbound send returns "conversation not open"** → 24-hour customer-service window expired. Send an approved template ([Send a template message](/#/inbox/send-template)) or wait for the customer to message you first.
+- **Outbound send returns "conversation not open"** → 24-hour customer-service window expired. Send an approved template ([Send a template message](#/inbox/send-template)) or wait for the customer to message you first.
 - **Analytics cards all zero** → daily rollup runs every 15 minutes; restart the server for an immediate boot-tick.
 
-See [Inbox troubleshooting](/#/inbox/troubleshooting) and [Integrations](/#/integrations/overview) for more.
+See [Inbox troubleshooting](#/inbox/troubleshooting) and [Integrations](#/integrations/overview) for more.

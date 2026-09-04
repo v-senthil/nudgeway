@@ -1,57 +1,66 @@
 # Groups troubleshooting
 
-## OBA not granted → sync returns 502
+## Sync fails with an "official business account" error
 
-**Symptom**: `POST /api/v1/groups/sync` returns `502 provider_error`; the Groups page is empty; [Meta API execution log](/#/audit-telemetry/provider-calls) shows the `list_groups` call failing with a Meta error like "requires official business account".
+**What you see**: You click **Sync** on the Groups page and get an error toast that mentions "requires official business account". The Groups list stays empty.
 
-**Cause**: Meta gates the Business Groups API on OBA phone numbers only.
+**Why**: WhatsApp only exposes the Business Groups feature on numbers with the Official Business Account (OBA) badge.
 
-**Fix**:
+**What to do**:
 
-1. Open [Settings → Integrations → OBA](/#/integrations/oba-status).
-2. Click **Apply** if the status is `NOT_APPLIED`.
-3. Wait for `APPROVED` (usually 1–5 business days).
-4. Re-run sync.
+1. Open **Settings** -> **Integrations** and click the integration.
+2. Open the **OBA** section.
+3. If the status is `NOT_APPLIED`, click **Apply**.
+4. Wait for the status to become `APPROVED` (usually 1-5 business days). Meta reviews the application; there is nothing further to do until they respond.
+5. Once approved, return to the Groups page and click **Sync**. Existing conversations and inbound webhooks will start working automatically the moment Meta flips the number.
 
-Any group traffic (inbound webhooks, outbound sends) will begin to work automatically once Meta flips the phone number.
+## Roster looks stale
 
-## Member roster looks stale
+**What you see**: A group's member list on the detail panel shows people who have left, or the member count doesn't match what you see in the WhatsApp app.
 
-**Symptom**: The `group_members` page shows people who left, or is missing people who joined.
+**Why**: Nudgeway does not yet automatically remove members who left a group. New joiners appear immediately on the next sync; departures stick around as ghosts.
 
-**Cause**: Sync upserts members but does not tombstone rows Meta no longer returns. A future reconciliation pass will stamp `left_at`; today the roster is best-effort.
+**What to do**:
 
-**Fix**:
+- Click **Sync** on the Groups page to pick up new joiners.
+- Trust the member count shown at the top of the row (that number comes directly from Meta) over the length of the roster list.
+- If you need an accurate roster today, cross-check against the WhatsApp mobile app.
 
-- Re-run sync — new joiners land immediately.
-- Departures show as ghosts until the reconciliation pass ships. Compare `SELECT COUNT(*) FROM group_members WHERE group_id = ? AND left_at IS NULL` against the group's `size` field for a rough sanity check.
+## Send to a group fails
 
-## Send returns 502 provider_error
+**What you see**: The message flips to "failed" with a red indicator inside the group thread.
 
-**Symptom**: `POST /api/v1/groups/{id}/messages` succeeds locally (202) but the message never transitions past `queued`; the message row's `error` column is populated.
+**What to do**: Hover the failure indicator to see the reason. The common cases are:
 
-**Diagnosis**: Open [Meta API execution log](/#/audit-telemetry/provider-calls), filter `integration_id=<yours>&operation=send_message`, find the row for the failed send. The Meta response body carries the exact reason.
+- **"24-hour window closed"** — send an approved template instead. See [Send a template message](#/inbox/send-template).
+- **"template payload invalid"** — re-pick the template and re-fill any variables.
+- **"business account restriction"** — your WABA is throttled or under Meta review. Contact your Meta representative.
 
-Common Meta rejections:
+If the reason is not clear, an admin can open **Settings** -> **Audit** -> [Meta API execution log](#/audit-telemetry/provider-calls) and filter by `send_message` to see Meta's raw response.
 
-- `#131047` — 24-hour customer-service window closed. Send a template instead.
-- `#100 (param)` — malformed template payload; verify component structure.
-- `#131056 (Business account restriction)` — the WABA is throttled or in review.
+## Sync says "0 groups added or updated"
 
-## Sync completes but `groups_upserted: 0`
+**What you see**: Sync completes cleanly, but no groups appear.
 
-**Cause**: The integration is not a WhatsApp channel, or the WABA genuinely has no groups.
+**Why**: Either the integration is not a WhatsApp integration, or the WABA genuinely has no groups yet.
 
-**Check**: `GET /api/v1/integrations/{id}` — `provider` should be `whatsapp` and `capabilities.groups` should be true. If a Zoho / bot / AI integration id was passed, sync returns `422 unsupported`.
+**What to do**:
 
-## `424 Failed Dependency`
+- Confirm your business number has actually been added to at least one group inside WhatsApp.
+- Confirm you picked the correct integration in the drop-down.
 
-**Cause**: The integration id in the request body does not exist under your org, or has been soft-disconnected.
+## Sync says "integration not found" or "failed dependency"
 
-**Fix**: Re-check the id in Settings → Integrations. A `disconnected` integration ignores sync until you re-run [Test the connection](/#/integrations/test-connection).
+**What you see**: A red error banner mentioning the integration being disconnected.
+
+**What to do**:
+
+1. Open **Settings** -> **Integrations**.
+2. Confirm the integration status pill is `connected`. If it says `disconnected`, click **Test connection**.
+3. If the test fails, re-check your credentials — see [Test the connection](#/integrations/test-connection).
 
 ## Related
 
-- [Groups overview](/#/groups/overview)
-- [OBA status](/#/integrations/oba-status)
-- [Meta API execution log](/#/audit-telemetry/provider-calls)
+- [Groups overview](#/groups/overview)
+- [OBA status](#/integrations/oba-status)
+- [Meta API execution log](#/audit-telemetry/provider-calls)

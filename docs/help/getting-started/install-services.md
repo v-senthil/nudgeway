@@ -2,6 +2,8 @@
 
 Nudgeway needs four backing services running on the local machine before `make dev`: **MySQL 8+**, **Redis 7+**, **Kafka 3+**, and **HBase 2+**. Native install is the recommended day-to-day dev path — every service becomes a normal OS service, restarts survive reboots, and there is no VM overhead.
 
+> **Note.** This page is for the operator setting Nudgeway up on their own machine — command-line steps are unavoidable here. Once the app is running, the rest of the help pages walk you through the browser UI.
+
 The full, canonical instructions live in [`docs/install-services.md`](https://github.com/v-senthil/nudgeway/blob/main/docs/install-services.md). The essentials are inline below.
 
 ## macOS (Homebrew)
@@ -48,7 +50,7 @@ sudo systemctl enable --now mysqld redis
 
 ## Windows
 
-WSL2 is the least painful path — install Ubuntu from the Microsoft Store, then follow the Debian/Ubuntu section inside it. Native Windows works for MySQL + Redis via Chocolatey (`choco install mysql redis-64`), but Kafka and HBase need WSL2 or the [Docker Compose](docker-compose) path.
+WSL2 is the least painful path — install Ubuntu from the Microsoft Store, then follow the Debian/Ubuntu section inside it. Native Windows works for MySQL + Redis via Chocolatey (`choco install mysql redis-64`), but Kafka and HBase need WSL2 or the [Docker Compose](#/getting-started/docker-compose) path.
 
 ## Verify
 
@@ -67,6 +69,6 @@ make check-infra
 
 ## Related
 
-- [Docker Compose](/#/getting-started/docker-compose) — one-command alternative.
-- [Apple Containers](/#/getting-started/apple-containers) — macOS 26+ native OCI runtime.
-- [First run](/#/getting-started/first-run) — org + admin + first message.
+- [Docker Compose](#/getting-started/docker-compose) — one-command alternative.
+- [Apple Containers](#/getting-started/apple-containers) — macOS 26+ native OCI runtime.
+- [First run](#/getting-started/first-run) — org + admin + first message.

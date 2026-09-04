@@ -1,91 +1,39 @@
 # Create a template
 
-Templates start as local `DRAFT` rows. You can save a draft and submit later, or create + submit in the same request via the `submit: true` flag.
+Templates start as local drafts. You can save a draft and submit later, or create and submit in one step.
 
 ## How to use
 
-1. Settings → Templates → **New template**.
-2. Pick the target integration and language (Meta locale, e.g. `en`, `en_US`, `pt_BR`).
-3. Pick the category — `AUTHENTICATION`, `MARKETING`, or `UTILITY`.
-4. Enter a name — lowercase alphanumeric + underscore, 1-512 chars.
-5. Build the components — `HEADER` (text / image / video / document), `BODY` (required), `FOOTER`, and up to 3 `BUTTONS` (`URL`, `QUICK_REPLY`, `PHONE_NUMBER`, `COPY_CODE`, `VOICE_CALL`).
-6. Save as draft, or tick **Submit for Meta review** to send it immediately.
-
-## API
-
-**operationId**: `createTemplate`
-
-```
-POST /api/v1/templates
-```
-
-```bash
-curl -sS -X POST 'http://127.0.0.1:8080/api/v1/templates' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "integration_id": "01M1MC4KFJQ33YQWKPT7HKZNYC",
-    "name": "order_shipped",
-    "language": "en",
-    "category": "UTILITY",
-    "components": [
-      {
-        "type": "BODY",
-        "text": "Hi {{1}}, your order {{2}} shipped this morning."
-      },
-      {
-        "type": "FOOTER",
-        "text": "Acme Co."
-      },
-      {
-        "type": "BUTTONS",
-        "buttons": [
-          { "type": "URL", "text": "Track", "url": "https://acme.co/track/{{1}}" }
-        ]
-      }
-    ],
-    "submit": true,
-    "allow_category_change": false
-  }'
-```
-
-Response is a full `Template` object. If `submit: true`, the row advances to the provider-reported status (usually `PENDING`).
-
-## MCP
-
-Call the `createTemplate` tool with:
-
-```json
-{
-  "body": {
-    "integration_id": "<integration-ULID>",
-    "name": "<lowercase_name>",
-    "language": "<meta-locale>",
-    "category": "AUTHENTICATION | MARKETING | UTILITY",
-    "components": [ ... ],
-    "submit": true
-  }
-}
-```
+1. Go to **Settings → Templates** and click **New template**.
+2. Pick the target integration (the WhatsApp number the template belongs to).
+3. Pick the language. Use Meta's locale codes — `en`, `en_US`, `pt_BR`, `hi`, etc.
+4. Pick the category — **AUTHENTICATION**, **MARKETING**, or **UTILITY**.
+5. Enter a name. Lowercase letters, numbers, and underscores only; 1 to 512 characters.
+6. Build the components:
+   - **Header** (optional) — text, image, video, or document.
+   - **Body** (required) — the main message. Use `{{1}}`, `{{2}}` for positional placeholders or `{{name}}` for named ones.
+   - **Footer** (optional) — short branding line.
+   - **Buttons** (optional, up to 3) — URL, Quick Reply, Phone Number, Copy Code, or Voice Call.
+7. Click **Save as draft** to persist locally, or tick **Submit for Meta review** and click **Save** to send it straight to Meta.
 
 ## Category rules
 
-- `AUTHENTICATION` — OTPs only. Body must be `{{1}} is your verification code.` shape. Buttons limited to a single `COPY_CODE`.
-- `MARKETING` — promo copy allowed. Requires an opt-out affordance.
-- `UTILITY` — order confirmations, appointment reminders, shipping updates. No promo language.
+- **AUTHENTICATION** — OTP shape only. Body must read like `{{1}} is your verification code.` Buttons limited to a single Copy Code button.
+- **MARKETING** — promo copy allowed but must include an opt-out affordance.
+- **UTILITY** — order confirmations, appointment reminders, shipping updates. Keep the tone transactional; no promo phrasing.
 
-Set `allow_category_change: true` if you're unsure and want Meta to re-categorize during review (Meta will move it, e.g., `UTILITY → MARKETING`, without rejecting).
+If you're unsure which category fits, tick **Allow Meta to re-categorize** — Meta will move it during review instead of rejecting.
 
 ## Troubleshooting
 
-- **`422 invalid name`** — must match `^[a-z][a-z0-9_]{0,511}$`. No hyphens, no uppercase.
-- **`422 missing body`** — every template needs at least one `BODY` component. Header / footer / buttons are optional.
-- **`424 target integration missing`** — the `integration_id` doesn't exist or was disabled.
-- **`403 missing templates.manage`** — the current user's role doesn't grant template management. Ask an admin.
-- **`502` from provider on `submit: true`** — Meta rejected inline. Check the response `detail` and re-check the [Provider calls log](/#/audit-telemetry/provider-calls).
+- **"Invalid name" red banner** — the name has an unsupported character. Use only lowercase letters, digits, and underscores. No hyphens, no capitals.
+- **"Body is required" banner** — every template needs at least one Body component. Header, footer, and buttons are optional.
+- **"Target integration missing"** — the WhatsApp integration you picked was deleted or disabled. Reconnect it in Settings → Integrations.
+- **"Permission denied — template management"** — your role doesn't allow managing templates. Ask an admin to grant the templates-manage permission.
+- **Submit inline failed with a Meta reason** — the exact message from Meta appears in the error toast. Read it, edit the copy, and try again. Common causes: promotional wording in a UTILITY template, unbalanced placeholders, or a reserved word in the body.
 
 ## Related
 
-- [Templates overview](/#/templates/overview) — lifecycle + categories.
-- [Submit for Meta review](/#/templates/submit-for-review) — submit a DRAFT later.
-- [Troubleshooting](/#/templates/troubleshooting) — rejection reasons.
+- [Templates overview](#/templates/overview) — lifecycle and categories.
+- [Submit for Meta review](#/templates/submit-for-review) — submit a draft later.
+- [Troubleshooting](#/templates/troubleshooting) — rejection reasons.

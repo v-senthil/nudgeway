@@ -1,73 +1,34 @@
 # Official Business Account (OBA)
 
-Meta's Official Business Account badge — the green checkmark next to the business name in WhatsApp — unlocks several capabilities Nudgeway depends on, notably the [Groups](/#/groups/overview) API. This page tracks the OBA application lifecycle for one integration.
+Meta's Official Business Account badge — the green checkmark next to your business name in WhatsApp — unlocks features Nudgeway needs, most importantly [Groups](#/groups/overview). This section tracks the OBA application for one integration.
 
-## Status enum
+## Status values
 
 | Value | Meaning |
 |---|---|
-| `NOT_APPLIED` | No application on file. Click **Apply** to file one. |
-| `PENDING` | Application filed, awaiting Meta review (typically 1–5 business days). |
-| `APPROVED` | Badge granted. OBA-gated APIs are usable. |
-| `REJECTED` | Meta declined. `status_message` carries the reason. Re-apply after resolving. |
-| `CANCELLED` | Application withdrawn (via **Withdraw** or by Meta). |
+| **Not applied** | No application on file. Click **Apply** to file one. |
+| **Pending** | Application filed. Meta is reviewing (typically 1-5 business days). |
+| **Approved** | Badge granted. Groups and other OBA-gated features work. |
+| **Rejected** | Meta declined. The panel shows the reason. Fix and re-apply. |
+| **Cancelled** | Application withdrawn. |
 
 ## How to use
 
-1. Settings → Integrations → the row → **OBA** section.
-2. If `NOT_APPLIED` — click **Apply**. Nudgeway files the application with Meta.
-3. Wait. The status polls on drawer open.
-4. If `PENDING` and you want to abort — click **Withdraw**.
-5. Once `APPROVED`, sync your [Groups](/#/groups/list-sync).
-
-## API
-
-### Read status
-
-```
-GET /api/v1/integrations/{id}/oba-status
-```
-
-Response `200`:
-
-```json
-{ "oba_status": "PENDING", "status_message": "" }
-```
-
-### Apply
-
-```
-POST /api/v1/integrations/{id}/oba-status/apply
-```
-
-No body. Response `200` reflects the resulting status (usually `PENDING`).
-
-### Withdraw
-
-```
-POST /api/v1/integrations/{id}/oba-status/withdraw
-```
-
-No body. Response `200` reflects the resulting status (usually `CANCELLED`).
-
-All three require `integrations.manage` (Apply / Withdraw also require CSRF).
-
-## MCP
-
-| operationId | Purpose |
-|---|---|
-| `getIntegrationOBAStatus` | Read the current application state. |
-| `applyIntegrationOBA` | File an OBA application. |
-| `withdrawIntegrationOBA` | Cancel an in-flight application. |
+1. Click **Settings** -> **Integrations** and pick the integration.
+2. Open the **OBA** section.
+3. If the status is **Not applied**, click **Apply**. Nudgeway files the application with Meta on your behalf.
+4. Wait for Meta's review. The status refreshes automatically when you reopen the panel.
+5. If the status is **Pending** and you want to cancel, click **Withdraw**.
+6. Once **Approved**, you can go to the [Groups page](#/groups/list-sync) and click **Sync** to pull your groups.
 
 ## Troubleshooting
 
-- **`REJECTED` with a generic reason** — Meta doesn't always give actionable detail. Common causes: business verification incomplete, brand-name conflict, missing website. Fix and re-apply after 30 days.
-- **`APPROVED` but Groups still 502** — Meta occasionally lags on propagating OBA to the Cloud API. Wait 24 hours and re-run [group sync](/#/groups/list-sync).
-- **Apply returns `502`** — the WABA is in review or under Meta enforcement. Check [Meta API execution log](/#/audit-telemetry/provider-calls) filtered on `operation=apply_oba`.
+- **Rejected with a vague reason** — Meta doesn't always give actionable detail. Common causes are: business verification not complete, the brand name conflicts with another business, or your website is missing from the business profile. Fix and re-apply after 30 days (Meta enforces a wait window on re-applications).
+- **Approved but Groups still won't sync** — Meta sometimes lags a few hours propagating OBA. Wait a day and re-try [Sync](#/groups/list-sync).
+- **Apply button returns an error banner** — your WABA may be under Meta review or enforcement. Contact your Meta representative. An admin can check the exact response in the [Meta API execution log](#/audit-telemetry/provider-calls).
 
 ## Related
 
-- [Integrations overview](/#/integrations/overview)
-- [Groups overview](/#/groups/overview)
-- [Meta API execution log](/#/audit-telemetry/provider-calls)
+- [Integrations overview](#/integrations/overview)
+- [Groups overview](#/groups/overview)
+- [Meta API execution log](#/audit-telemetry/provider-calls)

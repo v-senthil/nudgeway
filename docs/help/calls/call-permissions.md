@@ -1,90 +1,41 @@
 # Call permissions
 
-WhatsApp users control which businesses can call them. Before you place an outbound call, you must check the recipient's current permission and — if they haven't granted one — send an interactive `call_permission_request` message and wait for them to tap Accept.
+WhatsApp users control which businesses can call them. Before you place an outbound call, Nudgeway checks the recipient's current permission. If they haven't granted one, you send an interactive permission request and wait for them to tap Accept.
 
 ## The three states
 
-| State | Meaning | Can I call? |
+| State | Meaning | Can you call? |
 |---|---|---|
-| `permanent` | User granted permission indefinitely | Yes, freely |
-| `temporary` | User granted a time-limited permission | Yes, before `expiration_time` |
-| `no_permission` | Never granted, or a previous grant lapsed | No — send a permission-request first |
+| **Permanent** | User granted permission indefinitely | Yes, whenever you want |
+| **Temporary** | User granted a time-limited permission | Yes, until the expiration time shown on the button |
+| **No permission** | Never granted, or a previous grant expired | No — send a permission request first |
 
 ## Check the current state
 
-**operationId**: `getIntegrationCallPermission`
-
-```
-GET /api/v1/integrations/{id}/call-permission?to=<E164 without +>
-```
-
-Requires `calls.read` (a lower bar than `integrations.manage`).
-
-```bash
-curl -sS 'http://127.0.0.1:8080/api/v1/integrations/01M1…/call-permission?to=918197002143' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>'
-```
-
-Response (`CallPermission`):
-
-```json
-{ "status": "temporary", "expiration_time": 1793212800 }
-```
-
-- `expiration_time` is Unix seconds. Zero when `status` is `permanent` or `no_permission`.
-- The "New call" affordance in the UI uses this exact call to render a permanent/temporary/no-permission chip and enable/disable the Call button.
+Open the contact's conversation. The **Call** button in the right pane shows a coloured chip with the current state — green for permanent, amber for temporary (with the expiry time), grey for no permission.
 
 ## Request permission
 
-When `status: no_permission`, send an interactive `call_permission_request` message. The user sees a WhatsApp-native prompt with Accept / Decline; their reply arrives as an inbound `call_permission_reply` bubble in the thread.
+When the state is **No permission**:
 
-**operationId**: `sendCallPermissionRequest`
+1. Click the **Request permission** chip on the Call button (or the **Request** action in the composer's overflow menu).
+2. A dialog appears asking for a short prompt. Type a plain-English sentence explaining why you want to call — for example, "May we call you to discuss your recent order?"
+3. Click **Send request**. WhatsApp shows the customer an interactive prompt with Accept and Decline buttons.
+4. When they tap Accept, a `call_permission_reply` bubble arrives in the thread. The Call button turns green within a few seconds. When they tap Decline, the state stays as No permission — you can't retry immediately (WhatsApp rate-limits these).
 
-```
-POST /api/v1/calls/permission-request
-```
-
-```bash
-curl -sS -X POST 'http://127.0.0.1:8080/api/v1/calls/permission-request' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "integration_id": "01M1MC4KFJQ33YQWKPT7HKZNYC",
-    "to": "918197002143",
-    "prompt": "May we call you to discuss your recent order?"
-  }'
-```
-
-Response (`CallPermissionRequestResponse`):
-
-```json
-{ "wamid": "wamid.HBg…" }
-```
-
-The `wamid` is the provider-issued id of the outbound interactive message.
-
-The `postCallPermissionRequested` audit action fires whenever a permission-request message is sent (visible in the [Audit log](/#/audit-telemetry/audit-log)).
-
-## MCP
-
-- `getIntegrationCallPermission` — `{ "id": "<integration-ULID>", "to": "<E164>" }`
-- `sendCallPermissionRequest` — `{ "body": { "integration_id": "...", "to": "...", "prompt": "..." } }`
-
-## Recipient's reply
-
-The customer's `accept` / `reject` reply arrives as a `call_permission_reply` message inbound. Nudgeway renders it as a distinct bubble in the thread; the next `getIntegrationCallPermission` call will show the updated state.
+Every permission request is recorded in the [Audit log](#/audit-telemetry/audit-log) for compliance.
 
 ## Troubleshooting
 
-- **`400 missing to parameter`** — pass `?to=<E.164 without +>` on the GET.
-- **`403 missing calls.read`** — role doesn't grant call reads. Admin can grant.
-- **`404 integration not found`** — the ULID is wrong or the integration was deleted.
-- **`501 call-permission lookup is not wired for this deployment`** — the WhatsApp adapter version in this build doesn't support the permission endpoint. Upgrade Nudgeway.
-- **`502 provider error`** — Meta returned a transient error. Retry; the [Provider calls log](/#/audit-telemetry/provider-calls) has the exact response.
-- **User tapped Accept but state still `no_permission`** — the reply webhook is delayed. Wait 30-60s and re-fetch; if still stuck, check webhook subscriptions include `call_settings_update`.
+- **The Call button shows the wrong state** — refresh the page; the real-time update may have been missed.
+- **"Permission denied — call read"** — your role doesn't allow reading call state. Ask an admin.
+- **"Integration not found"** — the WhatsApp integration was deleted. Reconnect it in Settings → Integrations.
+- **"This deployment doesn't support call permissions"** — the WhatsApp adapter in this build is older than the call-permissions feature. Ask an admin to upgrade Nudgeway.
+- **"Provider error" when checking state** — Meta had a transient error. Wait 30 seconds and re-open the conversation.
+- **Customer tapped Accept but the state still shows No permission** — the reply is delayed. Wait 30 to 60 seconds and refresh; if it's still stuck, ask an admin to verify webhook subscriptions include `call_settings_update`.
 
 ## Related
 
-- [Outbound calls](/#/calls/outbound-call) — placing the call once permission exists.
-- [Calls overview](/#/calls/overview) — full call lifecycle.
-- [Call settings](/#/integrations/call-settings) — per-integration call hours and defaults.
+- [Outbound calls](#/calls/outbound-call) — placing the call once permission exists.
+- [Calls overview](#/calls/overview) — full call lifecycle.
+- [Call settings](#/integrations/call-settings) — per-integration call hours and defaults.
