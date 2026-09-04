@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Nudgeway API
-  version: 0.2.5-phase2
+  version: 0.2.6-phase2
   summary: Multi-tenant customer communication platform API.
   description: |
     Every request is scoped to an organization determined from the
@@ -36,6 +36,16 @@ tags:
     description: Append-only audit trail of tenant mutations.
   - name: api-tokens
     description: Long-lived programmatic-access tokens for MCP / CI / scripts.
+  - name: templates
+    description: WhatsApp message-template CRUD, submit-for-review, and provider sync.
+  - name: groups
+    description: WhatsApp Business Cloud API groups (list, sync, roster, send).
+  - name: calls
+    description: Voice call lifecycle over provider adapters (list, initiate, answer, reject, end, recording, transcript, session).
+  - name: analytics
+    description: Daily rollup aggregates over the canonical messages and conversations tables.
+  - name: tools
+    description: Operator utilities that support the settings drawer (ngrok tunnel discovery, etc.).
 
 paths:
   /healthz:
@@ -1170,6 +1180,1677 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /api/v1/templates:
+    get:
+      tags: [templates]
+      operationId: getTemplates
+      summary: List message templates.
+      description: |
+        Returns the tenant's persisted templates, newest-updated first.
+        Filter by integration + status. Cursor is opaque base64 — do not
+        interpret or persist it beyond the immediate paging session.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: integration_id
+          required: false
+          schema: { type: string }
+        - in: query
+          name: status
+          required: false
+          schema:
+            $ref: '#/components/schemas/TemplateStatus'
+        - in: query
+          name: cursor
+          required: false
+          schema: { type: string }
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: A page of templates.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemplateList' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing templates.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    post:
+      tags: [templates]
+      operationId: createTemplate
+      summary: Create a template (draft or submit).
+      description: |
+        Persists a template locally in `DRAFT` state. When `submit=true`
+        the service also calls the provider in the same request and
+        advances the row to the provider-reported status
+        (usually `PENDING`).
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateTemplateRequest' }
+      responses:
+        '201':
+          description: Template persisted (and optionally submitted).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        '400':
+          description: Invalid request body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing templates.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Validation error (missing body, unknown category, bad name).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Target integration is missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/templates/{id}:
+    get:
+      tags: [templates]
+      operationId: getTemplate
+      summary: Fetch a single template.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: Template ULID.
+      responses:
+        '200':
+          description: The template.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing templates.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Template not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    put:
+      tags: [templates]
+      operationId: updateTemplate
+      summary: Patch a template's category and components.
+      description: |
+        Only `category` + `components` are patchable. `name`, `language`,
+        and `integration_id` are the natural key on the provider side and
+        cannot be changed after creation.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateTemplateRequest' }
+      responses:
+        '200':
+          description: Template updated.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        '400':
+          description: Invalid request body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing templates.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Template not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Validation error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [templates]
+      operationId: deleteTemplate
+      summary: Delete a local template row.
+      description: |
+        Removes the local mirror only. The provider mirror is untouched
+        (a provider-side delete lands in Phase 3). Useful for abandoning
+        an unsubmitted DRAFT.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Template removed.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing templates.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/templates/{id}/submit:
+    post:
+      tags: [templates]
+      operationId: submitTemplate
+      summary: Submit a DRAFT template for provider review.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Template submitted; body reflects the provider-reported state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Template' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing templates.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Template not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '409':
+          description: Template is not in DRAFT state.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Target integration is missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider rejected the submission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/templates/sync:
+    post:
+      tags: [templates]
+      operationId: syncTemplates
+      summary: Reconcile the local template mirror with the provider.
+      description: |
+        Fetches every template from the provider for the supplied
+        integration and upserts them into the local `templates` table.
+        Local DRAFT rows the provider does not know about are left alone.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncTemplatesRequest' }
+      responses:
+        '200':
+          description: Sync complete.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncTemplatesResponse' }
+        '400':
+          description: Missing integration_id.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing templates.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Integration missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider list call failed.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/groups:
+    get:
+      tags: [groups]
+      operationId: listGroups
+      summary: List persisted groups for the caller's org.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: integration_id
+          schema: { type: string }
+          description: ULID; scope to one integration.
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Case-insensitive subject substring.
+        - in: query
+          name: cursor
+          schema: { type: string }
+          description: Opaque next-page token.
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: A page of groups.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupList' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing groups.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    post:
+      tags: [groups]
+      operationId: createGroup
+      summary: Create a new WhatsApp group on the provider.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGroupRequest' }
+      responses:
+        '201':
+          description: Group created and persisted locally.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '400':
+          description: Validation error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing groups.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Provider does not support groups.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Integration missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/groups/sync:
+    post:
+      tags: [groups]
+      operationId: syncGroups
+      summary: Pull the current group roster from the provider and upsert it.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncGroupsRequest' }
+      responses:
+        '200':
+          description: Sync result.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncGroupsResponse' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing groups.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Provider does not support groups.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Integration missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/groups/{id}:
+    get:
+      tags: [groups]
+      operationId: getGroup
+      summary: Read one group by ULID.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The group.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/groups/{id}/members:
+    get:
+      tags: [groups]
+      operationId: listGroupMembers
+      summary: Read the roster of a group.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Group roster.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupMemberList' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/groups/{id}/messages:
+    post:
+      tags: [groups]
+      operationId: sendGroupMessage
+      summary: Send a text / template / media message to a group.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendGroupMessageRequest' }
+      responses:
+        '202':
+          description: Accepted; message queued for outbound send.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendGroupMessageAccepted' }
+        '400':
+          description: Validation error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing messages.send permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls:
+    get:
+      tags: [calls]
+      operationId: listCalls
+      summary: List calls for the caller's organization.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [queued, ringing, answered, in_progress, completed, missed, failed, declined, no_answer]
+        - in: query
+          name: direction
+          schema: { type: string, enum: [inbound, outbound] }
+        - in: query
+          name: contact_id
+          schema: { type: string }
+        - in: query
+          name: since
+          schema: { type: string, format: date-time }
+        - in: query
+          name: until
+          schema: { type: string, format: date-time }
+        - in: query
+          name: cursor
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200 }
+      responses:
+        '200':
+          description: A page of calls newest-first.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CallList' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing calls.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    post:
+      tags: [calls]
+      operationId: initiateCall
+      summary: Place a new outbound call.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InitiateCallRequest' }
+      responses:
+        '202':
+          description: Accepted; call queued.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InitiateCallAccepted' }
+        '400':
+          description: Validation error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing calls.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Integration missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/{id}:
+    get:
+      tags: [calls]
+      operationId: getCall
+      summary: Fetch a single call.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The call.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Call' }
+        '404':
+          description: Call not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/{id}/answer:
+    post:
+      tags: [calls]
+      operationId: answerCall
+      summary: Accept an inbound call.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AnswerCallRequest' }
+      responses:
+        '204':
+          description: Accepted.
+        '404':
+          description: Call not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/{id}/reject:
+    post:
+      tags: [calls]
+      operationId: rejectCall
+      summary: Reject an inbound call.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RejectCallRequest' }
+      responses:
+        '204':
+          description: Rejected.
+        '404':
+          description: Call not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/{id}/end:
+    post:
+      tags: [calls]
+      operationId: endCall
+      summary: Terminate an in-progress call.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Terminated.
+        '404':
+          description: Call not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/{id}/recording:
+    get:
+      tags: [calls]
+      operationId: getCallRecording
+      summary: Stream a call recording.
+      description: |
+        Proxies the recording bytes from the provider so the browser never
+        sees the Meta-issued short-lived URL (which requires a Bearer
+        token to fetch).
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Audio bytes streamed from the provider.
+          content:
+            audio/ogg: {}
+            audio/mp4: {}
+            audio/wav: {}
+            application/octet-stream: {}
+        '404':
+          description: Call not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/{id}/session:
+    get:
+      tags: [calls]
+      operationId: getCallSession
+      summary: Fetch the SDP offer captured on the provider connect webhook.
+      description: |
+        Returns the SDP offer the provider handed us on the `connect`
+        webhook so the operator's browser can build a WebRTC answer.
+        Returns 404 when no offer is stored for this call.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: The stored SDP offer.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CallSession' }
+        '404':
+          description: Call not found or no SDP offer stored.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/{id}/transcript:
+    get:
+      tags: [calls]
+      operationId: getCallTranscript
+      summary: Stream the raw transcript JSON returned by the provider.
+      description: |
+        Returns the raw transcript JSON returned by the provider. When no
+        `transcription_ref` is stamped yet the endpoint returns 409
+        not_available so the UI can render a "not available yet"
+        affordance.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Provider-native transcript JSON (opaque shape).
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: Call not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '409':
+          description: Transcript not available yet.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Integration missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/calls/permission-request:
+    post:
+      tags: [calls]
+      operationId: sendCallPermissionRequest
+      summary: Send an interactive call_permission_request message.
+      description: |
+        Sends an interactive `call_permission_request` message to the
+        recipient so they can grant call permission — a prerequisite for
+        outbound calls when the current permission is `no_permission`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CallPermissionRequestBody' }
+      responses:
+        '200':
+          description: Interactive message sent; body carries the provider-issued wamid.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CallPermissionRequestResponse' }
+        '400':
+          description: Validation error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing calls.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '424':
+          description: Integration missing.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/analytics/overview:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsOverview
+      summary: Compact dashboard aggregate over a date range.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Inclusive start date (UTC, YYYY-MM-DD).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: Inclusive end date (UTC, YYYY-MM-DD).
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Overview aggregate.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsOverview' }
+        '400':
+          description: Invalid or missing range.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing analytics.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/analytics/series:
+    get:
+      tags: [analytics]
+      operationId: getAnalyticsSeries
+      summary: Labelled time series for a line chart.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          description: One of `messages_daily`, `delivery_rate`, or `conversations_opened`.
+          schema:
+            type: string
+            enum: [messages_daily, delivery_rate, conversations_opened]
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: provider
+          in: query
+          required: false
+          description: Restrict to a provider ("whatsapp", ...). Omit to use the pan-provider aggregate row.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Time series for the requested kind.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsSeries' }
+        '400':
+          description: Invalid range or unknown kind.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing analytics.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/business-profile:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegrationBusinessProfile
+      summary: Fetch the WhatsApp business-profile record.
+      description: |
+        Returns the provider-agnostic view of the integration's business
+        profile (about text, address, description, email, profile picture
+        URL, vertical, websites). Requires the `integrations.manage`
+        permission.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The business profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessProfile' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    put:
+      tags: [integrations]
+      operationId: updateIntegrationBusinessProfile
+      summary: Update the WhatsApp business-profile record.
+      description: |
+        Writes the caller-supplied business profile to the provider and
+        returns the reconciled state (a follow-up GET is embedded in the
+        response so the drawer can render without a second round-trip).
+        Requires CSRF and `integrations.manage`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BusinessProfile' }
+      responses:
+        '200':
+          description: Updated business profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BusinessProfile' }
+        '400':
+          description: Invalid JSON body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/call-settings:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegrationCallSettings
+      summary: Fetch the per-integration call settings.
+      description: |
+        Returns provider-agnostic call settings (status, call icon
+        visibility, weekly call hours, callback permission status).
+        Requires the `integrations.manage` permission.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Call settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CallSettings' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    put:
+      tags: [integrations]
+      operationId: updateIntegrationCallSettings
+      summary: Update the per-integration call settings.
+      description: |
+        Writes the caller-supplied call settings to the provider and
+        returns the reconciled state. Requires CSRF and
+        `integrations.manage`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CallSettings' }
+      responses:
+        '200':
+          description: Updated call settings.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CallSettings' }
+        '400':
+          description: Invalid JSON body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/call-permission:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegrationCallPermission
+      summary: Look up the recipient's current WhatsApp call permission.
+      description: |
+        Returns the current WhatsApp user-call-permission state for the
+        supplied recipient (`to` query parameter, E.164 without `+`).
+        Used by the "New call" affordance to render a
+        permanent/temporary/no-permission chip and enable/disable the
+        Call button. Gated on `calls.read` rather than
+        `integrations.manage`.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: to
+          required: true
+          schema: { type: string }
+          description: Recipient E.164 phone number without the leading +.
+      responses:
+        '200':
+          description: The recipient's current call-permission state.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CallPermission' }
+        '400':
+          description: Missing `to` parameter.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing calls.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '501':
+          description: Call-permission lookup is not wired for this deployment.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/oba-status:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegrationOBAStatus
+      summary: Fetch the current Official Business Account status.
+      description: |
+        Returns the compact view of an Official Business Account
+        application (one of PENDING, APPROVED, REJECTED, CANCELLED,
+        NOT_APPLIED). Requires the `integrations.manage` permission.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The OBA status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OBAStatus' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/oba-status/apply:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    post:
+      tags: [integrations]
+      operationId: applyIntegrationOBA
+      summary: Apply for the Official Business Account badge.
+      description: |
+        Files an OBA application with the provider on behalf of the
+        integration and returns the resulting status. Requires CSRF and
+        `integrations.manage`.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Application filed; response body reflects the resulting status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OBAStatus' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/oba-status/withdraw:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    post:
+      tags: [integrations]
+      operationId: withdrawIntegrationOBA
+      summary: Withdraw a pending Official Business Account application.
+      description: |
+        Cancels an in-flight OBA application. Requires CSRF and
+        `integrations.manage`.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Application withdrawn; response body reflects the resulting status.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OBAStatus' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/username:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegrationUsername
+      summary: Fetch the currently adopted Business-Scoped Username.
+      description: |
+        Returns the provider-neutral view of the current Business-Scoped
+        Username (empty string means no username is adopted, which is a
+        valid steady state). Requires the `integrations.manage`
+        permission.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The current username.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Username' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    put:
+      tags: [integrations]
+      operationId: setIntegrationUsername
+      summary: Adopt or change the Business-Scoped Username.
+      description: |
+        Writes the caller-supplied username to the provider. `transfer_action`
+        controls how conflicts with an existing owner are resolved
+        (defaults to "none"). Requires CSRF and `integrations.manage`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetUsernameRequest' }
+      responses:
+        '200':
+          description: The adopted username.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Username' }
+        '400':
+          description: Invalid JSON body or missing username.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [integrations]
+      operationId: deleteIntegrationUsername
+      summary: Release the currently adopted Business-Scoped Username.
+      description: Requires CSRF and `integrations.manage`.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Username released.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success]
+                properties:
+                  success: { type: boolean }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/username/suggestions:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegrationUsernameSuggestions
+      summary: Fetch provider-suggested candidate usernames.
+      description: |
+        Returns provider-generated suggestions the operator can pick from
+        when adopting a Business-Scoped Username. Requires the
+        `integrations.manage` permission.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: A (possibly empty) list of suggestions.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UsernameSuggestions' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/phone-number:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [integrations]
+      operationId: getIntegrationPhoneNumber
+      summary: Fetch the Meta phone-number record.
+      description: |
+        Returns the provider-neutral view of the channel phone number
+        (display number, verified name, status, quality rating, country,
+        messaging limit tier, official-business-account flag, ...). An
+        empty struct is a valid 200 response when the id is not (yet)
+        part of the WABA. Requires the `integrations.manage` permission.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: The phone-number record.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PhoneNumber' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/webhook:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    post:
+      tags: [integrations]
+      operationId: setIntegrationWebhook
+      summary: Push a public webhook callback URL to the provider.
+      description: |
+        Sends the caller-supplied public URL to the provider as its
+        webhook callback override (for WhatsApp this maps to Meta's
+        `/{waba_id}?webhook_configuration` override). The response echoes
+        the fully-qualified URL that was pushed so the UI can render it.
+        Requires CSRF and `integrations.manage`.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetWebhookRequest' }
+      responses:
+        '200':
+          description: Webhook override written to the provider.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookConfig' }
+        '400':
+          description: Invalid JSON body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: CSRF failure or missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Validation failed (malformed URL, non-https scheme, ...).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/tools/ngrok-tunnel:
+    get:
+      tags: [tools]
+      operationId: getNgrokTunnel
+      summary: Best-effort ngrok tunnel URL discovery.
+      description: |
+        Queries the local ngrok agent's inspector API (default
+        `http://127.0.0.1:4040`) and returns the first https tunnel URL.
+        When ngrok is not running or the shape does not match, returns
+        200 with an empty `public_url` — the UI treats this as "not
+        detected" and prompts the operator to paste the URL manually.
+        Requires the `integrations.manage` permission.
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Tunnel discovery result (empty public_url means not detected).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NgrokTunnel' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1939,6 +3620,552 @@ components:
         top_paths:
           type: array
           items: { $ref: '#/components/schemas/APITokenPathHit' }
+
+    TemplateCategory:
+      type: string
+      enum: [MARKETING, UTILITY, AUTHENTICATION]
+
+    TemplateStatus:
+      type: string
+      enum: [DRAFT, PENDING, APPROVED, REJECTED, PAUSED, DISABLED]
+
+    TemplateComponent:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          description: HEADER, BODY, FOOTER, BUTTONS, CAROUSEL, ...
+        format:
+          type: string
+          description: Header format when type=HEADER (TEXT, IMAGE, VIDEO, DOCUMENT, LOCATION).
+        text:
+          type: string
+        example:
+          type: object
+          additionalProperties: true
+        buttons:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        cards:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        extra:
+          type: object
+          additionalProperties: true
+
+    Template:
+      type: object
+      required: [id, org_id, integration_id, name, language, category, status, components, variables, created_at, updated_at]
+      properties:
+        id: { type: string }
+        org_id: { type: string }
+        integration_id: { type: string }
+        provider_template_id: { type: string }
+        name: { type: string }
+        language: { type: string }
+        category: { $ref: '#/components/schemas/TemplateCategory' }
+        status: { $ref: '#/components/schemas/TemplateStatus' }
+        components:
+          type: array
+          items: { $ref: '#/components/schemas/TemplateComponent' }
+        variables:
+          type: object
+          additionalProperties: { type: string }
+        last_synced_at:
+          type: string
+          format: date-time
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TemplateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Template' }
+        next_cursor: { type: string }
+
+    CreateTemplateRequest:
+      type: object
+      required: [integration_id, name, language, category, components]
+      properties:
+        integration_id: { type: string }
+        name:
+          type: string
+          description: Lowercase alphanumeric + underscore; 1-512 chars.
+        language: { type: string }
+        category: { $ref: '#/components/schemas/TemplateCategory' }
+        components:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/TemplateComponent' }
+        submit:
+          type: boolean
+          default: false
+          description: When true, submit to the provider in the same request.
+        allow_category_change:
+          type: boolean
+          default: false
+
+    UpdateTemplateRequest:
+      type: object
+      required: [category, components]
+      description: |
+        Partial update body for PUT /api/v1/templates/{id}. Only
+        `category` + `components` are patchable — `name`, `language`,
+        `integration_id` are the natural key on the provider side and
+        cannot be changed.
+      properties:
+        category: { $ref: '#/components/schemas/TemplateCategory' }
+        components:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/TemplateComponent' }
+
+    SyncTemplatesRequest:
+      type: object
+      required: [integration_id]
+      properties:
+        integration_id: { type: string }
+
+    SyncTemplatesResponse:
+      type: object
+      required: [fetched, upserted]
+      properties:
+        fetched: { type: integer }
+        upserted: { type: integer }
+
+    Group:
+      type: object
+      required: [id, org_id, integration_id, provider_group_id, subject, size, is_admin, created_at, updated_at]
+      properties:
+        id: { type: string, description: 'ULID' }
+        org_id: { type: string, description: 'ULID' }
+        integration_id: { type: string, description: 'ULID' }
+        provider_group_id: { type: string, description: 'Meta group id' }
+        subject: { type: string }
+        description: { type: string }
+        size: { type: integer, minimum: 0 }
+        is_admin: { type: boolean, description: 'Our business phone number is admin in this group' }
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    GroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Group' }
+        next_cursor: { type: string }
+
+    GroupMember:
+      type: object
+      required: [id, group_id, role, joined_at]
+      properties:
+        id: { type: integer, format: int64 }
+        group_id: { type: string }
+        contact_id: { type: string, description: 'resolved ULID, if any' }
+        wa_id: { type: string, description: 'E.164 without +' }
+        bsuid: { type: string, description: 'business-scoped user id' }
+        role:
+          type: string
+          enum: [member, admin, superadmin]
+        joined_at: { type: string, format: date-time }
+        left_at: { type: string, format: date-time, nullable: true }
+
+    GroupMemberList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMember' }
+
+    CreateGroupRequest:
+      type: object
+      required: [integration_id, subject]
+      properties:
+        integration_id: { type: string, description: 'ULID of the whatsapp integration' }
+        subject:
+          type: string
+          maxLength: 128
+        description:
+          type: string
+          maxLength: 2048
+        join_approval_mode:
+          type: string
+          enum: [auto_approve, approval_required]
+
+    SyncGroupsRequest:
+      type: object
+      required: [integration_id]
+      properties:
+        integration_id: { type: string, description: 'ULID of the whatsapp integration to sync' }
+
+    SyncGroupsResponse:
+      type: object
+      required: [groups_upserted, members_upserted]
+      properties:
+        groups_upserted: { type: integer, minimum: 0 }
+        members_upserted: { type: integer, minimum: 0 }
+
+    SendGroupMessageRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [text, template, image, video, audio, document, sticker]
+        text: { type: object, description: 'TextPayload (canonical)' }
+        template: { type: object, description: 'TemplatePayload' }
+        media: { type: object, description: 'MediaPayload — media_id or url' }
+        idempotency_key: { type: string }
+
+    SendGroupMessageAccepted:
+      type: object
+      required: [message_id, status]
+      properties:
+        message_id: { type: string }
+        status: { type: string, enum: [queued] }
+
+    RecordingOptions:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        purpose: { type: string, maxLength: 250 }
+        announcement_language: { type: string }
+
+    TranscriptionOptions:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        purpose: { type: string, maxLength: 250 }
+        announcement_language: { type: string }
+
+    InitiateCallRequest:
+      type: object
+      required: [integration_id]
+      properties:
+        integration_id: { type: string }
+        to: { type: string }
+        to_user_id: { type: string }
+        contact_id: { type: string }
+        idempotency_key: { type: string }
+        recording: { $ref: '#/components/schemas/RecordingOptions' }
+        transcription: { $ref: '#/components/schemas/TranscriptionOptions' }
+
+    InitiateCallAccepted:
+      type: object
+      required: [call_id, status]
+      properties:
+        call_id: { type: string }
+        status: { type: string }
+
+    AnswerCallRequest:
+      type: object
+      description: |
+        Optional body for POST /api/v1/calls/{id}/answer. When empty, the
+        call is answered without an SDP negotiation. When `sdp` is
+        present, the server treats the payload as a WebRTC answer.
+      properties:
+        sdp: { type: string }
+        recording: { $ref: '#/components/schemas/RecordingOptions' }
+        transcription: { $ref: '#/components/schemas/TranscriptionOptions' }
+
+    RejectCallRequest:
+      type: object
+      description: Optional body for POST /api/v1/calls/{id}/reject.
+      properties:
+        reason: { type: string }
+
+    Call:
+      type: object
+      required: [id, org_id, provider, provider_call_id, direction, status, created_at]
+      properties:
+        id: { type: string }
+        org_id: { type: string }
+        integration_id: { type: string }
+        business_endpoint_id: { type: string }
+        contact_id: { type: string }
+        session_id: { type: string }
+        conversation_id: { type: string }
+        provider: { type: string }
+        provider_call_id: { type: string }
+        direction: { type: string, enum: [inbound, outbound] }
+        status:
+          type: string
+          enum: [queued, ringing, answered, in_progress, completed, missed, failed, declined, no_answer]
+        from: { type: string }
+        to: { type: string }
+        from_user_id: { type: string }
+        to_user_id: { type: string }
+        started_at: { type: string, format: date-time }
+        answered_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+        duration_seconds: { type: integer }
+        hangup_reason: { type: string }
+        recording_url: { type: string }
+        transcription_ref: { type: string }
+        metadata: { type: object, additionalProperties: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CallList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Call' }
+        next_cursor: { type: string }
+
+    CallSession:
+      type: object
+      required: [sdp_type, sdp]
+      description: SDP offer captured on the provider `connect` webhook.
+      properties:
+        sdp_type:
+          type: string
+          description: SDP kind (`offer`).
+        sdp:
+          type: string
+          description: The raw SDP blob the browser feeds into RTCPeerConnection.
+
+    CallPermissionRequestBody:
+      type: object
+      required: [integration_id, to]
+      properties:
+        integration_id: { type: string }
+        to:
+          type: string
+          description: Recipient E.164 phone number without the leading +.
+        prompt:
+          type: string
+          description: Optional operator-supplied prompt shown alongside the permission request.
+
+    CallPermissionRequestResponse:
+      type: object
+      required: [wamid]
+      properties:
+        wamid:
+          type: string
+          description: Provider-issued message id of the outbound permission-request interactive.
+
+    AnalyticsOverview:
+      type: object
+      required: [messages_total, delivery_rate_pct, response_time_seconds_p50, conversations_opened]
+      properties:
+        messages_total:
+          type: integer
+          format: int64
+          description: Total messages in the range, pan-provider.
+        delivery_rate_pct:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 100
+          description: Delivered / sent as a percentage in the 0..100 range. Zero when Sent is zero.
+        response_time_seconds_p50:
+          type: integer
+          format: int64
+          description: |
+            Coarse p50 of the per-day average response time (seconds
+            between an inbound message and the next outbound reply).
+        conversations_opened:
+          type: integer
+          format: int64
+
+    AnalyticsPoint:
+      type: object
+      required: [day, value]
+      properties:
+        day:
+          type: string
+          format: date
+        value:
+          type: integer
+          format: int64
+
+    AnalyticsSeries:
+      type: object
+      required: [name, points]
+      properties:
+        name:
+          type: string
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/AnalyticsPoint' }
+
+    BusinessProfile:
+      type: object
+      description: |
+        Provider-agnostic view of a channel business profile edited from
+        the settings drawer. Mirrors the WhatsApp adapter's shape
+        one-to-one for now; later channel providers map into the same
+        set.
+      properties:
+        about: { type: string }
+        address: { type: string }
+        description: { type: string }
+        email: { type: string, format: email }
+        profile_picture_url: { type: string, format: uri }
+        vertical: { type: string }
+        websites:
+          type: array
+          items: { type: string, format: uri }
+
+    WeeklyHours:
+      type: object
+      required: [day_of_week, open_time, close_time]
+      description: A single day's open/close window. Times are Meta's `HHMM` format.
+      properties:
+        day_of_week: { type: string }
+        open_time: { type: string }
+        close_time: { type: string }
+
+    CallHours:
+      type: object
+      properties:
+        status: { type: string }
+        timezone_id: { type: string }
+        weekly_operating_hours:
+          type: array
+          items: { $ref: '#/components/schemas/WeeklyHours' }
+
+    CallSettings:
+      type: object
+      description: Provider-agnostic view of per-integration call settings.
+      properties:
+        status: { type: string }
+        call_icon_visibility: { type: string }
+        call_hours: { $ref: '#/components/schemas/CallHours' }
+        callback_permission_status: { type: string }
+
+    CallPermission:
+      type: object
+      description: |
+        Provider-agnostic view of a recipient's WhatsApp call-permission
+        state.
+      properties:
+        status:
+          type: string
+          description: One of `no_permission`, `temporary`, `permanent` (provider-defined).
+        expiration_time:
+          type: integer
+          format: int64
+          description: Unix seconds when a `temporary` permission expires; zero when not applicable.
+
+    OBAStatus:
+      type: object
+      description: Compact view of an Official Business Account application.
+      properties:
+        oba_status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, CANCELLED, NOT_APPLIED]
+        status_message: { type: string }
+
+    Username:
+      type: object
+      description: |
+        Provider-neutral view of a Business-Scoped Username. Empty
+        `username` means no username is currently adopted — this is a
+        valid steady state.
+      properties:
+        username: { type: string }
+        status:
+          type: string
+          description: '"approved" | "reserved" | ""'
+
+    SetUsernameRequest:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+          description: The desired Business-Scoped Username.
+        transfer_action:
+          type: string
+          description: |
+            How to resolve a conflict when another business already owns
+            the username. Defaults to `none` when omitted.
+
+    UsernameSuggestions:
+      type: object
+      required: [suggestions]
+      properties:
+        suggestions:
+          type: array
+          items: { type: string }
+
+    PhoneNumber:
+      type: object
+      description: |
+        Provider-neutral view of the channel phone number as returned by
+        the settings drawer. Mirrors the WhatsApp adapter's PhoneNumber
+        shape one-to-one; later channels map into the same set.
+      properties:
+        id: { type: string }
+        display_phone_number: { type: string }
+        verified_name: { type: string }
+        status: { type: string }
+        quality_rating: { type: string }
+        country_code: { type: string }
+        country_dial_code: { type: string }
+        code_verification_status: { type: string }
+        account_mode: { type: string }
+        host_platform: { type: string }
+        messaging_limit_tier: { type: string }
+        is_official_business_account: { type: boolean }
+
+    SetWebhookRequest:
+      type: object
+      required: [public_url]
+      properties:
+        public_url:
+          type: string
+          format: uri
+          description: |
+            Publicly-reachable https base URL (e.g. an ngrok tunnel URL)
+            the provider will POST webhook deliveries to.
+
+    WebhookConfig:
+      type: object
+      required: [webhook_url]
+      description: |
+        Outcome of a Set-webhook call: the fully-qualified provider
+        webhook URL that was pushed to the provider, plus the verify
+        token used.
+      properties:
+        webhook_url:
+          type: string
+          format: uri
+        verify_token:
+          type: string
+          description: |
+            Convenience — some provider consoles want the verify token
+            pasted separately from the callback URL.
+
+    NgrokTunnel:
+      type: object
+      required: [public_url]
+      description: |
+        Result of the ngrok tunnel discovery helper. Empty `public_url`
+        means no tunnel was detected — the UI treats this as "paste the
+        URL manually".
+      properties:
+        public_url:
+          type: string
+          description: The first https tunnel URL discovered on the local ngrok agent (empty when none).
 
     Problem:
       type: object

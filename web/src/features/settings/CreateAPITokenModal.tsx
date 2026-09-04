@@ -44,7 +44,10 @@ export function CreateAPITokenModal({ open, onClose, onCreated }: Props) {
       setFormError(null);
       create.reset();
     }
-  }, [open, create]);
+    // `create` (TanStack useMutation) is a new object every render — keep
+    // it out of the deps list or the effect fires every render and loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const trimmed = name.trim();
   const canSubmit = trimmed.length > 0 && trimmed.length <= MAX_NAME_LEN && !create.isPending;

@@ -312,22 +312,18 @@ function OverviewTab({
           <table className="min-w-full divide-y divide-slate-100">
             <thead className="bg-slate-50 text-left text-[10px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-3 py-1.5">Method</th>
                 <th className="px-3 py-1.5">Path</th>
                 <th className="px-3 py-1.5 text-right">Hits</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-xs">
               {(metrics?.top_paths ?? []).map((p, i) => (
-                <tr key={`${p.method}-${p.path}-${i}`}>
-                  <td className="px-3 py-1.5">
-                    <MethodChip method={p.method} />
-                  </td>
+                <tr key={`${p.path}-${i}`}>
                   <td className="px-3 py-1.5">
                     <code className="font-mono text-[11px] text-slate-700">{p.path}</code>
                   </td>
                   <td className="px-3 py-1.5 text-right tabular-nums text-slate-700">
-                    {p.hits.toLocaleString()}
+                    {(p.count ?? 0).toLocaleString()}
                   </td>
                 </tr>
               ))}

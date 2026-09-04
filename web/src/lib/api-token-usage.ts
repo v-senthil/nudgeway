@@ -43,9 +43,8 @@ export type MetricsByDay = {
 };
 
 export type MetricsTopPath = {
-  method: string;
   path: string;
-  hits: number;
+  count: number;
 };
 
 export type TokenMetrics = {
