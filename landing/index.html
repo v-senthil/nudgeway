@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Nudgeway — open-source WhatsApp Business Platform + MCP for AI agents</title>
+    <title>Nudgeway — The open-source WhatsApp Business Platform</title>
     <meta
       name="description"
-      content="Nudgeway is the open-source, multi-tenant WhatsApp Business Platform for teams and AI agents. Real-time inbox, in-browser WebRTC calls, templates, groups, analytics — plus a native Model Context Protocol (MCP) server that exposes every REST endpoint as an LLM tool. Single Go binary. MySQL + Redis + Kafka + HBase. MIT licensed."
+      content="Nudgeway is the open-source WhatsApp Business Platform. Real-time inbox, in-browser WebRTC calls, templates, groups, analytics, and a native Model Context Protocol (MCP) server for AI agents. Multi-tenant, self-hosted, MIT-licensed. Single Go binary on MySQL + Redis + Kafka + HBase."
     />
     <meta name="keywords" content="Nudgeway, WhatsApp Business Platform, WhatsApp Cloud API, open source WhatsApp, WhatsApp inbox, WhatsApp templates, WhatsApp calling, WebRTC WhatsApp, MCP, Model Context Protocol, AI agent WhatsApp, Claude MCP server, API tokens, bearer authentication, WhatsApp API, WhatsApp analytics, self-hosted WhatsApp, multi-tenant WhatsApp, WhatsApp for developers" />
     <meta name="author" content="Nudgeway contributors" />
@@ -75,6 +75,51 @@
               "target": "https://github.com/v-senthil/nudgeway/search?q={search_term_string}",
               "query-input": "required name=search_term_string"
             }
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is Nudgeway?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Nudgeway is the open-source WhatsApp Business Platform — a self-hosted app that runs on top of the WhatsApp Business Cloud API. It ships a real-time inbox, in-browser WebRTC calls, template management, groups, analytics, plus a native Model Context Protocol (MCP) server so any LLM can drive the account. Single Go binary. MIT-licensed."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "How do I install MySQL, Redis, Kafka, and HBase?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Native install (Homebrew on macOS, apt on Debian/Ubuntu, dnf on Fedora/RHEL, WSL2 on Windows) is the recommended dev path. Or run docker compose up -d at the repo root for a one-command bring-up that works with Docker Desktop, Podman, and Apple Containers on macOS 26+."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Do I need Docker or Kubernetes?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Native install is the default dev path. We ship a docker-compose.yml if you want one-command bring-up, but the Go server and Vite frontend always run natively via make dev."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is Nudgeway a fork of an existing WhatsApp library?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "No. Nudgeway is a first-principles platform — canonical domain (org, contact, session, conversation, message, call), real-time UI, MCP-native. It ships with a WhatsApp Business Cloud API adapter."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "What is the license?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "MIT — free to use, fork, and ship. See the LICENSE file on GitHub."
+                }
+              }
+            ]
           }
         ]
       }

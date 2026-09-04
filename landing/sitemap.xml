@@ -6,8 +6,93 @@
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://v-senthil.github.io/nudgeway/api.html</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/getting-started/overview</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/getting-started/first-run</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/getting-started/install-services</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/getting-started/docker-compose</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/inbox/overview</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/inbox/send-text</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/inbox/send-media</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/inbox/send-template</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/templates/overview</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/calls/overview</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/calls/inbound-call</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/analytics/overview</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/analytics/meta-analytics-tab</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/integrations/overview</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/integrations/connect-whatsapp</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://v-senthil.github.io/nudgeway/help.html#/api-tokens/overview</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
   </url>
 </urlset>

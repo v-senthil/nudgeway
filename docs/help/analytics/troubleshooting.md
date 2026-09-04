@@ -1,70 +1,68 @@
 # Analytics troubleshooting
 
-## Nudgeway tab — all cards show 0
+## Nudgeway tab: all cards show 0
 
-**Symptom**: Every KPI card renders `—` or `0`. Sparklines are flat.
+**What you see**: Every KPI on the Nudgeway tab reads `0` or `-`. Sparklines are flat.
 
-**Most common cause**: The rollup worker has not yet processed the range.
+**Most common cause**: The 15-minute rollup hasn't fired yet since you sent your first message.
 
-**Diagnosis**:
+**What to do**:
 
-1. The rollup runs every 15 minutes. If you just imported traffic or restarted the server, wait one tick.
-2. Query `analytics_rollup_state` — the `analytics.rollup.daily` bookmark tells you the last processed day.
-3. Confirm the raw tables have rows: `SELECT COUNT(*) FROM messages WHERE created_at >= NOW() - INTERVAL 1 DAY;`
+- Wait 15 minutes and refresh.
+- Confirm the range picker isn't set to a future date.
+- Confirm you have actually sent or received messages in the selected range — open the [Inbox](#/inbox/overview) as a sanity check.
 
-**Fix**:
+## Nudgeway tab: sparkline stays flat at "max 2"
 
-- Restart the server for an immediate boot tick.
-- Confirm the range picker is not set to a future date.
-- Confirm your server's system clock is roughly aligned with UTC — the runner processes yesterday + today + tomorrow (local) but the REST API takes UTC-anchored ISO dates. A 5-hour clock skew can hide a day of data.
+**What you see**: The chart's Y-axis maxes at 2 and the line is flat along the bottom.
 
-## Nudgeway tab — sparkline sitting at a flat "max 2"
+**Why**: The chart uses a display floor when there is no activity, so an empty range shows as "max 2" rather than a collapsed axis.
 
-**Cause**: The chart has a floor of 1 with 15% headroom. All-zero data reads as "max 2" — this is a visual convention, not real data.
+**What to do**: Send some real traffic, wait for the next 15-minute tick, and refresh.
 
-**Fix**: Send a real message and wait 15 minutes.
+## Meta Analytics: pricing tier column is empty
 
-## Meta Analytics — pricing tier column is empty
+**What you see**: The Pricing sub-section shows rows but the tier column is blank on some of them.
 
-**Cause**: Meta omits the `tier` field on free-tier / free-entry-point / free-customer-service pricing types. Not a bug.
+**Why**: Meta omits the tier for free-tier, free-entry-point, and free-customer-service pricing types. Not an error — those categories aren't billed by tier.
 
-**Fix**: Filter `pricing_types=REGULAR` to see only rows Meta bills.
+**What to do**: Nothing to fix. If you want tier-bearing rows only, add `REGULAR` to the pricing-types filter.
 
-## Meta Analytics — 400 from Meta
+## Meta Analytics: red error banner from Meta
 
-**Symptom**: A sub-section shows the red error banner with a Meta detail like "`(#100) The parameter phone_numbers is required`".
+**What you see**: A sub-section shows a red banner with a Meta message like "The parameter phone_numbers is required".
 
-**Cause**: Some Meta endpoints reject requests without at least one dimension or filter set.
+**What to do**:
 
-**Fix**:
+- Wait a couple of seconds and refresh — the integration picker may still be loading the phone number.
+- Type your WhatsApp number in E.164 format (no `+`) into the phone-numbers box.
+- Widen the range. Some Meta endpoints reject very short ranges outside the half-hour granularity.
 
-- Ensure the integration picker has resolved — the `phone_numbers` default comes from `PhoneNumber.display_phone_number`, which is loaded via `getIntegrationPhoneNumber`. If that call is still pending or failed, the filter is blank.
-- Type an E.164 number (no `+`) into the phone_numbers box manually.
-- Widen the range: some Meta endpoints reject sub-hour windows outside `HALF_HOUR` granularity.
+## Meta Analytics: integration picker won't switch
 
-## Meta Analytics — integration picker doesn't switch
+**What you see**: You choose a different integration in the drop-down, but the sub-sections keep showing the old numbers.
 
-**Symptom**: You choose a different integration in the drop-down but the sub-sections keep showing the old data.
+**What to do**:
 
-**Diagnosis**: The picker is bound to the query key `['meta-analytics', section, integrationID, range, granularity, phoneNumber]`. If TanStack Query has a fresh cache entry for the old key it re-uses it.
+- Change the range in the range picker to force a refresh.
+- Do a hard-refresh (Cmd+Shift+R on macOS, Ctrl+Shift+R on Windows / Linux).
+- If a panel is stuck on a failed load, the tab may be showing the last successful data. Reload the page.
 
-**Fix**:
+## Either tab: "Unauthorized" or the page redirects to sign-in
 
-- Change the range to force a new query key.
-- Hard-refresh the tab (Cmd/Ctrl-Shift-R).
-- Check the browser console for a fetch that returned `502` — the tab keeps the last successful data around when a refresh fails.
+**What you see**: The Analytics page prompts you to sign in, or a red banner mentions "Unauthorized".
 
-## Both tabs — 401 Unauthorized
+**What to do**: Your session has expired. Sign in again.
 
-Your session cookie has expired. Log back in.
+## Either tab: "Missing permission" banner
 
-## Both tabs — 403 Missing analytics.read
+**What you see**: A red banner mentions the `analytics.read` permission.
 
-Your role does not include the `analytics.read` permission. Ask an org admin to grant it via the CLI (`nudgeway-cli role grant …`) or SQL.
+**What to do**: Ask an org admin to grant your role analytics-read access.
 
 ## Related
 
-- [Analytics overview](/#/analytics/overview)
-- [Nudgeway tab](/#/analytics/nudgeway-tab)
-- [Meta Analytics tab](/#/analytics/meta-analytics-tab)
-- [Meta API execution log](/#/audit-telemetry/provider-calls)
+- [Analytics overview](#/analytics/overview)
+- [Nudgeway tab](#/analytics/nudgeway-tab)
+- [Meta Analytics tab](#/analytics/meta-analytics-tab)
+- [Meta API execution log](#/audit-telemetry/provider-calls)

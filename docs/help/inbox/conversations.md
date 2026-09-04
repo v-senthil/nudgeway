@@ -1,67 +1,25 @@
 # Conversation list
 
-The conversation list is the left pane of the inbox and the entry point for every reply. Rows are grouped by status (open / pending / resolved), sorted newest-activity-first, and enriched with the contact name, avatar, last-message preview, and unread count.
+The conversation list is the left pane of the Inbox and the entry point for every reply. Rows are grouped by status (open, pending, resolved), sorted newest-activity-first, and show the contact name, avatar, last-message preview, and unread count.
 
 ## How to use
 
-- **Click a row** to load its thread into the middle pane. The client fires `getConversationMessages` (cursor-paginated, newest-first) and marks the conversation read via [`postConversationMarkRead`](/#/inbox/mark-read).
-- **Filter chips** at the top of the pane narrow by status, assignee, or channel. Filters compose in the query string.
-- **Search** hits contact name and phone; results scope to the current org automatically.
+1. Click a row to load its thread into the middle pane. Opening a conversation automatically marks its unread inbound messages as read (blue ticks on the customer's phone).
+2. Use the filter chips at the top of the pane to narrow by status, assignee, or channel. Filters combine.
+3. Type in the search box to find a contact by name or phone. Search is scoped to your organization.
 
-Group conversations render with `conversation.type === 'group'` and use the `subject` field instead of `contact_name` / `contact_avatar_url`.
-
-## API
-
-**operationId**: `getConversations`
-
-```
-GET /api/v1/conversations
-```
-
-```bash
-curl -sS 'http://127.0.0.1:8080/api/v1/conversations' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>'
-```
-
-Response shape (`ConversationList`):
-
-```json
-{
-  "items": [
-    {
-      "id": "01M1MC4KFJQ33YQWKPT7HKZNYC",
-      "contact_id": "01M1...",
-      "session_id": "01M1...",
-      "status": "open",
-      "last_message_preview": "Your order shipped this morning.",
-      "last_message_at": "2026-09-05T09:14:22Z",
-      "unread_count": 0
-    }
-  ],
-  "next_cursor": null
-}
-```
-
-Load one thread:
-
-```
-GET /api/v1/conversations/{id}/messages
-```
-
-## MCP
-
-Call the `getConversations` tool with no arguments to list the org's conversations. Follow up with `getConversationMessages` and the returned `id`.
+Group conversations show the group subject instead of a contact name and avatar.
 
 ## Troubleshooting
 
-- **List empty even though the customer messaged you** — no integration is connected, or Meta hasn't been subscribed to `messages`. Check [Push webhook to Meta](/#/integrations/webhook-setup).
-- **`401 unauthorized`** — session cookie expired. Re-login, or use a bearer API token for programmatic access.
-- **`403 CSRF failure`** on `postConversationMarkRead` — the client didn't send the `X-CSRF-Token` header; hit `GET /api/v1/auth/csrf` first.
-- **New messages don't appear live** — the `/ws/inbox` socket dropped. Check the DevTools Network tab; the client reconnects with backoff, then re-fetches the open thread.
-- **Group conversations show a blank name** — expected. Use `subject`, not `contact_name`.
+- **The list is empty even though a customer messaged you** — no WhatsApp integration is connected yet, or Meta hasn't been told to send you `messages` events. Go to Settings → Integrations and confirm your integration is connected, then use [Push webhook to Meta](#/integrations/webhook-setup) to register the callback.
+- **You see a "session expired" toast when clicking a row** — your login cookie timed out. Log out and back in.
+- **A red "action failed" toast appears when opening a conversation** — refresh the page. Your browser lost the security token; the reload will fetch a fresh one automatically.
+- **New messages don't appear live** — your real-time connection dropped. Look for a "reconnecting" indicator; if you don't see one in a few seconds, refresh the page.
+- **Group conversations show a blank name** — this is expected. The subject line renders in place of a contact name; scroll the right pane to see group members.
 
 ## Related
 
-- [Inbox overview](/#/inbox/overview) — three-pane layout + WebSocket.
-- [Send a text message](/#/inbox/send-text) — the composer's default path.
-- [Mark messages as read](/#/inbox/mark-read) — blue-tick semantics.
+- [Inbox overview](#/inbox/overview) — three-pane layout and real-time behaviour.
+- [Send a text message](#/inbox/send-text) — the composer's default path.
+- [Mark messages as read](#/inbox/mark-read) — blue-tick semantics.

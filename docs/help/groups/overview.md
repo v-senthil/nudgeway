@@ -1,36 +1,33 @@
 # Groups
 
-A **Group** is a persisted, tenant-scoped mirror of a WhatsApp Business Groups thread. Nudgeway treats groups as first-class alongside `Contact`, `Session`, `Conversation`, `Message`, and `Ticket` — a group conversation shows up as **one thread in the Inbox** regardless of how many participants have written to it.
+A **Group** is a WhatsApp Business group chat that Nudgeway tracks alongside your 1:1 conversations. A group appears as a single thread in the Inbox no matter how many participants have written to it, and it lives beside Contacts, Sessions, Conversations, Messages, and Tickets as its own kind of thing.
 
 ## OBA-only
 
-The WhatsApp Business Cloud Groups API is gated by Meta on **Official Business Account (OBA)** phone numbers. If your integration has not been granted OBA:
+WhatsApp only exposes the Business Groups feature on numbers that Meta has granted the **Official Business Account (OBA)** badge. Until your integration is OBA-approved:
 
-- `POST /api/v1/groups/sync` returns `502 provider_error` from Meta.
-- The Groups page in Settings renders empty.
+- Clicking **Sync** on the Groups page produces an error toast that mentions "requires official business account".
+- The Groups list on the page stays empty.
 
-Check your OBA state at [Settings → Integrations → OBA](/#/integrations/oba-status). Apply once, wait for `APPROVED`, then re-run sync.
+Open Settings -> Integrations -> **OBA** for that integration. If the status shows `NOT_APPLIED`, click **Apply** and wait for `APPROVED` (typically 1-5 business days). Once approved, come back to the Groups page and click **Sync** again.
 
-## Model
+## What Nudgeway keeps per group
 
-Every group row carries:
+Each group row on the page shows:
 
-- `provider_group_id` — the Meta group id.
-- `subject` (may be blank) + optional `description`.
-- `size` — hint from Meta's `total_participant_count`; the authoritative roster count comes from `group_members` filtered by `left_at IS NULL`.
-- `is_admin` — whether *our* business phone number holds admin rights. Management calls (add/remove participants, reset invite link) require `is_admin = true`; non-admin groups are read-only.
-- `metadata` — free-form bag for provider-native fields (`join_approval_mode`, `suspended`, `creation_timestamp`).
+- The subject line (may be blank) and an optional description.
+- A member count.
+- An "Admin" chip if your business number has admin rights on the group. Only admins can add or remove participants, or reset the invite link. Non-admin groups are read-only from the composer's perspective.
 
-Members are keyed on `(group_id, wa_id, bsuid)`. A member row can exist before the participant has ever messaged you (so `contact_id` may be nil until an inbound message resolves them).
+Members appear individually once they message the group; a participant who has never messaged your business shows up on the roster but not yet in your contacts list.
 
 ## Inbox behaviour
 
-A group message webhook still fires the canonical `MessageReceived` event with `from` = the participant's contact identity. The `group_id` rides as a sidecar so the inbox fan-out routes it to the group thread rather than a 1:1 chat.
+When someone messages the group, the message lands in the group thread in your Inbox rather than a 1:1 chat, even though the sender is a normal contact. Replying from that thread sends to the whole group.
 
 ## Related
 
-- [List + sync groups](/#/groups/list-sync)
-- [Send to a group](/#/groups/send-to-group)
-- [Groups troubleshooting](/#/groups/troubleshooting)
-- [OBA status](/#/integrations/oba-status)
-- Source of truth: `docs/domain/group.md`, `docs/flows/group-sync.md`.
+- [List + sync groups](#/groups/list-sync)
+- [Send to a group](#/groups/send-to-group)
+- [Groups troubleshooting](#/groups/troubleshooting)
+- [OBA status](#/integrations/oba-status)

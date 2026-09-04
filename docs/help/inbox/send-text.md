@@ -1,72 +1,27 @@
 # Send a text message
 
-The composer at the bottom of the middle pane is the primary send path for plain-text replies. Sends are optimistic — the row appears immediately, then reconciles when the send worker confirms.
+The composer at the bottom of the middle pane is the primary way to send plain-text replies. Your message appears in the thread immediately and updates its delivery status live as WhatsApp confirms each step.
 
 ## How to use
 
-1. Click a conversation in the [list](/#/inbox/conversations).
-2. Type in the composer.
-3. Hit **Send** (or `Enter` — `Shift+Enter` inserts a newline).
+1. Click a conversation in the [list](#/inbox/conversations).
+2. Type your message in the composer at the bottom of the middle pane.
+3. Press **Send** (or hit `Enter` — `Shift+Enter` inserts a newline).
 
-The bubble renders with a spinning tick while queued, one grey tick on `sent`, two grey ticks on `delivered`, and two blue ticks on `read`. Each transition arrives via WebSocket from a `MessageSent` / `MessageDelivered` / `MessageRead` event.
+Your bubble renders with a spinning tick while it's being sent, one grey tick once WhatsApp accepts it, two grey ticks when it's delivered to the recipient's phone, and two blue ticks once the recipient opens it. The transitions arrive automatically — no refresh needed.
 
-## API
-
-**operationId**: `postMessagesSend`
-
-```
-POST /api/v1/messages
-```
-
-Persists the message as `queued`, enqueues a job on the `message.send` lane, returns 202. The channel adapter is invoked asynchronously.
-
-```bash
-curl -sS -X POST 'http://127.0.0.1:8080/api/v1/messages' \
-  -H 'Authorization: Bearer nk_abcd1234_<40-char-secret>' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "conversation_id": "01M1MC4KFJQ33YQWKPT7HKZNYC",
-    "type": "text",
-    "text": { "body": "Your order shipped this morning." },
-    "idempotency_key": "reply-01M1MC4KFJQ33YQWKPT7HKZNYC-1"
-  }'
-```
-
-Response (`SendMessageAccepted`):
-
-```json
-{ "message_id": "01M1MC5X…", "status": "queued" }
-```
-
-Always pass `idempotency_key` — retries with the same key collapse to one Meta call. When omitted the server uses the message ID.
-
-Set `text.preview_url: true` to let WhatsApp render a link preview for URLs in the body.
-
-## MCP
-
-Call the `postMessagesSend` tool with:
-
-```json
-{
-  "body": {
-    "conversation_id": "<conv-ULID>",
-    "type": "text",
-    "text": { "body": "<message>" },
-    "idempotency_key": "<stable-key>"
-  }
-}
-```
+If the recipient's message contains a URL, WhatsApp shows a link preview automatically when the URL is on its own line.
 
 ## Troubleshooting
 
-- **`422` with message `outside 24h window`** — WhatsApp's customer-service window has expired. Send an approved [template](/#/inbox/send-template) instead.
-- **`404 conversation not found`** — the ULID isn't in your org, or was resolved and archived. Re-list via [`getConversations`](/#/inbox/conversations).
-- **`424 conversation has no configured integration`** — the integration was deleted or disabled. Reconnect via [Integrations](/#/integrations/connect-whatsapp).
-- **Bubble stuck on spinning tick** — the send worker isn't consuming. `curl :8080/readyz` and check the worker logs for a Kafka lag warning.
-- **Duplicate bubbles** — the frontend didn't reconcile because `idempotency_key` was missing. Always set it.
+- **You see a red banner "Message can't be sent — the 24-hour window has expired"** — WhatsApp only allows plain text within 24 hours of the customer's last inbound message. Click **Send template** in the composer and pick an approved [template](#/inbox/send-template) instead.
+- **You see "Conversation not found" toast** — the conversation was archived or moved. Click back to the list and re-open it from there.
+- **You see "This conversation has no active integration"** — the WhatsApp integration for this conversation was deleted or disabled. Go to Settings → Integrations and reconnect via [Connect a WhatsApp integration](#/integrations/connect-whatsapp).
+- **Your bubble stays on the spinning tick for more than a few seconds** — your send didn't leave the queue. Wait 15 seconds; if it still hasn't moved, refresh the page. If the problem persists after refresh, an admin can check the [Provider calls log](#/audit-telemetry/provider-calls).
+- **You see two copies of the same message in the thread** — refresh once. If it happens again, report it — the client should collapse duplicates automatically.
 
 ## Related
 
-- [Send media](/#/inbox/send-media) — image / video / document flow.
-- [Send a template message](/#/inbox/send-template) — outside the 24h window.
-- [Mark messages as read](/#/inbox/mark-read) — blue-tick the customer's inbound.
+- [Send media](#/inbox/send-media) — image, video, or document.
+- [Send a template message](#/inbox/send-template) — outside the 24-hour window.
+- [Mark messages as read](#/inbox/mark-read) — blue-tick the customer's inbound.
