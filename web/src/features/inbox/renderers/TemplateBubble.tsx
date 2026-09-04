@@ -160,27 +160,50 @@ export function TemplateBubble({ msg, footer }: Props) {
 function ResolvedButtonChip({ btn }: { btn: ResolvedButton }) {
   const rawType = typeof btn.type === 'string' ? btn.type.toUpperCase() : '';
   const label = typeof btn.text === 'string' && btn.text !== '' ? btn.text : rawType || 'BUTTON';
-  const icon = iconForButtonType(rawType);
   return (
-    <span className="inline-flex items-center justify-center gap-1 rounded-md border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium">
-      {icon !== '' && <span aria-hidden="true">{icon}</span>}
+    <span className="inline-flex items-center justify-center gap-1.5 rounded-md border border-white/30 bg-white/10 px-3 py-1.5 text-xs font-medium">
+      <ButtonTypeIcon type={rawType} />
       <span className="truncate">{label}</span>
     </span>
   );
 }
 
-function iconForButtonType(type: string): string {
+function ButtonTypeIcon({ type }: { type: string }) {
+  const props = {
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 1.75,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    className: 'h-3.5 w-3.5',
+    'aria-hidden': true,
+  };
   switch (type) {
     case 'URL':
-      return '\u{1F517}'; // 🔗
+      return (
+        <svg {...props}>
+          <path d="M10 14a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+          <path d="M14 10a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+        </svg>
+      );
     case 'PHONE_NUMBER':
     case 'VOICE_CALL':
-      return '\u{1F4DE}'; // 📞
+      return (
+        <svg {...props}>
+          <path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1v3.4a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.4a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.24 1L6.6 10.8Z" />
+        </svg>
+      );
     case 'COPY_CODE':
-      return '\u{1F4CB}'; // 📋
+      return (
+        <svg {...props}>
+          <rect x="9" y="9" width="12" height="12" rx="2" />
+          <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+        </svg>
+      );
     case 'QUICK_REPLY':
     default:
-      return '';
+      return null;
   }
 }
 

@@ -464,7 +464,7 @@ export function Thread({ conversationID, orgID }: Props) {
         )}
         {messages.data !== undefined && messages.data.length === 0 && (
           <div className="flex items-center justify-center py-10">
-            <p className="text-sm text-slate-500">No messages in this conversation yet. Say hello 👋</p>
+            <p className="text-sm text-slate-500">No messages in this conversation yet.</p>
           </div>
         )}
         {grouped !== null &&

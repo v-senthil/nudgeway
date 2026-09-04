@@ -132,9 +132,15 @@ function PhoneNumberSection({
                 <button
                   type="button"
                   onClick={() => setQrOpen(true)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
                 >
-                  <span aria-hidden="true">📱</span> Show QR
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-4 w-4">
+                    <rect x="3" y="3" width="7" height="7" rx="1" />
+                    <rect x="14" y="3" width="7" height="7" rx="1" />
+                    <rect x="3" y="14" width="7" height="7" rx="1" />
+                    <path d="M14 14h3M14 18h3M20 14v7M17 21h4" />
+                  </svg>
+                  Show QR
                 </button>
               )}
             </div>

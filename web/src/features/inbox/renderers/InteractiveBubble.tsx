@@ -55,20 +55,20 @@ function CallPermissionReplyBody({
   let tone: string;
   if (isAccept) {
     if (isPermanent) {
-      title = '✅ Permission granted';
+      title = 'Permission granted';
       subtitle = 'Permanent — the customer allows calls anytime.';
     } else if (it.expiration_timestamp !== undefined && it.expiration_timestamp > 0) {
       const d = new Date(it.expiration_timestamp * 1000);
       const when = Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
-      title = '✅ Permission granted';
+      title = 'Permission granted';
       subtitle = when !== '' ? `Temporary — expires ${when}.` : 'Temporary permission.';
     } else {
-      title = '✅ Permission granted';
+      title = 'Permission granted';
       subtitle = 'Temporary permission.';
     }
     tone = 'text-emerald-700';
   } else if (isReject) {
-    title = '⛔ Permission declined';
+    title = 'Permission declined';
     subtitle = 'The customer chose not to allow calls.';
     tone = 'text-rose-700';
   } else {
@@ -79,7 +79,20 @@ function CallPermissionReplyBody({
   return (
     <div className="flex flex-col gap-1">
       <p className="text-[11px] uppercase tracking-wide opacity-70">Call permission</p>
-      <p className={`font-semibold break-words ${tone}`}>{title}</p>
+      <p className={`inline-flex items-center gap-1.5 font-semibold break-words ${tone}`}>
+        {isAccept ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 12l3 3 5-6" />
+          </svg>
+        ) : isReject ? (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 shrink-0">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M8 12h8" />
+          </svg>
+        ) : null}
+        {title}
+      </p>
       {subtitle !== '' && (
         <p className="text-xs opacity-80 break-words">{subtitle}</p>
       )}

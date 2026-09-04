@@ -207,13 +207,22 @@ export function IncomingCallPopup() {
         <div
           aria-hidden="true"
           className={
-            'flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xl ' +
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-full ' +
             (inCall
               ? 'bg-sky-100 text-sky-700'
               : 'animate-pulse bg-emerald-100 text-emerald-700')
           }
         >
-          {inCall ? '🔊' : '📞'}
+          {inCall ? (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="h-5 w-5">
+              <path d="M11 5 6 9H2v6h4l5 4z" />
+              <path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+              <path d="M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1v3.4a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.4a1 1 0 0 1 1 1c0 1.25.2 2.46.57 3.6a1 1 0 0 1-.24 1L6.6 10.8Z" />
+            </svg>
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
