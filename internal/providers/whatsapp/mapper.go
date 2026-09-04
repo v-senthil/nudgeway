@@ -42,13 +42,27 @@ type metaValueMetadata struct {
 
 type metaInboundContact struct {
 	Profile struct {
-		Name string `json:"name"`
+		Name     string `json:"name"`
+		Username string `json:"username,omitempty"`
 	} `json:"profile"`
-	WaID string `json:"wa_id"`
+	WaID   string `json:"wa_id"`
+	// UserID is the business-scoped user ID (BSUID) Meta ships alongside
+	// (and will eventually replace) wa_id. Format: <CC>.<up to 128 alnum>.
+	// See ~/Documents/whatsapp_doc_tracker/docs/business-scoped-user-ids.md.
+	UserID string `json:"user_id,omitempty"`
+	// ParentUserID is the parent BSUID for managed businesses enrolled in
+	// a parent BSUID account; usable in place of user_id across all
+	// portfolios enrolled in the same parent account.
+	ParentUserID string `json:"parent_user_id,omitempty"`
 }
 
 type metaInboundMessage struct {
 	From      string          `json:"from"`
+	// FromUserID is the sender's BSUID. Populated whenever Meta has one
+	// assigned; going forward this is the durable identity — phone (`from`)
+	// may disappear once username adoption completes.
+	FromUserID   string `json:"from_user_id,omitempty"`
+	FromParentID string `json:"from_parent_user_id,omitempty"`
 	ID        string          `json:"id"`
 	Timestamp string          `json:"timestamp"`
 	Type      string          `json:"type"`
@@ -139,11 +153,16 @@ type metaSystemMsg struct {
 }
 
 type metaStatus struct {
-	ID          string      `json:"id"`
-	Status      string      `json:"status"`
-	Timestamp   string      `json:"timestamp"`
-	RecipientID string      `json:"recipient_id"`
-	Errors      []metaError `json:"errors,omitempty"`
+	ID               string      `json:"id"`
+	Status           string      `json:"status"`
+	Timestamp        string      `json:"timestamp"`
+	RecipientID      string      `json:"recipient_id"`
+	// RecipientUserID is Meta's BSUID for the customer. Present on
+	// delivered / read callbacks regardless of whether the original send
+	// went to a phone number or a BSUID; omitted from `failed` callbacks
+	// when the send was phone-addressed.
+	RecipientUserID  string      `json:"recipient_user_id,omitempty"`
+	Errors           []metaError `json:"errors,omitempty"`
 }
 
 type metaError struct {

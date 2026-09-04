@@ -467,10 +467,26 @@ func (s *SendService) resolveRecipient(ctx context.Context, orgID organization.I
 	if err != nil {
 		return "", err
 	}
+	// Preference order for the outbound "to" field:
+	//   1. BSUID identity (WhatsApp will eventually stop emitting wa_id;
+	//      BSUID is the durable identity the provider prefers going
+	//      forward — see
+	//      ~/Documents/whatsapp_doc_tracker/docs/business-scoped-user-ids.md).
+	//   2. The Contact's primary identity (usually phone / wa_id today).
+	//   3. Any identity we can find for the contact.
+	//   4. Display name — providers can't route to it, but better than an
+	//      internal ULID leaking to Meta.
+	if s.deps.Identities != nil {
+		list, err := s.deps.Identities.ListForContact(ctx, orgID, contactID)
+		if err == nil {
+			for _, id := range list {
+				if id.Type == identity.TypeBSUID && id.NormalizedValue != "" {
+					return id.NormalizedValue, nil
+				}
+			}
+		}
+	}
 	if c.PrimaryIdentityID == nil {
-		// No primary identity — fall back to any identity we can find
-		// for this contact. Better than returning the display name,
-		// which providers can't route to.
 		if s.deps.Identities != nil {
 			list, err := s.deps.Identities.ListForContact(ctx, orgID, contactID)
 			if err == nil && len(list) > 0 {

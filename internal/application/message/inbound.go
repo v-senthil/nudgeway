@@ -215,13 +215,38 @@ func (s *InboundService) handleInbound(
 	// row already existed; adopt it so downstream writes hit the right row.
 	contactID = ident.ContactID
 
-	if created {
-		primary := contact.IdentityID(ident.ID)
+	// BSUID (WhatsApp business-scoped user id) upsert. Meta now ships this
+	// alongside every message and will eventually stop sending wa_id — it
+	// is the durable identity. When present, upsert as a BSUID identity
+	// bound to the same Contact and promote it to primary.
+	primaryIdentityID := contact.IdentityID(ident.ID)
+	if payload.FromUserID != "" {
+		bsuidIdent, _, bErr := s.deps.Identities.FindOrCreate(
+			ctx, orgID, contactID, identity.TypeBSUID, providerKey,
+			payload.FromUserID, payload.FromUserID,
+		)
+		if bErr != nil {
+			slog.Default().Warn("inbound: bsuid identity upsert failed (continuing with phone identity)",
+				slog.String("provider", providerKey),
+				slog.String("org_id", string(orgID)),
+				slog.String("bsuid", payload.FromUserID),
+				slog.Any("err", bErr),
+			)
+		} else {
+			// FindOrCreate may return an identity bound to a different
+			// contact if the BSUID row pre-existed under an older contact
+			// row — adopt whichever contact_id it points at.
+			contactID = bsuidIdent.ContactID
+			primaryIdentityID = contact.IdentityID(bsuidIdent.ID)
+		}
+	}
+
+	if created || payload.FromUserID != "" {
 		if err := s.deps.Contacts.Upsert(ctx, contact.Contact{
 			ID:                contactID,
 			OrgID:             orgID,
 			DisplayName:       display,
-			PrimaryIdentityID: &primary,
+			PrimaryIdentityID: &primaryIdentityID,
 			LastSeenAt:        &now,
 			CreatedAt:         now,
 			UpdatedAt:         now,

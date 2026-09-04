@@ -101,11 +101,33 @@ func ParseWebhook(rawBody []byte, resolver EndpointResolver) ([]events.Envelope,
 				}
 			}
 
-			// Index contact profile names by wa_id so inbound events can
-			// carry FromDisplayName without a second scan.
+			// Index contact profile / BSUID by both wa_id and user_id so
+			// inbound events carry name + BSUID without a second scan.
 			names := map[string]string{}
+			bsuidByWaID := map[string]string{}
+			parentByWaID := map[string]string{}
+			usernameByWaID := map[string]string{}
 			for _, c := range v.Contacts {
-				names[c.WaID] = c.Profile.Name
+				if c.WaID != "" {
+					names[c.WaID] = c.Profile.Name
+					if c.UserID != "" {
+						bsuidByWaID[c.WaID] = c.UserID
+					}
+					if c.ParentUserID != "" {
+						parentByWaID[c.WaID] = c.ParentUserID
+					}
+					if c.Profile.Username != "" {
+						usernameByWaID[c.WaID] = c.Profile.Username
+					}
+				}
+				// Also index by user_id for the future state where wa_id is
+				// omitted from the contacts block.
+				if c.UserID != "" {
+					names[c.UserID] = c.Profile.Name
+					if c.Profile.Username != "" {
+						usernameByWaID[c.UserID] = c.Profile.Username
+					}
+				}
 			}
 
 			for _, msg := range v.Messages {
@@ -114,13 +136,34 @@ func ParseWebhook(rawBody []byte, resolver EndpointResolver) ([]events.Envelope,
 				if ts.IsZero() {
 					ts = time.Now().UTC()
 				}
+				// Prefer BSUID from the message itself, else from the
+				// contacts-block index keyed on wa_id.
+				bsuid := msg.FromUserID
+				if bsuid == "" && msg.From != "" {
+					bsuid = bsuidByWaID[msg.From]
+				}
+				parentID := msg.FromParentID
+				if parentID == "" && msg.From != "" {
+					parentID = parentByWaID[msg.From]
+				}
+				display := names[msg.From]
+				if display == "" {
+					display = names[bsuid]
+				}
+				username := usernameByWaID[msg.From]
+				if username == "" {
+					username = usernameByWaID[bsuid]
+				}
 				received := events.MessageReceivedPayload{
 					Provider:                   "whatsapp",
 					Channel:                    "whatsapp",
 					BusinessEndpointExternalID: endpointExternalID,
 					ProviderMessageID:          msg.ID,
 					From:                       "+" + strings.TrimPrefix(msg.From, "+"),
-					FromDisplayName:            names[msg.From],
+					FromUserID:                 bsuid,
+					FromParentUserID:           parentID,
+					FromUsername:               username,
+					FromDisplayName:            display,
 					To:                         phoneNumberID,
 					MessageType:                string(mtype),
 					Payload:                    payload,
@@ -154,6 +197,7 @@ func ParseWebhook(rawBody []byte, resolver EndpointResolver) ([]events.Envelope,
 					Channel:           "whatsapp",
 					ProviderMessageID: st.ID,
 					Recipient:         st.RecipientID,
+					RecipientUserID:   st.RecipientUserID,
 					Status:            st.Status,
 					Timestamp:         ts,
 				}

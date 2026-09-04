@@ -17,7 +17,21 @@ type MessageReceivedPayload struct {
 	// Idempotency on receive uses this.
 	ProviderMessageID string
 	// From is the canonical sender identity (E.164 phone, email, wa_id).
+	// May become empty once WhatsApp completes the BSUID / username
+	// rollout — always prefer FromUserID when populated.
 	From string
+	// FromUserID is the provider-native durable identity (WhatsApp BSUID:
+	// business-scoped user id). Present when the provider supports it;
+	// this is the identity to key on going forward. Format
+	// <CC>.<alnum-up-to-128>.
+	FromUserID string
+	// FromParentUserID is the WhatsApp parent BSUID for managed
+	// businesses enrolled in a parent BSUID account. Usable across every
+	// portfolio in the parent account.
+	FromParentUserID string
+	// FromUsername is the WhatsApp username the customer has adopted, if
+	// any. Optional display-only field.
+	FromUsername string
 	// FromDisplayName is the profile name reported by the provider.
 	FromDisplayName string
 	// To is the canonical recipient identity (the business endpoint address).
@@ -51,8 +65,13 @@ type MessageStatusPayload struct {
 	Channel           string
 	ProviderMessageID string
 	Recipient         string
-	Status            string    // "sent" | "delivered" | "read" | "failed"
-	Timestamp         time.Time
+	// RecipientUserID is the WhatsApp BSUID Meta echoes back on delivered
+	// and read status callbacks. Present regardless of whether the
+	// original send targeted a phone number or a BSUID (except failed
+	// status callbacks, which omit it when the send was phone-addressed).
+	RecipientUserID string
+	Status          string    // "sent" | "delivered" | "read" | "failed"
+	Timestamp       time.Time
 	// ErrorCode / ErrorMessage populated when Status == "failed".
 	ErrorCode    string
 	ErrorMessage string
