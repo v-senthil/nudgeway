@@ -9,6 +9,13 @@ export const MAX_ATTACHMENT_BYTES = 16 * 1024 * 1024;
 export type UploadResult = {
   attachment_id: string;
   media_url: string;
+  /**
+   * Meta-native handle returned by Media Upload API. Preferred over
+   * media_url when present — Meta uses it directly instead of re-fetching
+   * a URL. Empty when the server couldn't upload to the provider.
+   */
+  media_id?: string;
+  provider?: string;
   size: number;
   content_type: string;
   filename?: string;

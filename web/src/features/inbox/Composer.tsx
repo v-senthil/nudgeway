@@ -102,7 +102,12 @@ export function Composer({ conversationID, orgID }: Props) {
         conversation_id: conversationID,
         type: kind,
         media: {
-          url: attachment.media_url,
+          // Prefer the Meta-native media_id (returned by our upload
+          // endpoint when the provider Media Upload API succeeded); fall
+          // back to the URL so Meta re-fetches from HBase.
+          ...(attachment.media_id !== undefined && attachment.media_id !== ''
+            ? { id: attachment.media_id }
+            : { url: attachment.media_url }),
           ...(hasText ? { caption: trimmed } : {}),
           ...(kind === 'document' && attachment.filename !== undefined
             ? { filename: attachment.filename }

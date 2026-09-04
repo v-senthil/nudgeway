@@ -93,7 +93,9 @@ export type SendMessageInput =
       conversation_id: string;
       type: 'image' | 'video' | 'audio' | 'document';
       media: {
-        url: string;
+        /** Meta media_id from Media Upload; preferred over url. */
+        id?: string;
+        url?: string;
         caption?: string;
         filename?: string;
       };

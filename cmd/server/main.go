@@ -419,6 +419,12 @@ func run() error {
 		},
 		AttachmentsUpload: v1.AttachmentsUploadDeps{
 			Store:         attachStore,
+			MediaUploader: metaMediaUploader{
+				store:        attachStore,
+				integrations: integrations,
+				providers:    provRegistry,
+				logger:       logger,
+			},
 			PublicBaseURL: publicBaseURL(cfg),
 			Logger:        logger,
 		},
@@ -553,6 +559,83 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// metaMediaUploader implements v1.MediaUploader by picking the org's first
+// channel integration and handing the stored bytes to that provider via
+// its adapter. The upload is best-effort: failures do NOT bounce the
+// local Put — media_url still works as a fallback for send.
+type metaMediaUploader struct {
+	store        attachmentsPort.Store
+	integrations *fmysql.Integrations
+	providers    providerRegistryFunc
+	logger       *slog.Logger
+}
+
+// Upload implements v1.MediaUploader. It resolves the first channel-kind
+// integration for orgID, opens the stored blob, hands it to the provider,
+// and stashes the returned mediaID via SetMediaID when the store supports
+// it.
+func (u metaMediaUploader) Upload(ctx context.Context, orgID, key, contentType, filename string) (string, string, string, error) {
+	if u.integrations == nil {
+		return "", "", "", fmt.Errorf("meta upload: integrations repo not wired")
+	}
+	list, err := u.integrations.List(ctx, organization.ID(orgID))
+	if err != nil {
+		return "", "", "", fmt.Errorf("meta upload: list integrations: %w", err)
+	}
+	var integ dintegration.Integration
+	found := false
+	for _, i := range list {
+		if i.Type == dintegration.TypeChannel && i.Provider == "whatsapp" {
+			integ = i
+			found = true
+			break
+		}
+	}
+	if !found {
+		return "", "", "", fmt.Errorf("meta upload: no whatsapp integration for org %s", orgID)
+	}
+	row, secrets, err := u.integrations.GetWithSecrets(ctx, organization.ID(orgID), integ.ID)
+	if err != nil {
+		return "", "", "", fmt.Errorf("meta upload: load secrets: %w", err)
+	}
+	if v, ok := row.Config["phone_number_id"].(string); ok {
+		secrets["phone_number_id"] = v
+	}
+	if v, ok := row.Config["waba_id"].(string); ok {
+		secrets["waba_id"] = v
+	}
+	p, err := u.providers.Channel(ctx, row.Provider, secrets)
+	if err != nil {
+		return "", "", "", fmt.Errorf("meta upload: resolve provider: %w", err)
+	}
+	waP, ok := p.(*whatsapp.Provider)
+	if !ok {
+		return "", "", "", fmt.Errorf("meta upload: provider %q does not support upload", row.Provider)
+	}
+	body, err := u.store.Get(ctx, key)
+	if err != nil {
+		return "", "", "", fmt.Errorf("meta upload: open blob: %w", err)
+	}
+	defer func() { _ = body.Close() }()
+	mediaID, err := waP.UploadMedia(ctx, contentType, filename, body)
+	if err != nil {
+		return "", "", "", fmt.Errorf("meta upload: %w", err)
+	}
+	// Best-effort persist of the media_id alongside the blob so re-uploads
+	// aren't needed on re-send.
+	if setter, ok := u.store.(interface {
+		SetMediaID(ctx context.Context, key, providerKey, integrationID, mediaID string) error
+	}); ok {
+		if err := setter.SetMediaID(ctx, key, row.Provider, string(integ.ID), mediaID); err != nil {
+			u.logger.Warn("meta upload: SetMediaID failed",
+				slog.Any("err", err),
+				slog.String("key", key),
+			)
+		}
+	}
+	return row.Provider, string(integ.ID), mediaID, nil
 }
 
 // attachmentDownloaderFunc adapts a closure into appmsg.AttachmentDownloader.

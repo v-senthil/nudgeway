@@ -2,6 +2,7 @@ package v1
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,13 @@ type AttachmentsUploadDeps struct {
 	// Store is the port implementation the handler writes blobs through.
 	// A nil Store disables the endpoint (route not mounted).
 	Store attachments.Store
+	// MediaUploader is optional: when non-nil, after storing bytes locally
+	// the handler asks the uploader to hand the same bytes to the provider
+	// (Meta's Media Upload API). The returned media_id is stashed
+	// alongside the attachment and returned in the response so the
+	// composer can send with media:{id:<mid>} — Meta prefers a first-
+	// class handle over a re-fetch of a URL.
+	MediaUploader MediaUploader
 	// PublicBaseURL is the externally-reachable origin (e.g.
 	// "https://app.example.com"). It is prepended to the returned
 	// media_url so operator-side responses are self-contained.
@@ -35,12 +43,23 @@ type AttachmentsUploadDeps struct {
 	Logger *slog.Logger
 }
 
+// MediaUploader hands a stored attachment to the provider and returns the
+// provider-native handle (Meta media_id). Wire-up owns which integration
+// the upload targets — the handler is provider-agnostic.
+type MediaUploader interface {
+	Upload(ctx context.Context, orgID, attachmentKey, contentType, filename string) (providerKey, integrationID, mediaID string, err error)
+}
+
 // AttachmentUploadResponse is the 201 body of POST /api/v1/attachments.
 // media_url is the fully-qualified URL the send worker can hand to Meta
 // under the `link` field of an image/video/audio/document/sticker payload.
+// media_id is set when the wire-up MediaUploader successfully handed the
+// blob to the provider — the composer prefers it over media_url.
 type AttachmentUploadResponse struct {
 	AttachmentID string `json:"attachment_id"`
 	MediaURL     string `json:"media_url"`
+	MediaID      string `json:"media_id,omitempty"`
+	Provider     string `json:"provider,omitempty"`
 	Size         int64  `json:"size"`
 	ContentType  string `json:"content_type"`
 	Filename     string `json:"filename,omitempty"`
@@ -130,9 +149,31 @@ func (h *attachmentsHandler) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Best-effort Meta Media Upload: hand the bytes to the provider so
+	// subsequent sends can reference media_id (Meta prefers a first-class
+	// handle over re-fetching a URL). Failures here don't fail the local
+	// store — media_url will still work as a fallback.
+	var providerKey, mediaID string
+	if h.d.MediaUploader != nil {
+		p, _, mid, upErr := h.d.MediaUploader.Upload(r.Context(), pr.OrgID, key, contentType, header.Filename)
+		if upErr != nil {
+			h.logger().Warn("meta media upload failed; local store OK",
+				slog.String("request_id", middleware.RequestIDFrom(r.Context())),
+				slog.String("org_id", pr.OrgID),
+				slog.String("key", key),
+				slog.Any("err", upErr),
+			)
+		} else {
+			providerKey = p
+			mediaID = mid
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, AttachmentUploadResponse{
 		AttachmentID: key,
 		MediaURL:     h.mediaURL(key),
+		MediaID:      mediaID,
+		Provider:     providerKey,
 		Size:         size,
 		ContentType:  contentType,
 		Filename:     header.Filename,
