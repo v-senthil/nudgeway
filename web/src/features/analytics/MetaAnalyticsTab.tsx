@@ -14,17 +14,13 @@ import {
   formatCurrency,
   rangeDaysAgo,
   useMetaCalls,
-  useMetaConversations,
   useMetaMessaging,
   useMetaPricing,
-  useMetaTemplates,
   type MetaCallPoint,
-  type MetaConversationPoint,
   type MetaGranularity,
   type MetaMessagingPoint,
   type MetaPricingPoint,
   type MetaRange,
-  type MetaTemplatePoint,
 } from '../../lib/meta-analytics';
 
 // SectionError renders a red banner with the RFC 7807 detail or a
@@ -138,137 +134,6 @@ function MessagingSection({
             label="Messages sent per bucket"
             ariaLabel="Messages sent per bucket sparkline"
           />
-        </>
-      )}
-    </section>
-  );
-}
-
-// ---- Conversations section ---------------------------------------------
-
-function ConversationsSection({
-  integrationID,
-  range,
-  granularity,
-  active,
-  phoneNumber,
-}: {
-  integrationID: string;
-  range: MetaRange;
-  granularity: MetaGranularity;
-  active: boolean;
-  phoneNumber?: string;
-}) {
-  const q = useMetaConversations(integrationID, range, granularity, active, phoneNumber);
-  const series = q.data?.conversation_analytics.data ?? [];
-  const points: MetaConversationPoint[] = useMemo(
-    () => series.flatMap((s) => s.data_points),
-    [series],
-  );
-
-  const totals = useMemo(() => {
-    let conv = 0;
-    let cost = 0;
-    let currency: string | undefined;
-    for (const p of points) {
-      conv += p.conversation ?? 0;
-      cost += p.cost ?? 0;
-      if (currency === undefined && p.currency !== undefined) currency = p.currency;
-    }
-    return { conv, cost, currency };
-  }, [points]);
-
-  // Aggregate rows for the breakdown table by (direction, type,
-  // category). Meta returns a row per bucket so we roll them up client
-  // side.
-  const breakdown = useMemo(() => {
-    const map = new Map<
-      string,
-      { direction: string; type: string; category: string; conv: number; cost: number; currency?: string }
-    >();
-    for (const p of points) {
-      const direction = p.conversation_direction ?? '—';
-      const type = p.conversation_type ?? '—';
-      const category = p.conversation_category ?? '—';
-      const key = `${direction}|${type}|${category}`;
-      const existing = map.get(key);
-      if (existing === undefined) {
-        map.set(key, {
-          direction,
-          type,
-          category,
-          conv: p.conversation ?? 0,
-          cost: p.cost ?? 0,
-          ...(p.currency !== undefined ? { currency: p.currency } : {}),
-        });
-      } else {
-        existing.conv += p.conversation ?? 0;
-        existing.cost += p.cost ?? 0;
-        if (existing.currency === undefined && p.currency !== undefined) {
-          existing.currency = p.currency;
-        }
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => b.conv - a.conv);
-  }, [points]);
-
-  const avgCost = totals.conv > 0 ? totals.cost / totals.conv : 0;
-
-  return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Conversations</h2>
-        {q.isFetching ? <Spinner className="h-4 w-4 text-slate-400" label="Refreshing" /> : null}
-      </div>
-      <SectionError err={q.error} />
-      {q.isPending && q.data === undefined ? (
-        <SectionSpinner label="Loading conversations" />
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <KpiCard title="Conversations" value={formatInt(totals.conv)} />
-            <KpiCard title="Total cost" value={formatCurrency(totals.cost, totals.currency)} />
-            <KpiCard
-              title="Avg cost / conv"
-              value={totals.conv > 0 ? formatCurrency(avgCost, totals.currency) : '—'}
-            />
-          </div>
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-2 text-left font-medium">Direction</th>
-                  <th className="px-4 py-2 text-left font-medium">Type</th>
-                  <th className="px-4 py-2 text-left font-medium">Category</th>
-                  <th className="px-4 py-2 text-right font-medium">Conversations</th>
-                  <th className="px-4 py-2 text-right font-medium">Cost</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {breakdown.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
-                      No data in the selected range.
-                    </td>
-                  </tr>
-                ) : (
-                  breakdown.map((row) => (
-                    <tr key={`${row.direction}-${row.type}-${row.category}`}>
-                      <td className="px-4 py-2 text-slate-700">{row.direction}</td>
-                      <td className="px-4 py-2 text-slate-700">{row.type}</td>
-                      <td className="px-4 py-2 text-slate-700">{row.category}</td>
-                      <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                        {formatInt(row.conv)}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                        {formatCurrency(row.cost, row.currency)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
         </>
       )}
     </section>
@@ -590,138 +455,6 @@ function PricingSection({
   );
 }
 
-// ---- Templates section --------------------------------------------------
-
-// pickCost extracts the `amount_spent` value from Meta's cost array
-// (falling back to the first entry). Templates return cost as an array
-// of {type, value} objects rather than a single scalar.
-function pickCost(entries: MetaTemplatePoint['cost']): number {
-  if (entries === undefined || entries.length === 0) return 0;
-  const amount = entries.find((e) => e.type === 'amount_spent');
-  return amount !== undefined ? amount.value : (entries[0]?.value ?? 0);
-}
-
-function sumClicks(entries: MetaTemplatePoint['clicked']): number {
-  if (entries === undefined || entries.length === 0) return 0;
-  return entries.reduce((acc, e) => acc + e.count, 0);
-}
-
-function TemplatesSection({
-  integrationID,
-  range,
-  granularity,
-  active,
-  phoneNumber,
-}: {
-  integrationID: string;
-  range: MetaRange;
-  granularity: MetaGranularity;
-  active: boolean;
-  phoneNumber?: string;
-}) {
-  const q = useMetaTemplates(integrationID, range, granularity, active, phoneNumber);
-  const points: MetaTemplatePoint[] = useMemo(
-    () => (q.data?.data ?? []).flatMap((s) => s.data_points),
-    [q.data],
-  );
-
-  const rows = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        template_id: string;
-        template_name: string;
-        sent: number;
-        delivered: number;
-        read: number;
-        clicked: number;
-        cost: number;
-      }
-    >();
-    for (const p of points) {
-      const key = p.template_id;
-      const existing = map.get(key);
-      if (existing === undefined) {
-        map.set(key, {
-          template_id: p.template_id,
-          template_name: p.template_name ?? p.template_id,
-          sent: p.sent ?? 0,
-          delivered: p.delivered ?? 0,
-          read: p.read ?? 0,
-          clicked: sumClicks(p.clicked),
-          cost: pickCost(p.cost),
-        });
-      } else {
-        existing.sent += p.sent ?? 0;
-        existing.delivered += p.delivered ?? 0;
-        existing.read += p.read ?? 0;
-        existing.clicked += sumClicks(p.clicked);
-        existing.cost += pickCost(p.cost);
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => b.sent - a.sent);
-  }, [points]);
-
-  // Suppress the section entirely when the integration has no templates
-  // in this range — matches the requested "rendered only when the
-  // integration has templates" behaviour.
-  if (!q.isPending && q.error === null && rows.length === 0) {
-    return null;
-  }
-
-  return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Templates</h2>
-        {q.isFetching ? <Spinner className="h-4 w-4 text-slate-400" label="Refreshing" /> : null}
-      </div>
-      <SectionError err={q.error} />
-      {q.isPending && q.data === undefined ? (
-        <SectionSpinner label="Loading templates" />
-      ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">Template</th>
-                <th className="px-4 py-2 text-right font-medium">Sent</th>
-                <th className="px-4 py-2 text-right font-medium">Delivered</th>
-                <th className="px-4 py-2 text-right font-medium">Read</th>
-                <th className="px-4 py-2 text-right font-medium">Clicked</th>
-                <th className="px-4 py-2 text-right font-medium">Cost</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => (
-                <tr key={row.template_id}>
-                  <td className="px-4 py-2 text-slate-700">
-                    <div className="font-medium text-slate-900">{row.template_name}</div>
-                    <div className="text-xs text-slate-500">{row.template_id}</div>
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                    {formatInt(row.sent)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                    {formatInt(row.delivered)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                    {formatInt(row.read)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                    {formatInt(row.clicked)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                    {formatCurrency(row.cost, undefined)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
-  );
-}
 
 // ---- Root tab -----------------------------------------------------------
 
@@ -889,13 +622,6 @@ export function MetaAnalyticsTab({ active }: { active: boolean }) {
             active={active}
             phoneNumber={phoneDigits}
           />
-          <ConversationsSection
-            integrationID={effectiveID}
-            range={range}
-            granularity={granularity}
-            active={active}
-            phoneNumber={phoneDigits}
-          />
           <CallsSection
             integrationID={effectiveID}
             range={range}
@@ -904,13 +630,6 @@ export function MetaAnalyticsTab({ active }: { active: boolean }) {
             phoneNumber={phoneDigits}
           />
           <PricingSection
-            integrationID={effectiveID}
-            range={range}
-            granularity={granularity}
-            active={active}
-            phoneNumber={phoneDigits}
-          />
-          <TemplatesSection
             integrationID={effectiveID}
             range={range}
             granularity={granularity}
