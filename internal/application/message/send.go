@@ -424,15 +424,24 @@ func (s *SendService) ProcessSend(ctx context.Context, job SendJobPayload) error
 		return nil // do not requeue permanent failures
 	}
 
-	// Success: update status → SENT and record provider_message_id via the
-	// same UpdateStatus call (the underlying MySQL repo also persists the
-	// provider_message_id when non-empty on the row; we update the id via
-	// the repo's status write which stamps SentAt).
+	// Success: update status → SENT then stamp the provider_message_id
+	// (wamid) so later status callbacks (delivered / read / failed) can
+	// route via UpdateStatusByProviderMessageID and advance the UI.
 	if err := s.deps.Messages.UpdateStatus(ctx, orgID, msgdom.ID(job.MessageID), msgdom.StatusSent, now); err != nil {
 		log.Error("message.send status=sent write failed",
 			slog.Any("err", err),
 		)
 		return fmt.Errorf("mark sent: %w", err)
+	}
+	if setter, ok := s.deps.Messages.(interface {
+		SetProviderMessageID(ctx context.Context, orgID organization.ID, id msgdom.ID, providerMessageID string) error
+	}); ok && res.ProviderMessageID != "" {
+		if err := setter.SetProviderMessageID(ctx, orgID, msgdom.ID(job.MessageID), res.ProviderMessageID); err != nil {
+			log.Warn("message.send: SetProviderMessageID failed; delivered/read callbacks will not route",
+				slog.String("provider_message_id", res.ProviderMessageID),
+				slog.Any("err", err),
+			)
+		}
 	}
 	_ = s.deps.Publisher.Publish(ctx, events.Envelope{
 		Type:           events.MessageSent,
@@ -468,17 +477,25 @@ func (s *SendService) resolveRecipient(ctx context.Context, orgID organization.I
 		return "", err
 	}
 	// Preference order for the outbound "to" field:
-	//   1. BSUID identity (WhatsApp will eventually stop emitting wa_id;
-	//      BSUID is the durable identity the provider prefers going
-	//      forward — see
-	//      ~/Documents/whatsapp_doc_tracker/docs/business-scoped-user-ids.md).
-	//   2. The Contact's primary identity (usually phone / wa_id today).
-	//   3. Any identity we can find for the contact.
-	//   4. Display name — providers can't route to it, but better than an
-	//      internal ULID leaking to Meta.
+	//   1. Phone / wa_id — universally accepted by Meta today.
+	//   2. BSUID (once WhatsApp completes the username rollout Meta will
+	//      accept this everywhere; for now some BSUIDs still 4xx, hence
+	//      the fallback).
+	//   3. The Contact's primary identity (may be BSUID after our
+	//      InboundService promotes it).
+	//   4. Display name — providers can't route to it, but safer than
+	//      leaking an internal ULID.
+	// TODO: promote BSUID to (1) once Meta portfolio-side send accepts
+	// all BSUIDs. See ~/Documents/whatsapp_doc_tracker/docs/
+	// business-scoped-user-ids.md.
 	if s.deps.Identities != nil {
 		list, err := s.deps.Identities.ListForContact(ctx, orgID, contactID)
 		if err == nil {
+			for _, id := range list {
+				if (id.Type == identity.TypePhone || id.Type == identity.TypeWhatsApp) && id.NormalizedValue != "" {
+					return id.NormalizedValue, nil
+				}
+			}
 			for _, id := range list {
 				if id.Type == identity.TypeBSUID && id.NormalizedValue != "" {
 					return id.NormalizedValue, nil
