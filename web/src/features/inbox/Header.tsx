@@ -52,10 +52,27 @@ export function Header({ me }: Props) {
   return (
     <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4">
       <div className="flex items-center gap-2">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-600 text-white">
-          <span className="text-[11px] font-bold">fW</span>
+        <div
+          className="flex h-7 w-7 items-center justify-center rounded-lg text-white"
+          style={{ backgroundImage: 'linear-gradient(135deg, #25D366, #128C7E)' }}
+          aria-hidden="true"
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+            <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v9A2.5 2.5 0 0 1 17.5 17H10l-4.2 3.4A.6.6 0 0 1 4.8 20V17H6.5A2.5 2.5 0 0 1 4 14.5v-9Z" />
+          </svg>
         </div>
         <span className="text-sm font-semibold tracking-tight text-slate-900">Nudgeway</span>
+        {me.org_name !== undefined && me.org_name !== '' && (
+          <>
+            <span aria-hidden="true" className="text-slate-300">·</span>
+            <span
+              className="max-w-[180px] truncate text-sm font-medium text-slate-500"
+              title={me.org_name}
+            >
+              {me.org_name}
+            </span>
+          </>
+        )}
       </div>
 
       <nav aria-label="Primary" className="flex items-center gap-1">
@@ -80,7 +97,6 @@ export function Header({ me }: Props) {
         >
           Analytics
         </Link>
-        <span className="ml-3 text-sm font-medium text-slate-600">{me.org_name}</span>
       </nav>
 
       <div className="flex items-center gap-2">
