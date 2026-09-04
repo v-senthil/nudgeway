@@ -103,19 +103,6 @@
         { "id": "audit-log", "title": "Audit log" },
         { "id": "provider-calls", "title": "Meta API execution log" }
       ]
-    },
-    {
-      "id": "developer",
-      "title": "Developer",
-      "pages": [
-        { "id": "overview", "title": "Overview" },
-        { "id": "rest-api", "title": "REST API" },
-        { "id": "openapi", "title": "OpenAPI spec" },
-        { "id": "mcp-server", "title": "MCP server" },
-        { "id": "claude-desktop", "title": "Claude Desktop setup" },
-        { "id": "skills", "title": "Skills library" },
-        { "id": "cli", "title": "CLI (nudgeway-cli)" }
-      ]
     }
   ]
 }

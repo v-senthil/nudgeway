@@ -185,33 +185,12 @@
           <p class="text-slate-500">Loading…</p>
         </article>
 
-        <footer class="mt-6 text-xs text-slate-400 flex items-center justify-between">
-          <span>
-            Docs live in
-            <a
-              class="underline hover:text-slate-600"
-              href="https://github.com/v-senthil/nudgeway/tree/main/docs/help"
-            >
-              <code>docs/help/</code>
-            </a>. PRs welcome.
-          </span>
-          <a
-            id="editLink"
-            class="underline hover:text-slate-600"
-            href="https://github.com/v-senthil/nudgeway/tree/main/docs/help"
-            target="_blank"
-            rel="noopener"
-          >
-            Edit this page
-          </a>
-        </footer>
       </main>
     </div>
 
     <script>
       const MANIFEST_URL = './help/manifest.json';
       const CONTENT_BASE = './help';
-      const EDIT_BASE = 'https://github.com/v-senthil/nudgeway/edit/main/docs/help';
 
       let manifest = null;
       const contentCache = new Map();
@@ -283,12 +262,25 @@
         return md;
       }
 
+      // normalizeLinks rewrites any anchor href that starts with "/#/"
+      // (a common authoring mistake — resolves against the domain root
+      // and drops you off the help center) to a plain "#/" hash link
+      // that stays on this page. Also handles bare "module/page"
+      // authoring by prepending "#/".
+      function normalizeLinks(root) {
+        for (const a of root.querySelectorAll('a[href]')) {
+          const href = a.getAttribute('href');
+          if (href === null) continue;
+          if (href.startsWith('/#/')) {
+            a.setAttribute('href', href.slice(1));
+          }
+        }
+      }
+
       async function renderPage() {
         if (manifest === null) return;
         const { moduleId, pageId } = currentRoute();
         const content = document.getElementById('content');
-        const editLink = document.getElementById('editLink');
-        editLink.href = `${EDIT_BASE}/${moduleId}/${pageId}.md`;
 
         // Update page title.
         const mod = manifest.modules.find((m) => m.id === moduleId);
@@ -300,13 +292,13 @@
         try {
           const md = await fetchMarkdown(moduleId, pageId);
           content.innerHTML = marked.parse(md);
+          normalizeLinks(content);
           if (window.hljs) hljs.highlightAll();
           content.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } catch (err) {
           content.innerHTML = `
             <h1>Coming soon</h1>
-            <p>This page hasn't landed yet — check back after the next docs pass, or open a PR at <a href="${EDIT_BASE}/${moduleId}/${pageId}.md">docs/help/${moduleId}/${pageId}.md</a>.</p>
-            <p class="text-xs text-slate-400">Loader error: ${err.message}</p>
+            <p>This page hasn't landed yet — check back after the next docs pass.</p>
           `;
         }
         renderTOC(document.getElementById('tocSearch').value);
