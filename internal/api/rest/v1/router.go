@@ -55,6 +55,10 @@ type Deps struct {
 	// endpoints (business profile, call settings, OBA status). Route is
 	// silently omitted when IntegrationSettings.Service is nil.
 	IntegrationSettings IntegrationSettingsDeps
+	// MetaAnalytics exposes the per-integration Meta WABA analytics
+	// surface (messaging, conversation, pricing, call, template).
+	// Route is silently omitted when MetaAnalytics.Service is nil.
+	MetaAnalytics MetaAnalyticsDeps
 	// APITokens exposes /api/v1/api-tokens (create/list/revoke long-lived
 	// programmatic-access tokens). Route is silently omitted when
 	// APITokens.Service is nil.
@@ -211,6 +215,11 @@ func Mount(mux Registrar, deps Deps) {
 	// /call-settings, /oba-status* (auth + integrations.manage). Silently
 	// omitted when deps.IntegrationSettings.Service is nil.
 	mountIntegrationSettings(mux, base, authed, deps.IntegrationSettings)
+
+	// Meta WABA analytics — /api/v1/integrations/{id}/meta-analytics/*
+	// (auth + analytics.read). Silently omitted when
+	// deps.MetaAnalytics.Service is nil.
+	mountMetaAnalytics(mux, authedGET, deps.MetaAnalytics)
 
 	// API tokens — /api/v1/api-tokens* (auth-only; bearer callers
 	// exempt from CSRF via the shared middleware). Silently omitted

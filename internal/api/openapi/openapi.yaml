@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Nudgeway API
-  version: 0.2.6-phase2
+  version: 0.2.7-phase2
   summary: Multi-tenant customer communication platform API.
   description: |
     Every request is scoped to an organization determined from the
@@ -44,6 +44,8 @@ tags:
     description: Voice call lifecycle over provider adapters (list, initiate, answer, reject, end, recording, transcript, session).
   - name: analytics
     description: Daily rollup aggregates over the canonical messages and conversations tables.
+  - name: meta-analytics
+    description: Per-integration passthrough to Meta WhatsApp Business Account analytics (messaging, conversation, pricing, call, template).
   - name: tools
     description: Operator utilities that support the settings drawer (ngrok tunnel discovery, etc.).
 
@@ -2165,6 +2167,437 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /api/v1/integrations/{id}/meta-analytics/messaging:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [meta-analytics]
+      operationId: getMetaMessagingAnalytics
+      summary: Passthrough to Meta's WABA `analytics` field.
+      description: |
+        Returns message send / delivery counts for the WABA in the given
+        range. Requires the `analytics.read` permission. Mirrors Meta's
+        `GET /{waba-id}?fields=analytics.start(...).end(...).granularity(...)`.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - name: since
+          in: query
+          required: true
+          description: Inclusive start (RFC 3339).
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          required: true
+          description: Inclusive end (RFC 3339).
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          required: false
+          schema: { type: string, enum: [HALF_HOUR, DAY, MONTH] }
+        - name: phone_numbers
+          in: query
+          required: false
+          description: Comma-separated phone number list (Meta E.164 without +).
+          schema: { type: string }
+        - name: product_types
+          in: query
+          required: false
+          description: Comma-separated integers (0, 2, 100).
+          schema: { type: string }
+        - name: country_codes
+          in: query
+          required: false
+          description: Comma-separated ISO 3166-1 alpha-2 codes.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Meta messaging analytics response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaMessagingAnalytics' }
+        '400':
+          description: Invalid or missing query params.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing analytics.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Meta provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/meta-analytics/conversations:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [meta-analytics]
+      operationId: getMetaConversationAnalytics
+      summary: Passthrough to Meta's WABA `conversation_analytics` field.
+      description: |
+        Returns conversation counts + cost for the WABA in the given
+        range. Requires the `analytics.read` permission.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          required: false
+          schema: { type: string, enum: [HALF_HOUR, DAILY, MONTHLY] }
+        - name: phone_numbers
+          in: query
+          required: false
+          schema: { type: string }
+        - name: metric_types
+          in: query
+          required: false
+          description: Comma-separated (COST, CONVERSATION).
+          schema: { type: string }
+        - name: conversation_categories
+          in: query
+          required: false
+          description: Comma-separated (AUTHENTICATION, MARKETING, SERVICE, UTILITY).
+          schema: { type: string }
+        - name: conversation_types
+          in: query
+          required: false
+          description: Comma-separated (FREE_ENTRY_POINT, FREE_TIER, REGULAR).
+          schema: { type: string }
+        - name: conversation_directions
+          in: query
+          required: false
+          description: Comma-separated (BUSINESS_INITIATED, USER_INITIATED, UNKNOWN).
+          schema: { type: string }
+        - name: dimensions
+          in: query
+          required: false
+          description: Comma-separated (CONVERSATION_CATEGORY, CONVERSATION_DIRECTION, CONVERSATION_TYPE, COUNTRY, PHONE).
+          schema: { type: string }
+        - name: country_codes
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        '200':
+          description: Meta conversation analytics response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaConversationAnalytics' }
+        '400':
+          description: Invalid or missing query params.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing analytics.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Meta provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/meta-analytics/pricing:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [meta-analytics]
+      operationId: getMetaPricingAnalytics
+      summary: Passthrough to Meta's WABA `pricing_analytics` field.
+      description: |
+        Returns pricing tier + volume-tier info + cost per pricing
+        category / type. Requires the `analytics.read` permission.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          required: false
+          schema: { type: string, enum: [HALF_HOUR, DAILY, MONTHLY] }
+        - name: phone_numbers
+          in: query
+          required: false
+          schema: { type: string }
+        - name: country_codes
+          in: query
+          required: false
+          schema: { type: string }
+        - name: metric_types
+          in: query
+          required: false
+          description: Comma-separated (COST, VOLUME).
+          schema: { type: string }
+        - name: pricing_types
+          in: query
+          required: false
+          description: Comma-separated (FREE_CUSTOMER_SERVICE, FREE_ENTRY_POINT, REGULAR).
+          schema: { type: string }
+        - name: pricing_categories
+          in: query
+          required: false
+          description: Comma-separated (AUTHENTICATION, AUTHENTICATION_INTERNATIONAL, MARKETING, MARKETING_LITE, SERVICE, UTILITY, REFERRAL_CONVERSION).
+          schema: { type: string }
+        - name: dimensions
+          in: query
+          required: false
+          description: Comma-separated (COUNTRY, PHONE, PRICING_CATEGORY, PRICING_TYPE, TIER).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Meta pricing analytics response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaPricingAnalytics' }
+        '400':
+          description: Invalid or missing query params.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing analytics.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Meta provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/meta-analytics/calls:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [meta-analytics]
+      operationId: getMetaCallAnalytics
+      summary: Passthrough to Meta's WABA `call_analytics` field.
+      description: |
+        Returns call count / cost / average duration for the WABA in
+        the given range. Requires the `analytics.read` permission.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          required: false
+          schema: { type: string, enum: [HALF_HOUR, DAILY, MONTHLY] }
+        - name: phone_numbers
+          in: query
+          required: false
+          schema: { type: string }
+        - name: country_codes
+          in: query
+          required: false
+          schema: { type: string }
+        - name: directions
+          in: query
+          required: false
+          description: Comma-separated (USER_INITIATED, BUSINESS_INITIATED).
+          schema: { type: string }
+        - name: dimensions
+          in: query
+          required: false
+          description: Comma-separated (phone, direction, country).
+          schema: { type: string }
+        - name: metric_types
+          in: query
+          required: false
+          description: Comma-separated (COUNT, COST, AVERAGE_DURATION).
+          schema: { type: string }
+      responses:
+        '200':
+          description: Meta call analytics response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaCallAnalytics' }
+        '400':
+          description: Invalid or missing query params.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing analytics.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Meta provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/integrations/{id}/meta-analytics/templates:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema: { type: string }
+        description: Integration ULID.
+    get:
+      tags: [meta-analytics]
+      operationId: getMetaTemplateAnalytics
+      summary: Passthrough to Meta's WABA `template_analytics` edge.
+      description: |
+        Returns per-template sent / delivered / read / clicked / cost
+        metrics with a 90-day lookback. Requires `enable_template_analytics`
+        on the WABA plus the `analytics.read` permission.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - name: since
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: granularity
+          in: query
+          required: false
+          schema: { type: string, enum: [DAILY] }
+        - name: template_ids
+          in: query
+          required: true
+          description: Comma-separated template IDs (Meta caps at 10 per request).
+          schema: { type: string }
+        - name: metric_types
+          in: query
+          required: false
+          description: Comma-separated (COST, CLICKED, DELIVERED, READ, SENT, ...).
+          schema: { type: string }
+        - name: product_type
+          in: query
+          required: false
+          schema: { type: string, enum: [CLOUD_API, MARKETING_MESSAGES_API_FOR_WHATSAPP] }
+        - name: use_waba_timezone
+          in: query
+          required: false
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Meta template analytics response.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MetaTemplateAnalytics' }
+        '400':
+          description: Invalid or missing query params.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing analytics.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: Integration not found.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '502':
+          description: Meta provider error.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
   /api/v1/integrations/{id}/business-profile:
     parameters:
       - in: path
@@ -4005,6 +4438,190 @@ components:
         points:
           type: array
           items: { $ref: '#/components/schemas/AnalyticsPoint' }
+
+    MetaMessagingAnalyticsDataPoint:
+      type: object
+      required: [start, end, sent, delivered]
+      properties:
+        start: { type: integer, format: int64, description: UNIX seconds. }
+        end:   { type: integer, format: int64, description: UNIX seconds. }
+        sent:      { type: integer, format: int64 }
+        delivered: { type: integer, format: int64 }
+
+    MetaMessagingAnalyticsPayload:
+      type: object
+      properties:
+        phone_numbers: { type: array, items: { type: string } }
+        country_codes: { type: array, items: { type: string } }
+        granularity:   { type: string }
+        data_points:
+          type: array
+          items: { $ref: '#/components/schemas/MetaMessagingAnalyticsDataPoint' }
+
+    MetaMessagingAnalytics:
+      type: object
+      required: [analytics]
+      properties:
+        analytics: { $ref: '#/components/schemas/MetaMessagingAnalyticsPayload' }
+        id:        { type: string, description: WABA ID Meta echoed back. }
+
+    MetaConversationAnalyticsDataPoint:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: integer, format: int64 }
+        end:   { type: integer, format: int64 }
+        conversation:          { type: integer, format: int64 }
+        phone_number:          { type: string }
+        country:               { type: string }
+        conversation_type:     { type: string }
+        conversation_direction:{ type: string }
+        conversation_category: { type: string }
+        cost:                  { type: number, format: double }
+
+    MetaConversationAnalyticsData:
+      type: object
+      properties:
+        data_points:
+          type: array
+          items: { $ref: '#/components/schemas/MetaConversationAnalyticsDataPoint' }
+
+    MetaConversationAnalyticsPayload:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/MetaConversationAnalyticsData' }
+
+    MetaConversationAnalytics:
+      type: object
+      required: [conversation_analytics]
+      properties:
+        conversation_analytics: { $ref: '#/components/schemas/MetaConversationAnalyticsPayload' }
+        id: { type: string }
+
+    MetaPricingAnalyticsDataPoint:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: integer, format: int64 }
+        end:   { type: integer, format: int64 }
+        country:          { type: string }
+        phone_number:     { type: string }
+        tier:             { type: string, description: 'Concatenation "<LOWER>:<UPPER>" or "0:MAX"; omitted for free messages.' }
+        pricing_type:     { type: string }
+        pricing_category: { type: string }
+        volume:           { type: integer, format: int64 }
+        cost:             { type: number, format: double }
+
+    MetaPricingAnalyticsData:
+      type: object
+      properties:
+        data_points:
+          type: array
+          items: { $ref: '#/components/schemas/MetaPricingAnalyticsDataPoint' }
+
+    MetaPricingAnalyticsPayload:
+      type: object
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/MetaPricingAnalyticsData' }
+
+    MetaPricingAnalytics:
+      type: object
+      required: [pricing_analytics]
+      properties:
+        pricing_analytics: { $ref: '#/components/schemas/MetaPricingAnalyticsPayload' }
+        id: { type: string }
+
+    MetaCallAnalyticsDataPoint:
+      type: object
+      required: [start, end]
+      properties:
+        start: { type: integer, format: int64 }
+        end:   { type: integer, format: int64 }
+        count:            { type: integer, format: int64 }
+        cost:             { type: number, format: double }
+        average_duration: { type: integer, format: int64, description: Seconds. }
+        phone_number:     { type: string }
+        country:          { type: string }
+        direction:        { type: string }
+
+    MetaCallAnalyticsPayload:
+      type: object
+      properties:
+        granularity: { type: string }
+        data_points:
+          type: array
+          items: { $ref: '#/components/schemas/MetaCallAnalyticsDataPoint' }
+
+    MetaCallAnalytics:
+      type: object
+      required: [call_analytics]
+      properties:
+        call_analytics: { $ref: '#/components/schemas/MetaCallAnalyticsPayload' }
+        id: { type: string }
+
+    MetaTemplateAnalyticsCost:
+      type: object
+      required: [type, value]
+      properties:
+        type:  { type: string, description: 'amount_spent | cost_per_delivered | cost_per_url_button_click' }
+        value: { type: number, format: double }
+
+    MetaTemplateAnalyticsClick:
+      type: object
+      required: [type, count]
+      properties:
+        type:           { type: string, description: 'url_button | unique_url_button | quick_reply_button' }
+        button_content: { type: string }
+        count:          { type: integer, format: int64 }
+
+    MetaTemplateAnalyticsDataPoint:
+      type: object
+      required: [template_id, start, end]
+      properties:
+        template_id: { type: string }
+        start:       { type: integer, format: int64 }
+        end:         { type: integer, format: int64 }
+        sent:      { type: integer, format: int64 }
+        delivered: { type: integer, format: int64 }
+        read:      { type: integer, format: int64 }
+        clicked:
+          type: array
+          items: { $ref: '#/components/schemas/MetaTemplateAnalyticsClick' }
+        cost:
+          type: array
+          items: { $ref: '#/components/schemas/MetaTemplateAnalyticsCost' }
+
+    MetaTemplateAnalyticsBucket:
+      type: object
+      properties:
+        waba_timezone: { type: string }
+        granularity:   { type: string }
+        product_type:  { type: string }
+        data_points:
+          type: array
+          items: { $ref: '#/components/schemas/MetaTemplateAnalyticsDataPoint' }
+
+    MetaTemplateAnalyticsPaging:
+      type: object
+      properties:
+        cursors:
+          type: object
+          properties:
+            before: { type: string }
+            after:  { type: string }
+
+    MetaTemplateAnalytics:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items: { $ref: '#/components/schemas/MetaTemplateAnalyticsBucket' }
+        paging: { $ref: '#/components/schemas/MetaTemplateAnalyticsPaging' }
 
     BusinessProfile:
       type: object

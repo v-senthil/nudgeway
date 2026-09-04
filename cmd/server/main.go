@@ -41,6 +41,7 @@ import (
 	appgrp "github.com/v-senthil/nudgeway/internal/application/group"
 	appintegration "github.com/v-senthil/nudgeway/internal/application/integration"
 	appsettings "github.com/v-senthil/nudgeway/internal/application/integrationsettings"
+	appmetaanalytics "github.com/v-senthil/nudgeway/internal/application/metaanalytics"
 	appmsg "github.com/v-senthil/nudgeway/internal/application/message"
 	appproviderc "github.com/v-senthil/nudgeway/internal/application/providercall"
 	apptmpl "github.com/v-senthil/nudgeway/internal/application/template"
@@ -550,6 +551,31 @@ func run() error {
 		Logger:       logger,
 	})
 
+	// metaAnalyticsResolver builds a Meta-analytics ProviderClient for
+	// the integration. Mirrors settingsResolver — same whatsapp.Provider
+	// backing store, same tracer wiring so provider_calls captures every
+	// Meta analytics round-trip.
+	metaAnalyticsResolver := metaAnalyticsResolverFunc(func(_ context.Context, key string, integ dintegration.Integration, secrets map[string]string) (appmetaanalytics.MetaAnalyticsProvider, error) {
+		if key != "whatsapp" {
+			return nil, fmt.Errorf("meta analytics provider %q not supported", key)
+		}
+		integID := secrets["_integration_id"]
+		orgID := secrets["_org_id"]
+		waP := whatsapp.New(whatsapp.Config{
+			PhoneNumberID: secrets["phone_number_id"],
+			WABAID:        secrets["waba_id"],
+			AccessToken:   secrets["access_token"],
+			AppSecret:     secrets["app_secret"],
+		}).WithTracer(waTracer, integID, orgID)
+		return whatsappMetaAnalyticsAdapter{p: waP}, nil
+	})
+
+	metaAnalyticsSvc := appmetaanalytics.NewService(appmetaanalytics.Deps{
+		Integrations: integrations,
+		Providers:    metaAnalyticsResolver,
+		Logger:       logger,
+	})
+
 	// --- API tokens ---------------------------------------------------------
 	// Long-lived programmatic-access tokens (MCP server, CI, scripts).
 	// The service wraps the mysql repo and the shared argon2id helper.
@@ -673,6 +699,10 @@ func run() error {
 		IntegrationSettings: v1.IntegrationSettingsDeps{
 			Service: settingsSvc,
 			Audit:   auditSvc,
+			Logger:  logger,
+		},
+		MetaAnalytics: v1.MetaAnalyticsDeps{
+			Service: metaAnalyticsSvc,
 			Logger:  logger,
 		},
 		APITokens: v1.APITokensDeps{
@@ -1145,6 +1175,228 @@ type templateRegistryFunc func(ctx context.Context, key string, integ dintegrati
 // Template implements apptmpl.ProviderRegistry.
 func (f templateRegistryFunc) Template(ctx context.Context, key string, integ dintegration.Integration, secrets map[string]string) (apptmpl.TemplateProvider, error) {
 	return f(ctx, key, integ, secrets)
+}
+
+// metaAnalyticsResolverFunc adapts a closure into
+// appmetaanalytics.Resolver.
+type metaAnalyticsResolverFunc func(ctx context.Context, key string, integ dintegration.Integration, secrets map[string]string) (appmetaanalytics.MetaAnalyticsProvider, error)
+
+// MetaAnalytics implements appmetaanalytics.Resolver.
+func (f metaAnalyticsResolverFunc) MetaAnalytics(ctx context.Context, key string, integ dintegration.Integration, secrets map[string]string) (appmetaanalytics.MetaAnalyticsProvider, error) {
+	return f(ctx, key, integ, secrets)
+}
+
+// whatsappMetaAnalyticsAdapter bridges the whatsapp adapter's
+// provider-native Meta analytics methods to the provider-neutral
+// appmetaanalytics.MetaAnalyticsProvider port. Every method is a
+// one-shot shape translation; the whatsapp package remains the sole
+// owner of the Meta wire format.
+type whatsappMetaAnalyticsAdapter struct {
+	p *whatsapp.Provider
+}
+
+// MessagingAnalytics implements appmetaanalytics.MetaAnalyticsProvider.
+func (a whatsappMetaAnalyticsAdapter) MessagingAnalytics(ctx context.Context, wabaID string, req appmetaanalytics.MessagingAnalyticsRequest) (appmetaanalytics.MessagingAnalyticsResponse, error) {
+	out, err := a.p.MessagingAnalytics(ctx, wabaID, whatsapp.MessagingAnalyticsRequest{
+		Start:        req.Start,
+		End:          req.End,
+		Granularity:  req.Granularity,
+		PhoneNumbers: req.PhoneNumbers,
+		ProductTypes: req.ProductTypes,
+		CountryCodes: req.CountryCodes,
+	})
+	if err != nil {
+		return appmetaanalytics.MessagingAnalyticsResponse{}, err
+	}
+	pts := make([]appmetaanalytics.MessagingAnalyticsDataPoint, 0, len(out.Analytics.DataPoints))
+	for _, dp := range out.Analytics.DataPoints {
+		pts = append(pts, appmetaanalytics.MessagingAnalyticsDataPoint{
+			Start: dp.Start, End: dp.End, Sent: dp.Sent, Delivered: dp.Delivered,
+		})
+	}
+	return appmetaanalytics.MessagingAnalyticsResponse{
+		Analytics: appmetaanalytics.MessagingAnalyticsPayload{
+			PhoneNumbers: out.Analytics.PhoneNumbers,
+			CountryCodes: out.Analytics.CountryCodes,
+			Granularity:  out.Analytics.Granularity,
+			DataPoints:   pts,
+		},
+		ID: out.ID,
+	}, nil
+}
+
+// ConversationAnalytics implements appmetaanalytics.MetaAnalyticsProvider.
+func (a whatsappMetaAnalyticsAdapter) ConversationAnalytics(ctx context.Context, wabaID string, req appmetaanalytics.ConversationAnalyticsRequest) (appmetaanalytics.ConversationAnalyticsResponse, error) {
+	out, err := a.p.ConversationAnalytics(ctx, wabaID, whatsapp.ConversationAnalyticsRequest{
+		Start:                  req.Start,
+		End:                    req.End,
+		Granularity:            req.Granularity,
+		PhoneNumbers:           req.PhoneNumbers,
+		MetricTypes:            req.MetricTypes,
+		ConversationCategories: req.ConversationCategories,
+		ConversationTypes:      req.ConversationTypes,
+		ConversationDirections: req.ConversationDirections,
+		Dimensions:             req.Dimensions,
+		CountryCodes:           req.CountryCodes,
+	})
+	if err != nil {
+		return appmetaanalytics.ConversationAnalyticsResponse{}, err
+	}
+	data := make([]appmetaanalytics.ConversationAnalyticsData, 0, len(out.ConversationAnalytics.Data))
+	for _, d := range out.ConversationAnalytics.Data {
+		pts := make([]appmetaanalytics.ConversationAnalyticsDataPoint, 0, len(d.DataPoints))
+		for _, dp := range d.DataPoints {
+			pts = append(pts, appmetaanalytics.ConversationAnalyticsDataPoint{
+				Start:                 dp.Start,
+				End:                   dp.End,
+				Conversation:          dp.Conversation,
+				PhoneNumber:           dp.PhoneNumber,
+				Country:               dp.Country,
+				ConversationType:      dp.ConversationType,
+				ConversationDirection: dp.ConversationDirection,
+				ConversationCategory:  dp.ConversationCategory,
+				Cost:                  dp.Cost,
+			})
+		}
+		data = append(data, appmetaanalytics.ConversationAnalyticsData{DataPoints: pts})
+	}
+	return appmetaanalytics.ConversationAnalyticsResponse{
+		ConversationAnalytics: appmetaanalytics.ConversationAnalyticsPayload{Data: data},
+		ID:                    out.ID,
+	}, nil
+}
+
+// PricingAnalytics implements appmetaanalytics.MetaAnalyticsProvider.
+func (a whatsappMetaAnalyticsAdapter) PricingAnalytics(ctx context.Context, wabaID string, req appmetaanalytics.PricingAnalyticsRequest) (appmetaanalytics.PricingAnalyticsResponse, error) {
+	out, err := a.p.PricingAnalytics(ctx, wabaID, whatsapp.PricingAnalyticsRequest{
+		Start:             req.Start,
+		End:               req.End,
+		Granularity:       req.Granularity,
+		PhoneNumbers:      req.PhoneNumbers,
+		CountryCodes:      req.CountryCodes,
+		MetricTypes:       req.MetricTypes,
+		PricingTypes:      req.PricingTypes,
+		PricingCategories: req.PricingCategories,
+		Dimensions:        req.Dimensions,
+	})
+	if err != nil {
+		return appmetaanalytics.PricingAnalyticsResponse{}, err
+	}
+	data := make([]appmetaanalytics.PricingAnalyticsData, 0, len(out.PricingAnalytics.Data))
+	for _, d := range out.PricingAnalytics.Data {
+		pts := make([]appmetaanalytics.PricingAnalyticsDataPoint, 0, len(d.DataPoints))
+		for _, dp := range d.DataPoints {
+			pts = append(pts, appmetaanalytics.PricingAnalyticsDataPoint{
+				Start:           dp.Start,
+				End:             dp.End,
+				Country:         dp.Country,
+				PhoneNumber:     dp.PhoneNumber,
+				Tier:            dp.Tier,
+				PricingType:     dp.PricingType,
+				PricingCategory: dp.PricingCategory,
+				Volume:          dp.Volume,
+				Cost:            dp.Cost,
+			})
+		}
+		data = append(data, appmetaanalytics.PricingAnalyticsData{DataPoints: pts})
+	}
+	return appmetaanalytics.PricingAnalyticsResponse{
+		PricingAnalytics: appmetaanalytics.PricingAnalyticsPayload{Data: data},
+		ID:               out.ID,
+	}, nil
+}
+
+// CallAnalytics implements appmetaanalytics.MetaAnalyticsProvider.
+func (a whatsappMetaAnalyticsAdapter) CallAnalytics(ctx context.Context, wabaID string, req appmetaanalytics.CallAnalyticsRequest) (appmetaanalytics.CallAnalyticsResponse, error) {
+	out, err := a.p.CallAnalyticsMeta(ctx, wabaID, whatsapp.CallAnalyticsMetaRequest{
+		Start:        req.Start,
+		End:          req.End,
+		Granularity:  req.Granularity,
+		PhoneNumbers: req.PhoneNumbers,
+		CountryCodes: req.CountryCodes,
+		Directions:   req.Directions,
+		Dimensions:   req.Dimensions,
+		MetricTypes:  req.MetricTypes,
+	})
+	if err != nil {
+		return appmetaanalytics.CallAnalyticsResponse{}, err
+	}
+	pts := make([]appmetaanalytics.CallAnalyticsDataPoint, 0, len(out.CallAnalytics.DataPoints))
+	for _, dp := range out.CallAnalytics.DataPoints {
+		pts = append(pts, appmetaanalytics.CallAnalyticsDataPoint{
+			Start:           dp.Start,
+			End:             dp.End,
+			Count:           dp.Count,
+			Cost:            dp.Cost,
+			AverageDuration: dp.AverageDuration,
+			PhoneNumber:     dp.PhoneNumber,
+			Country:         dp.Country,
+			Direction:       dp.Direction,
+		})
+	}
+	return appmetaanalytics.CallAnalyticsResponse{
+		CallAnalytics: appmetaanalytics.CallAnalyticsPayload{
+			Granularity: out.CallAnalytics.Granularity,
+			DataPoints:  pts,
+		},
+		ID: out.ID,
+	}, nil
+}
+
+// TemplateAnalytics implements appmetaanalytics.MetaAnalyticsProvider.
+func (a whatsappMetaAnalyticsAdapter) TemplateAnalytics(ctx context.Context, wabaID string, req appmetaanalytics.TemplateAnalyticsRequest) (appmetaanalytics.TemplateAnalyticsResponse, error) {
+	out, err := a.p.TemplateAnalytics(ctx, wabaID, whatsapp.TemplateAnalyticsRequest{
+		Start:           req.Start,
+		End:             req.End,
+		Granularity:     req.Granularity,
+		TemplateIDs:     req.TemplateIDs,
+		MetricTypes:     req.MetricTypes,
+		ProductType:     req.ProductType,
+		UseWABATimezone: req.UseWABATimezone,
+	})
+	if err != nil {
+		return appmetaanalytics.TemplateAnalyticsResponse{}, err
+	}
+	buckets := make([]appmetaanalytics.TemplateAnalyticsBucket, 0, len(out.Data))
+	for _, b := range out.Data {
+		pts := make([]appmetaanalytics.TemplateAnalyticsDataPoint, 0, len(b.DataPoints))
+		for _, dp := range b.DataPoints {
+			clicks := make([]appmetaanalytics.TemplateAnalyticsClick, 0, len(dp.Clicked))
+			for _, c := range dp.Clicked {
+				clicks = append(clicks, appmetaanalytics.TemplateAnalyticsClick{
+					Type: c.Type, ButtonContent: c.ButtonContent, Count: c.Count,
+				})
+			}
+			costs := make([]appmetaanalytics.TemplateAnalyticsCost, 0, len(dp.Cost))
+			for _, c := range dp.Cost {
+				costs = append(costs, appmetaanalytics.TemplateAnalyticsCost{Type: c.Type, Value: c.Value})
+			}
+			pts = append(pts, appmetaanalytics.TemplateAnalyticsDataPoint{
+				TemplateID: dp.TemplateID,
+				Start:      dp.Start,
+				End:        dp.End,
+				Sent:       dp.Sent,
+				Delivered:  dp.Delivered,
+				Read:       dp.Read,
+				Clicked:    clicks,
+				Cost:       costs,
+			})
+		}
+		buckets = append(buckets, appmetaanalytics.TemplateAnalyticsBucket{
+			WABATimezone: b.WABATimezone,
+			Granularity:  b.Granularity,
+			ProductType:  b.ProductType,
+			DataPoints:   pts,
+		})
+	}
+	resp := appmetaanalytics.TemplateAnalyticsResponse{Data: buckets}
+	if out.Paging != nil {
+		p := &appmetaanalytics.TemplateAnalyticsPaging{}
+		p.Cursors.Before = out.Paging.Cursors.Before
+		p.Cursors.After = out.Paging.Cursors.After
+		resp.Paging = p
+	}
+	return resp, nil
 }
 
 // integrationSettingsResolverFunc adapts a closure into
