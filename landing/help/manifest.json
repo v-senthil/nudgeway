@@ -1,0 +1,121 @@
+{
+  "$schema": "manifest schema — consumed by landing/help.html to build the sidebar TOC and route hash URLs (#/module/page).",
+  "modules": [
+    {
+      "id": "getting-started",
+      "title": "Getting started",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "install-services", "title": "Install services (native)" },
+        { "id": "docker-compose", "title": "Docker Compose" },
+        { "id": "apple-containers", "title": "Apple Containers (macOS 26+)" },
+        { "id": "first-run", "title": "First run — org + admin + first message" }
+      ]
+    },
+    {
+      "id": "inbox",
+      "title": "Inbox",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "conversations", "title": "Conversation list" },
+        { "id": "send-text", "title": "Send a text message" },
+        { "id": "send-media", "title": "Send media (image / video / document)" },
+        { "id": "send-template", "title": "Send a template message" },
+        { "id": "mark-read", "title": "Mark messages as read" },
+        { "id": "troubleshooting", "title": "Troubleshooting" }
+      ]
+    },
+    {
+      "id": "templates",
+      "title": "Templates",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "create", "title": "Create a template" },
+        { "id": "submit-for-review", "title": "Submit for Meta review" },
+        { "id": "sync-from-meta", "title": "Sync status from Meta" },
+        { "id": "troubleshooting", "title": "Troubleshooting" }
+      ]
+    },
+    {
+      "id": "calls",
+      "title": "Calls",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "inbound-call", "title": "Inbound calls (popup + WebRTC accept)" },
+        { "id": "outbound-call", "title": "Outbound calls" },
+        { "id": "call-permissions", "title": "Call permissions" },
+        { "id": "recording-transcript", "title": "Recording + transcript" },
+        { "id": "troubleshooting", "title": "Troubleshooting" }
+      ]
+    },
+    {
+      "id": "groups",
+      "title": "Groups",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "list-sync", "title": "List + sync groups" },
+        { "id": "send-to-group", "title": "Send to a group" },
+        { "id": "troubleshooting", "title": "Troubleshooting" }
+      ]
+    },
+    {
+      "id": "analytics",
+      "title": "Analytics",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "nudgeway-tab", "title": "Nudgeway tab (local KPIs)" },
+        { "id": "meta-analytics-tab", "title": "Meta Analytics tab (WABA proxy)" },
+        { "id": "troubleshooting", "title": "Troubleshooting" }
+      ]
+    },
+    {
+      "id": "integrations",
+      "title": "Integrations",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "connect-whatsapp", "title": "Connect a WhatsApp integration" },
+        { "id": "test-connection", "title": "Test the connection" },
+        { "id": "webhook-setup", "title": "Push webhook to Meta" },
+        { "id": "business-profile", "title": "Business profile" },
+        { "id": "call-settings", "title": "Call settings" },
+        { "id": "oba-status", "title": "Official Business Account (OBA)" },
+        { "id": "business-username", "title": "Business username" },
+        { "id": "phone-number-details", "title": "Phone number details + QR" },
+        { "id": "delete-integration", "title": "Delete an integration" }
+      ]
+    },
+    {
+      "id": "api-tokens",
+      "title": "API tokens",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "create-token", "title": "Create a token" },
+        { "id": "revoke-token", "title": "Revoke a token" },
+        { "id": "usage-log-metrics", "title": "Usage log + metrics" },
+        { "id": "troubleshooting", "title": "Troubleshooting" }
+      ]
+    },
+    {
+      "id": "audit-telemetry",
+      "title": "Audit & Meta telemetry",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "audit-log", "title": "Audit log" },
+        { "id": "provider-calls", "title": "Meta API execution log" }
+      ]
+    },
+    {
+      "id": "developer",
+      "title": "Developer",
+      "pages": [
+        { "id": "overview", "title": "Overview" },
+        { "id": "rest-api", "title": "REST API" },
+        { "id": "openapi", "title": "OpenAPI spec" },
+        { "id": "mcp-server", "title": "MCP server" },
+        { "id": "claude-desktop", "title": "Claude Desktop setup" },
+        { "id": "skills", "title": "Skills library" },
+        { "id": "cli", "title": "CLI (nudgeway-cli)" }
+      ]
+    }
+  ]
+}

@@ -6,6 +6,7 @@ on:
     paths:
       - "landing/**"
       - "internal/api/openapi/openapi.yaml"
+      - "docs/help/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -28,6 +29,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Refresh OpenAPI mirror
         run: cp internal/api/openapi/openapi.yaml landing/openapi.yaml
+      - name: Mirror help center content
+        run: |
+          rm -rf landing/help
+          mkdir -p landing/help
+          cp -R docs/help/. landing/help/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
