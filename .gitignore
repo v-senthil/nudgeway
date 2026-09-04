@@ -51,3 +51,6 @@ test-results/
 
 # generated (kept in tree only when explicitly checked in)
 internal/infrastructure/mysql/gen/*.tmp
+
+# Claude Code runtime lock files
+.claude/
