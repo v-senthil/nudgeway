@@ -25,8 +25,12 @@ import (
 
 	"github.com/oklog/ulid/v2"
 
+	"github.com/tsuna/gohbase"
+
 	v1 "github.com/fullwa/fullwa/internal/api/rest/v1"
 	"github.com/fullwa/fullwa/internal/infrastructure/attachments"
+	fhbase "github.com/fullwa/fullwa/internal/infrastructure/hbase"
+	attachmentsPort "github.com/fullwa/fullwa/internal/ports/attachments"
 	appauth "github.com/fullwa/fullwa/internal/application/auth"
 	appintegration "github.com/fullwa/fullwa/internal/application/integration"
 	appmsg "github.com/fullwa/fullwa/internal/application/message"
@@ -165,16 +169,51 @@ func run() error {
 	// --- Metrics ------------------------------------------------------------
 	m := fmetrics.New()
 
-	// --- Attachment store (local filesystem; dev impl of attachments.Store) -
-	attachRoot := cfg.Attachments.Root
-	if attachRoot == "" {
-		attachRoot = "./attachments"
+	// --- Attachment store: prefer HBase; fall back to local FS -------------
+	var attachStore attachmentsPort.Store
+	var hbClient gohbase.Client
+	if len(cfg.HBase.ZookeeperQuorum) > 0 {
+		zkNode := cfg.HBase.ZNodeParent
+		if zkNode == "" {
+			zkNode = "/hbase"
+		}
+		// gohbase's CreateTable RPC doesn't split "namespace:table" the way
+		// HBase server expects, so use the default namespace for now with a
+		// prefixed table name. Real namespaces need shell pre-creation +
+		// gohbase upgrade or a raw admin call.
+		ns := ""
+		tbl := "fullwa_attachments"
+		client, admin, hErr := fhbase.NewClient(cfg.HBase.ZookeeperQuorum, zkNode)
+		if hErr != nil {
+			logger.Warn("hbase connect failed; falling back to local FS attachments", slog.Any("err", hErr))
+		} else {
+			schemaCtx, schemaCancel := context.WithTimeout(ctx, 15*time.Second)
+			if err := fhbase.EnsureSchema(schemaCtx, admin, ns, tbl); err != nil {
+				logger.Warn("hbase schema ensure failed; falling back to local FS attachments", slog.Any("err", err))
+			} else {
+				fq := tbl
+				if ns != "" {
+					fq = ns + ":" + tbl
+				}
+				attachStore = fhbase.NewAttachments(client, fq)
+				hbClient = client
+				logger.Info("hbase attachments ready", slog.String("table", fq))
+			}
+			schemaCancel()
+		}
 	}
-	attachStore, err := attachments.New(attachments.Config{Root: attachRoot})
-	if err != nil {
-		return fmt.Errorf("attachments: %w", err)
+	if attachStore == nil {
+		attachRoot := cfg.Attachments.Root
+		if attachRoot == "" {
+			attachRoot = "./attachments"
+		}
+		lfs, err := attachments.New(attachments.Config{Root: attachRoot})
+		if err != nil {
+			return fmt.Errorf("attachments: %w", err)
+		}
+		attachStore = lfs
+		logger.Info("attachment store (localfs) ready", slog.String("root", attachRoot))
 	}
-	logger.Info("attachment store ready", slog.String("root", attachRoot))
 
 	// --- In-proc event bus + WebSocket hub ---------------------------------
 	inproc := events.NewInProc()
@@ -468,6 +507,9 @@ func run() error {
 	}
 	if kClient != nil {
 		fkafka.Close(kClient)
+	}
+	if hbClient != nil {
+		fhbase.Close(hbClient)
 	}
 	if err := rdb.Close(); err != nil {
 		logger.Error("redis close", slog.Any("err", err))

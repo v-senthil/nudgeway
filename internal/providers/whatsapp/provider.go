@@ -136,6 +136,32 @@ func (p *Provider) DownloadMedia(ctx context.Context, mediaID string) (io.ReadCl
 	return body, ctype, nil
 }
 
+// UploadMedia uploads the raw bytes of a media asset to Meta and returns
+// the opaque media_id the outbound send API expects under {"id": "..."}.
+// This is the preferred outbound path — a media_id skips the "resolvable
+// URL" contract Meta imposes on the {"link": "..."} variant.
+//
+// contentType is the MIME type of the blob (e.g. "image/jpeg"). filename
+// is optional metadata carried in the multipart body — Meta ignores it
+// for most types but uses it as the document filename when type=document
+// and no caption filename is supplied at send time.
+//
+// Reference: business-phone-numbers/media.md.
+func (p *Provider) UploadMedia(ctx context.Context, contentType, filename string, r io.Reader) (string, error) {
+	if contentType == "" {
+		return "", fmt.Errorf("whatsapp: UploadMedia: contentType required")
+	}
+	id, err := p.client.uploadMedia(ctx, contentType, filename, r)
+	if err != nil {
+		if apiErr := AsAPIError(err); apiErr != nil && apiErr.Class == ClassAuth {
+			p.healthy.Store(false)
+		}
+		return "", err
+	}
+	p.healthy.Store(true)
+	return id, nil
+}
+
 // DownloadMediaByURL streams bytes from a URL Meta already gave us in the
 // webhook envelope (image/video/audio/document/sticker `url` field). It
 // skips the /v20.0/{media_id} lookup step — the URL is already signed +
