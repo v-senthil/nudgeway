@@ -56,23 +56,25 @@ func (h *metaAnalyticsHandler) pathIntegrationID(w http.ResponseWriter, r *http.
 	return id, true
 }
 
-// parseTimeRange parses `since` / `until` (RFC 3339) query params into
-// UNIX seconds. Both are required.
+// parseTimeRange parses `since` / `until` query params into UNIX
+// seconds. Accepts either full RFC 3339 timestamps or bare YYYY-MM-DD
+// dates (interpreted as UTC midnight); the latter is what the analytics
+// UI's date pickers naturally emit. Both params are required.
 func (h *metaAnalyticsHandler) parseTimeRange(w http.ResponseWriter, r *http.Request) (int64, int64, bool) {
 	sinceRaw := r.URL.Query().Get("since")
 	untilRaw := r.URL.Query().Get("until")
 	if sinceRaw == "" || untilRaw == "" {
-		writeProblem(w, r, http.StatusBadRequest, "validation", "since and until are required (RFC3339)")
+		writeProblem(w, r, http.StatusBadRequest, "validation", "since and until are required (YYYY-MM-DD or RFC3339)")
 		return 0, 0, false
 	}
-	since, err := time.Parse(time.RFC3339, sinceRaw)
-	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "validation", "since must be RFC3339")
+	since, ok := parseFlexibleDate(sinceRaw, false)
+	if !ok {
+		writeProblem(w, r, http.StatusBadRequest, "validation", "since must be YYYY-MM-DD or RFC3339")
 		return 0, 0, false
 	}
-	until, err := time.Parse(time.RFC3339, untilRaw)
-	if err != nil {
-		writeProblem(w, r, http.StatusBadRequest, "validation", "until must be RFC3339")
+	until, ok := parseFlexibleDate(untilRaw, true)
+	if !ok {
+		writeProblem(w, r, http.StatusBadRequest, "validation", "until must be YYYY-MM-DD or RFC3339")
 		return 0, 0, false
 	}
 	if !until.After(since) {
@@ -80,6 +82,23 @@ func (h *metaAnalyticsHandler) parseTimeRange(w http.ResponseWriter, r *http.Req
 		return 0, 0, false
 	}
 	return since.Unix(), until.Unix(), true
+}
+
+// parseFlexibleDate accepts full RFC 3339 (`2026-09-05T12:34:56Z`) or
+// bare `YYYY-MM-DD`. Bare dates go UTC midnight; when `endOfDay` is
+// true they resolve to 23:59:59 so an inclusive `since=X&until=X`
+// still spans that day.
+func parseFlexibleDate(raw string, endOfDay bool) (time.Time, bool) {
+	if t, err := time.Parse(time.RFC3339, raw); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse("2006-01-02", raw); err == nil {
+		if endOfDay {
+			return t.Add(24*time.Hour - time.Second), true
+		}
+		return t, true
+	}
+	return time.Time{}, false
 }
 
 // granularity reads the `granularity` query param with a sensible
