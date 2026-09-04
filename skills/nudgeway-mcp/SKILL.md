@@ -28,28 +28,49 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "/absolute/path/to/nudgeway/bin/nudgeway-mcp",
       "env": {
         "NUDGEWAY_API_URL": "http://127.0.0.1:8080",
-        "NUDGEWAY_SESSION_COOKIE": "<value of nudgeway_session cookie>",
-        "NUDGEWAY_CSRF_TOKEN": "<value of nudgeway_csrf cookie>"
+        "NUDGEWAY_API_TOKEN": "nk_abcd1234_<40-char-secret>"
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. All 23 (and growing) Nudgeway tools appear in the MCP menu.
+Restart Claude Desktop. All Nudgeway tools appear in the MCP menu. On startup the server logs the active auth mode to stderr, e.g. `nudgeway-mcp: base=http://127.0.0.1:8080 auth=api-token tools=23`.
 
-## Extracting the session cookie
+## Authentication
+
+Two modes; **prefer API tokens** unless you're doing throwaway local poking.
+
+### API tokens (recommended)
+
+Plaintext shape: `nk_<8-char-prefix>_<40-char-secret>` (base32). Sent as `Authorization: Bearer <token>`. No CSRF header required — the backend's bearer middleware skips the double-submit check.
+
+Mint one:
+
+- **UI**: `/settings/api-tokens` → *New token*. Copy the plaintext once; it's `argon2id`-hashed at rest and won't be shown again.
+- **MCP tool**: `createAPIToken` with body `{"name": "…", "expires_at": "…"}` — the response returns the plaintext `token` field one time. Companion tools: `listAPITokens`, `revokeAPIToken`.
+
+Then:
+
+```bash
+export NUDGEWAY_API_TOKEN=nk_abcd1234_<40-char-secret>
+./bin/nudgeway-mcp
+```
+
+### Session cookie (fallback for local dev)
+
+Only use when you don't have a token minted yet.
 
 1. Log into Nudgeway in your browser (http://localhost:5173).
 2. DevTools → Application → Cookies → `http://localhost:5173`.
 3. Copy the `nudgeway_session` value into `NUDGEWAY_SESSION_COOKIE`.
-4. Copy the `nudgeway_csrf` value into `NUDGEWAY_CSRF_TOKEN`.
+4. Copy the `nudgeway_csrf` value into `NUDGEWAY_CSRF_TOKEN` (required for POST/PUT/PATCH/DELETE).
 
-Cookies are 30-day sliding; refresh the values when they expire.
+Cookies are 30-day sliding; refresh when they expire. If `NUDGEWAY_API_TOKEN` is also set, cookie values are ignored.
 
 ## Tool naming
 
-Tools match OpenAPI `operationId` verbatim. E.g. `listIntegrations`, `postMessagesSend`, `testIntegration`. If you can't find a tool, run `./bin/nudgeway-mcp --list-tools | jq '.[].name'` to enumerate.
+Tools match OpenAPI `operationId` verbatim. E.g. `listIntegrations`, `postMessagesSend`, `testIntegration`, `createAPIToken`, `listAPITokens`, `revokeAPIToken`. If you can't find a tool, run `./bin/nudgeway-mcp --list-tools | jq '.[].name'` to enumerate.
 
 ## MCP methods implemented
 
@@ -63,8 +84,9 @@ Tools match OpenAPI `operationId` verbatim. E.g. `listIntegrations`, `postMessag
 
 ## Gotchas
 
-- **Auth is session-cookie based**. There is no API-key surface yet. Any credential rotation requires re-logging-in and re-extracting the cookies.
-- **CSRF is double-submit**. The forwarder sets both `X-CSRF-Token` header AND the `nudgeway_csrf` cookie on state-changing methods — matching the backend's expectation (`internal/infrastructure/auth/csrf.go`).
+- **API token wins over session cookie.** If both `NUDGEWAY_API_TOKEN` and `NUDGEWAY_SESSION_COOKIE` are set, the forwarder uses the token and drops the cookie entirely. Also drops CSRF — the bearer middleware doesn't require it.
+- **Plaintext token is shown once.** Lost tokens are unrecoverable; revoke and mint a new one via `/settings/api-tokens` or the `createAPIToken` MCP tool.
+- **CSRF still applies to the cookie fallback.** When you're on `NUDGEWAY_SESSION_COOKIE`, the forwarder sets both `X-CSRF-Token` and the `nudgeway_csrf` cookie on state-changing methods — matching the backend's expectation (`internal/infrastructure/auth/csrf.go`).
 - **The MCP server does not embed the REST server**. It forwards over HTTP to a running Nudgeway process; if the server is down the tools return connection errors.
 - **New endpoints auto-appear** after a `make mcp` rebuild — no manual tool registration. See CLAUDE.md §8 for the OpenAPI → REST → MCP change flow.
 

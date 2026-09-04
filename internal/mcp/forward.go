@@ -14,19 +14,46 @@ import (
 
 // Forwarder turns an MCP tool-call payload into an HTTP request against the
 // Nudgeway REST API and returns the response body plus status information.
+//
+// Auth precedence: when APIToken is non-empty, requests are sent with an
+// `Authorization: Bearer <token>` header and no session cookie or CSRF
+// header is attached — the backend's bearer middleware accepts the request
+// without CSRF. When APIToken is empty, the forwarder falls back to the
+// session-cookie + CSRF double-submit path.
 type Forwarder struct {
 	// BaseURL is the origin of the running Nudgeway server (e.g.
 	// http://127.0.0.1:8080). It should not include a trailing slash.
 	BaseURL string
+	// APIToken is a Nudgeway API token in the plaintext shape
+	// `nk_<8-char-prefix>_<40-char-secret>`. When set, it takes precedence
+	// over SessionCookie/CSRFToken and is sent as
+	// `Authorization: Bearer <token>` on every request.
+	APIToken string
 	// SessionCookie is the value of the `nudgeway_session` cookie captured
-	// from the browser after login.
+	// from the browser after login. Used only when APIToken is empty.
 	SessionCookie string
-	// CSRFToken is the CSRF double-submit token. When non-empty it is sent
-	// as both an `X-CSRF-Token` header and a `nudgeway_csrf` cookie on
-	// state-changing methods (POST, PUT, PATCH, DELETE).
+	// CSRFToken is the CSRF double-submit token. When non-empty (and
+	// APIToken is empty) it is sent as both an `X-CSRF-Token` header and a
+	// `nudgeway_csrf` cookie on state-changing methods
+	// (POST, PUT, PATCH, DELETE).
 	CSRFToken string
 	// HTTPClient overrides the default client. Optional.
 	HTTPClient *http.Client
+}
+
+// AuthMode returns a human-readable label for the auth mode the forwarder
+// is configured to use. Useful for startup logging.
+func (f *Forwarder) AuthMode() string {
+	if f == nil {
+		return "none"
+	}
+	if f.APIToken != "" {
+		return "api-token"
+	}
+	if f.SessionCookie != "" {
+		return "session-cookie"
+	}
+	return "none"
 }
 
 // stateChangingMethods lists HTTP verbs that require CSRF protection.
@@ -121,14 +148,21 @@ func (f *Forwarder) Forward(ctx context.Context, tool Tool, args map[string]any)
 	req.Header.Set("Accept", "application/json, application/problem+json, text/plain")
 	req.Header.Set("User-Agent", "nudgeway-mcp/0.1")
 
-	// Attach the session cookie if provided.
-	if f.SessionCookie != "" {
-		req.AddCookie(&http.Cookie{Name: "nudgeway_session", Value: f.SessionCookie})
-	}
-	// Attach CSRF for state-changing methods.
-	if f.CSRFToken != "" && stateChangingMethods[tool.Method] {
-		req.Header.Set("X-CSRF-Token", f.CSRFToken)
-		req.AddCookie(&http.Cookie{Name: "nudgeway_csrf", Value: f.CSRFToken})
+	// Auth: bearer token wins outright. When set, we skip session cookies
+	// AND CSRF — the backend's bearer middleware accepts the request
+	// without a CSRF double-submit.
+	switch {
+	case f.APIToken != "":
+		req.Header.Set("Authorization", "Bearer "+f.APIToken)
+	default:
+		// Fallback: session cookie + CSRF double-submit (local-dev path).
+		if f.SessionCookie != "" {
+			req.AddCookie(&http.Cookie{Name: "nudgeway_session", Value: f.SessionCookie})
+		}
+		if f.CSRFToken != "" && stateChangingMethods[tool.Method] {
+			req.Header.Set("X-CSRF-Token", f.CSRFToken)
+			req.AddCookie(&http.Cookie{Name: "nudgeway_csrf", Value: f.CSRFToken})
+		}
 	}
 
 	client := f.HTTPClient

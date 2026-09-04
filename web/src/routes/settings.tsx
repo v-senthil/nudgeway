@@ -15,7 +15,7 @@ const sections: Array<{ label: string; to?: string; disabled?: boolean }> = [
   { label: 'Audit log', to: '/settings/audit' },
   { label: 'Meta API logs', to: '/settings/provider-calls' },
   { label: 'Billing', disabled: true },
-  { label: 'API keys', disabled: true },
+  { label: 'API tokens', to: '/settings/api-tokens' },
 ];
 
 function SettingsShell() {

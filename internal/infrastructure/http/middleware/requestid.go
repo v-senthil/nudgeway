@@ -16,6 +16,13 @@ const (
 	ctxUserID
 	ctxOrgID
 	ctxPermissions
+	// ctxBearer marks a request as bearer-authenticated (API token in
+	// Authorization header). Requests carrying this flag skip CSRF —
+	// bearer tokens are not cookie-replay-vulnerable.
+	ctxBearer
+	// ctxAPITokenID carries the api_tokens ULID of the current bearer
+	// principal, when ctxBearer is set.
+	ctxAPITokenID
 )
 
 // HeaderRequestID is the response header carrying the request ID back to callers.

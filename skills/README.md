@@ -23,6 +23,7 @@ Skills are per-domain playbooks that describe *what an LLM can do with Nudgeway*
 | [`nudgeway-templates`](nudgeway-templates/SKILL.md) | WhatsApp message templates — CRUD + Meta sync | Templates surface (see skill) |
 | [`nudgeway-calls`](nudgeway-calls/SKILL.md) | Call flow — inbound popup, recording, transcript | Calls surface (see skill) |
 | [`nudgeway-analytics`](nudgeway-analytics/SKILL.md) | KPI cards + sparklines — messages / delivery rate / calls | Analytics surface (see skill) |
+| [`nudgeway-api-tokens`](nudgeway-api-tokens/SKILL.md) | API tokens — mint / list / revoke bearer credentials for MCP + scripted access | `createAPIToken`, `listAPITokens`, `revokeAPIToken` |
 | [`nudgeway-mcp`](nudgeway-mcp/SKILL.md) | Meta-skill — how to bring up the MCP server + wire it into a client | `./bin/nudgeway-mcp` |
 
 ## Anatomy of a skill file
@@ -53,7 +54,7 @@ trigger: <when the user's ask matches this skill>
 ## Golden rules (apply to every skill)
 
 1. **Multi-tenant**. Every write is org-scoped by the caller's session — never trust an `organization_id` from the client.
-2. **CSRF**. State-changing calls (`POST`, `PUT`, `DELETE`) require the `X-CSRF-Token` header matching the `nudgeway_csrf` cookie. The MCP forwarder handles this automatically when `NUDGEWAY_CSRF_TOKEN` is set.
+2. **CSRF**. Session-cookie state-changing calls (`POST`, `PUT`, `DELETE`) require the `X-CSRF-Token` header matching the `nudgeway_csrf` cookie. The MCP forwarder handles this automatically when `NUDGEWAY_CSRF_TOKEN` is set. **API-token requests skip CSRF** — the backend's bearer middleware accepts state-changing calls without a double-submit.
 3. **Idempotency**. Send-message accepts a `client_reference_id`; reuse it to avoid duplicate sends on retry.
 4. **RBAC**. Every route checks a per-permission gate — `integrations.manage`, `messages.send`, `calls.read`, etc. Requests without the permission return 403.
 5. **Audit trail**. Every mutation writes an `AuditLog` row visible at `/settings/audit` and via `getAuditLogs`.

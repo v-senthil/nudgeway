@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Nudgeway API
-  version: 0.2.4-phase2
+  version: 0.2.5-phase2
   summary: Multi-tenant customer communication platform API.
   description: |
     Every request is scoped to an organization determined from the
@@ -34,6 +34,8 @@ tags:
     description: Operator-facing execution log of every outbound HTTP call the provider adapters make.
   - name: audit
     description: Append-only audit trail of tenant mutations.
+  - name: api-tokens
+    description: Long-lived programmatic-access tokens for MCP / CI / scripts.
 
 paths:
   /healthz:
@@ -954,6 +956,103 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /api/v1/api-tokens:
+    get:
+      tags: [api-tokens]
+      operationId: listAPITokens
+      summary: List API tokens for the current organization.
+      description: |
+        Returns every long-lived API token owned by the caller's org,
+        newest-first. Revoked tokens are included — the UI badges them
+        separately. The plaintext secret is NEVER returned; only the
+        indexed prefix and metadata.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      responses:
+        '200':
+          description: A list of API tokens.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/APITokenList' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    post:
+      tags: [api-tokens]
+      operationId: createAPIToken
+      summary: Mint a new API token.
+      description: |
+        Creates a long-lived API token bound to the caller's (org, user).
+        The `plaintext` field of the response is the ONLY time the full
+        token (`nk_<prefix>_<secret>`) is ever returned — store it
+        immediately in a password manager or secret vault. Only the
+        prefix and an argon2id hash of the secret are persisted server-
+        side; losing the plaintext requires minting a replacement.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAPITokenRequest' }
+      responses:
+        '201':
+          description: Token minted. Response contains the plaintext (shown once).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CreateAPITokenResponse' }
+        '400':
+          description: Malformed request body.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422':
+          description: Validation failed (name required, name too long, bad expiry).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/api-tokens/{id}:
+    delete:
+      tags: [api-tokens]
+      operationId: revokeAPIToken
+      summary: Revoke an API token.
+      description: |
+        Marks the token as revoked. Subsequent bearer requests presenting
+        this token are rejected as unauthenticated. Idempotent — revoking
+        an already-revoked token succeeds.
+      security:
+        - sessionCookie: []
+        - apiKey: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: ULID of the api_tokens row to revoke.
+      responses:
+        '204':
+          description: Revoked.
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '404':
+          description: No matching token in the caller's org.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1485,6 +1584,99 @@ components:
         next_cursor:
           type: string
           description: Opaque token to echo back as `cursor` on the next request; absent when the caller reached the end.
+
+    APIToken:
+      type: object
+      description: Safe list-view projection of an API token. NEVER includes plaintext or hash.
+      required: [id, name, prefix, created_at]
+      properties:
+        id:
+          type: string
+          description: ULID of the api_tokens row.
+        name:
+          type: string
+          description: Human-friendly label, chosen by the caller at create time.
+          maxLength: 120
+        prefix:
+          type: string
+          description: 8-character plaintext prefix, safe to log. Uniquely identifies the token in listings.
+          minLength: 8
+          maxLength: 8
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of the most recent successful bearer verify. Best-effort — updated asynchronously.
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiry — after this instant the token is rejected as invalid.
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When set, the token is permanently invalid.
+
+    APITokenList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/APIToken' }
+
+    CreateAPITokenRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: Human-friendly label (e.g. "mcp server local", "gh actions ci").
+        expires_in_days:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Optional expiry, expressed in days from creation. Omit for a non-expiring token.
+
+    CreateAPITokenResponse:
+      type: object
+      description: |
+        The `plaintext` field is the FULL token (`nk_<prefix>_<secret>`) and
+        is returned exactly once — at creation time. It is never persisted
+        server-side; only the prefix and an argon2id hash of the secret are
+        stored.
+      required: [id, name, prefix, plaintext, created_at]
+      properties:
+        id:
+          type: string
+          description: ULID of the newly-minted api_tokens row.
+        name:
+          type: string
+          maxLength: 120
+        prefix:
+          type: string
+          minLength: 8
+          maxLength: 8
+          description: Indexed plaintext prefix, safe to log.
+        plaintext:
+          type: string
+          description: |
+            Full token (`nk_<prefix>_<secret>`). Store this in a password
+            manager immediately — it will never be shown again.
+          examples: ['nk_abcd1234_efghijklmnopqrstuvwxyz234567abcdefghijklmnop']
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
 
     Problem:
       type: object

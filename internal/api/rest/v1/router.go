@@ -55,6 +55,15 @@ type Deps struct {
 	// endpoints (business profile, call settings, OBA status). Route is
 	// silently omitted when IntegrationSettings.Service is nil.
 	IntegrationSettings IntegrationSettingsDeps
+	// APITokens exposes /api/v1/api-tokens (create/list/revoke long-lived
+	// programmatic-access tokens). Route is silently omitted when
+	// APITokens.Service is nil.
+	APITokens APITokensDeps
+	// BearerVerifier resolves Authorization: Bearer nk_... headers into
+	// a principal. When non-nil, the middleware chain adds a BearerAuth
+	// stage in front of SessionAuth so REST + WS callers can authenticate
+	// with either credential.
+	BearerVerifier middleware.BearerVerifier
 }
 
 // Registrar is the minimal surface Mount needs to install patterns. It is
@@ -82,15 +91,23 @@ func Mount(mux Registrar, deps Deps) {
 	}
 
 	// Base chain applied to every /api/v1/* endpoint.
+	//
+	// When a BearerVerifier is wired, its middleware runs BEFORE the
+	// session-cookie stage. Bearer wins when the header is present +
+	// valid; otherwise the request falls through to the session cookie
+	// path. Either way RequireAuth downstream produces the 401 for
+	// truly unauthenticated callers.
 	base := func(next http.Handler) http.Handler {
+		inner := middleware.SessionAuth(
+			deps.Auth.Sessions, deps.Auth.SessionCookie,
+			slide, deps.PermissionResolver, deps.Logger,
+		)(next)
+		if deps.BearerVerifier != nil {
+			inner = middleware.BearerAuth(deps.BearerVerifier, deps.PermissionResolver, deps.Logger)(inner)
+		}
 		return middleware.RequestID(
 			middleware.Recover(deps.Logger)(
-				middleware.Logger(deps.Logger)(
-					middleware.SessionAuth(
-						deps.Auth.Sessions, deps.Auth.SessionCookie,
-						slide, deps.PermissionResolver, deps.Logger,
-					)(next),
-				),
+				middleware.Logger(deps.Logger)(inner),
 			),
 		)
 	}
@@ -176,6 +193,11 @@ func Mount(mux Registrar, deps Deps) {
 	// /call-settings, /oba-status* (auth + integrations.manage). Silently
 	// omitted when deps.IntegrationSettings.Service is nil.
 	mountIntegrationSettings(mux, base, authed, deps.IntegrationSettings)
+
+	// API tokens — /api/v1/api-tokens* (auth-only; bearer callers
+	// exempt from CSRF via the shared middleware). Silently omitted
+	// when deps.APITokens.Service is nil.
+	mountAPITokens(mux, base, authed, deps.APITokens)
 
 	// /ws/inbox — WebSocket real-time endpoint. Reuses the same session-auth
 	// middleware chain as REST so the upgrade sees a Principal on the

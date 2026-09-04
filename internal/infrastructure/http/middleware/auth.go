@@ -122,11 +122,17 @@ func RequirePermission(p rbac.Permission) func(http.Handler) http.Handler {
 }
 
 // RequireCSRF enforces the double-submit cookie for state-changing methods.
+// Bearer-authenticated requests (Authorization: Bearer nk_...) are exempt:
+// they are not cookie-replay-vulnerable because they carry no cookie.
 func RequireCSRF(cookieName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {
 			case http.MethodGet, http.MethodHead, http.MethodOptions:
+				next.ServeHTTP(w, r)
+				return
+			}
+			if IsBearer(r.Context()) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -137,6 +143,22 @@ func RequireCSRF(cookieName string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// IsBearer reports whether the request was authenticated via an
+// Authorization: Bearer <api-token> header rather than a session cookie.
+// Used to skip CSRF enforcement — bearer callers are not cookie-replay-
+// vulnerable.
+func IsBearer(ctx context.Context) bool {
+	v, _ := ctx.Value(ctxBearer).(bool)
+	return v
+}
+
+// APITokenIDFrom returns the api_tokens ULID of the current bearer
+// principal, or "" if the request was not bearer-authenticated.
+func APITokenIDFrom(ctx context.Context) string {
+	v, _ := ctx.Value(ctxAPITokenID).(string)
+	return v
 }
 
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, title, detail string) {

@@ -8,6 +8,7 @@ import { settingsAuditRoute } from './routes/settings.audit';
 import { settingsProviderCallsRoute } from './routes/settings/provider-calls';
 import { settingsTemplatesRoute } from './routes/settings.templates';
 import { settingsGroupsRoute } from './routes/settings.groups';
+import { settingsAPITokensRoute } from './routes/settings.api-tokens';
 import { callsRoute } from './routes/calls';
 import { analyticsRoute } from './routes/analytics';
 
@@ -32,6 +33,7 @@ const routeTree = rootRoute.addChildren([
     settingsProviderCallsRoute,
     settingsTemplatesRoute,
     settingsGroupsRoute,
+    settingsAPITokensRoute,
   ]),
 ]);
 

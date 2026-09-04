@@ -52,8 +52,7 @@ Add a stanza to `~/Library/Application Support/Claude/claude_desktop_config.json
       "command": "/absolute/path/to/nudgeway/bin/nudgeway-mcp",
       "env": {
         "NUDGEWAY_API_URL": "http://127.0.0.1:8080",
-        "NUDGEWAY_SESSION_COOKIE": "<paste session cookie value>",
-        "NUDGEWAY_CSRF_TOKEN": "<paste csrf token value>"
+        "NUDGEWAY_API_TOKEN": "nk_abcd1234_<40-char-secret>"
       }
     }
   }
@@ -74,8 +73,7 @@ menu; the model can now call every REST endpoint on your behalf.
       "command": "./bin/nudgeway-mcp",
       "env": {
         "NUDGEWAY_API_URL": "http://127.0.0.1:8080",
-        "NUDGEWAY_SESSION_COOKIE": "…",
-        "NUDGEWAY_CSRF_TOKEN": "…"
+        "NUDGEWAY_API_TOKEN": "nk_abcd1234_<40-char-secret>"
       }
     }
   }
@@ -85,7 +83,74 @@ menu; the model can now call every REST endpoint on your behalf.
 ## How to authenticate
 
 The MCP server does **not** perform login. It forwards HTTP requests
-using credentials you provide via environment variables.
+using credentials you provide via environment variables. Two modes are
+supported; **prefer API tokens** unless you're doing throwaway local
+poking with an existing browser session.
+
+### API tokens (recommended)
+
+Tokens are opaque bearer credentials in the shape
+`nk_<8-char-prefix>_<40-char-secret>` (base32). The prefix is stored
+plaintext and used for lookup; the secret is `argon2id`-hashed at rest.
+The full token is shown **exactly once**, at creation time.
+
+Behaviour of the bearer path:
+
+- Sent as `Authorization: Bearer <token>` on every request.
+- **No CSRF header required.** The backend's bearer middleware
+  short-circuits the CSRF double-submit check when a token is present.
+- The MCP forwarder skips `Cookie: nudgeway_session=…` and
+  `Cookie: nudgeway_csrf=…` entirely when `NUDGEWAY_API_TOKEN` is set.
+- Tokens carry the same RBAC scopes as the user that minted them and
+  are revocable from `/settings/api-tokens`.
+
+Set the env var:
+
+```bash
+export NUDGEWAY_API_TOKEN=nk_abcd1234_<40-char-secret>
+./bin/nudgeway-mcp
+```
+
+On startup the server logs the active auth mode to stderr:
+
+```
+nudgeway-mcp: base=http://127.0.0.1:8080 auth=api-token tools=23
+```
+
+### How to mint an API token
+
+**Via the UI** — recommended for humans:
+
+1. Sign into Nudgeway.
+2. Go to `/settings/api-tokens`.
+3. Click *New token*, pick a name (e.g. `claude-desktop-laptop`) and an
+   optional expiry.
+4. Copy the displayed plaintext token into your MCP client config. It
+   will not be shown again — if you lose it, revoke and create a new
+   one.
+
+**Via the MCP tool** — recommended for agents already talking to a live
+Nudgeway (bootstrapping a second client, rotating tokens, etc.):
+
+```json
+{
+  "tool": "createAPIToken",
+  "arguments": {
+    "body": {
+      "name": "claude-desktop-laptop",
+      "expires_at": "2027-01-01T00:00:00Z"
+    }
+  }
+}
+```
+
+The response body contains the plaintext `token` field once. Companion
+tools: `listAPITokens`, `revokeAPIToken`.
+
+### Session cookie (fallback for local dev)
+
+Only use this path when you don't yet have a token minted and you need
+to poke the API from a fresh browser login.
 
 1. Log into the Nudgeway web UI in your browser.
 2. Open DevTools → Application → Cookies → `http://localhost:8080`.
@@ -95,13 +160,17 @@ using credentials you provide via environment variables.
    `GET /api/v1/auth/csrf`) into `NUDGEWAY_CSRF_TOKEN`. This is required
    for POST / PUT / PATCH / DELETE tool calls.
 
-Environment:
+Cookies are 30-day sliding; refresh when they expire. If
+`NUDGEWAY_API_TOKEN` is also set, the cookie values are ignored.
 
-| Variable                  | Default                | Purpose                                          |
-| ------------------------- | ---------------------- | ------------------------------------------------ |
-| `NUDGEWAY_API_URL`        | `http://127.0.0.1:8080` | Origin of the running Nudgeway server.           |
-| `NUDGEWAY_SESSION_COOKIE` | (empty)                | Attached as `Cookie: nudgeway_session=…`.        |
-| `NUDGEWAY_CSRF_TOKEN`     | (empty)                | Header `X-CSRF-Token` + `Cookie: nudgeway_csrf`. |
+### Environment reference
+
+| Variable                  | Default                 | Purpose                                                                     |
+| ------------------------- | ----------------------- | --------------------------------------------------------------------------- |
+| `NUDGEWAY_API_URL`        | `http://127.0.0.1:8080` | Origin of the running Nudgeway server.                                      |
+| `NUDGEWAY_API_TOKEN`      | (empty)                 | **Preferred.** Sent as `Authorization: Bearer …`; skips session + CSRF.     |
+| `NUDGEWAY_SESSION_COOKIE` | (empty)                 | Fallback. Attached as `Cookie: nudgeway_session=…` when no token is set.    |
+| `NUDGEWAY_CSRF_TOKEN`     | (empty)                 | Fallback. Header `X-CSRF-Token` + `Cookie: nudgeway_csrf` on state changes. |
 
 ## Tool naming
 

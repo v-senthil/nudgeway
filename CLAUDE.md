@@ -266,6 +266,7 @@ The rule is simple: **if a git diff changes runtime behaviour, at least three fi
 ## 15. Security rules
 
 - Session cookies: `HttpOnly`, `Secure`, `SameSite=Lax`. CSRF double-submit cookie for state-changing requests.
+- API tokens: opaque bearer credentials shaped `nk_<8-char-prefix>_<40-char-secret>`. Secret half is `argon2id`-hashed at rest; plaintext returned exactly once at creation. Sent as `Authorization: Bearer <token>`; the bearer middleware skips the CSRF double-submit. Tokens inherit the minting user's org + RBAC scopes and are revocable at `/settings/api-tokens`.
 - Passwords: `argon2id` (params documented in ADR).
 - Provider credentials: envelope-encrypted (KEK from env, DEK per-integration). Never in logs.
 - Webhook signatures verified before any parsing.

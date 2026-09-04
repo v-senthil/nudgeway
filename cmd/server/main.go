@@ -33,6 +33,7 @@ import (
 	fhbase "github.com/v-senthil/nudgeway/internal/infrastructure/hbase"
 	attachmentsPort "github.com/v-senthil/nudgeway/internal/ports/attachments"
 	appanalytics "github.com/v-senthil/nudgeway/internal/application/analytics"
+	appapitoken "github.com/v-senthil/nudgeway/internal/application/apitoken"
 	appaudit "github.com/v-senthil/nudgeway/internal/application/audit"
 	appauth "github.com/v-senthil/nudgeway/internal/application/auth"
 	appcall "github.com/v-senthil/nudgeway/internal/application/call"
@@ -53,6 +54,7 @@ import (
 	"github.com/v-senthil/nudgeway/internal/infrastructure/crypto"
 	"github.com/v-senthil/nudgeway/internal/infrastructure/health"
 	fhttp "github.com/v-senthil/nudgeway/internal/infrastructure/http"
+	"github.com/v-senthil/nudgeway/internal/infrastructure/http/middleware"
 	fkafka "github.com/v-senthil/nudgeway/internal/infrastructure/kafka"
 	fmetrics "github.com/v-senthil/nudgeway/internal/infrastructure/metrics"
 	fmysql "github.com/v-senthil/nudgeway/internal/infrastructure/mysql"
@@ -148,6 +150,7 @@ func run() error {
 	callsRepo := fmysql.NewCalls(db)
 	analyticsRepo := fmysql.NewAnalytics(db)
 	analyticsSourceRepo := fmysql.NewAnalyticsSource(db)
+	apiTokensRepo := fmysql.NewAPITokens(db)
 
 	// --- Kafka (best-effort at boot; server still runs without it) ---------
 	var kProducer *fkafka.Producer
@@ -543,6 +546,15 @@ func run() error {
 		Logger:       logger,
 	})
 
+	// --- API tokens ---------------------------------------------------------
+	// Long-lived programmatic-access tokens (MCP server, CI, scripts).
+	// The service wraps the mysql repo and the shared argon2id helper.
+	apiTokenSvc := appapitoken.NewService(appapitoken.Deps{
+		Repo:   apiTokensRepo,
+		Hasher: argon2Hasher{p: infauth.DefaultArgon2Params()},
+	})
+	bearerVerifier := bearerVerifierAdapter{svc: apiTokenSvc}
+
 	// --- Webhook ingress ----------------------------------------------------
 	// DEV MODE: signature verification is currently disabled. Meta's App
 	// Secret is not reliably configurable in this dev flow. The ingress
@@ -649,6 +661,11 @@ func run() error {
 			Audit:   auditSvc,
 			Logger:  logger,
 		},
+		APITokens: v1.APITokensDeps{
+			Service: apiTokenSvc,
+			Logger:  logger,
+		},
+		BearerVerifier:     bearerVerifier,
 		PermissionResolver: perms,
 		Logger:             logger,
 		SlideEvery:         5 * time.Minute,
@@ -1481,6 +1498,43 @@ func componentsFromMaps(ms []map[string]any) []tmpldom.Component {
 		out = append(out, c)
 	}
 	return out
+}
+
+// argon2Hasher adapts the infrastructure/auth argon2id helpers to the
+// appapitoken.PasswordHasher port. Kept in cmd/server so the application
+// layer never imports the infrastructure package directly.
+type argon2Hasher struct{ p infauth.Argon2Params }
+
+// Hash returns an argon2id-encoded hash of pw using the configured params.
+func (h argon2Hasher) Hash(pw string) (string, error) {
+	return infauth.HashPassword(pw, h.p)
+}
+
+// Verify reports whether pw matches the encoded argon2id hash.
+func (h argon2Hasher) Verify(pw, encoded string) (bool, error) {
+	return infauth.VerifyPassword(pw, encoded)
+}
+
+// bearerVerifierAdapter adapts *appapitoken.Service to
+// middleware.BearerVerifier, translating the application-layer principal
+// into the infra-layer shape so the middleware package can stay free of
+// application imports (dependency rule).
+type bearerVerifierAdapter struct{ svc *appapitoken.Service }
+
+// VerifyBearer implements middleware.BearerVerifier.
+func (a bearerVerifierAdapter) VerifyBearer(ctx context.Context, plaintext string) (middleware.BearerPrincipal, error) {
+	p, err := a.svc.Verify(ctx, plaintext)
+	if err != nil {
+		if errors.Is(err, appapitoken.ErrInvalidToken) {
+			return middleware.BearerPrincipal{}, middleware.ErrInvalidBearer
+		}
+		return middleware.BearerPrincipal{}, err
+	}
+	return middleware.BearerPrincipal{
+		OrgID:   string(p.OrgID),
+		UserID:  string(p.UserID),
+		TokenID: string(p.TokenID),
+	}, nil
 }
 
 // orgLister satisfies workers.OrgLister by scanning the organizations

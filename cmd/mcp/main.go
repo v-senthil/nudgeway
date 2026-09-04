@@ -7,8 +7,16 @@
 //
 //	NUDGEWAY_API_URL         Base URL of the running Nudgeway server.
 //	                         Defaults to http://127.0.0.1:8080.
-//	NUDGEWAY_SESSION_COOKIE  Value of the `nudgeway_session` cookie.
-//	NUDGEWAY_CSRF_TOKEN      Optional CSRF token for state-changing calls.
+//	NUDGEWAY_API_TOKEN       Preferred. Plaintext API token in the shape
+//	                         `nk_<8-char-prefix>_<40-char-secret>`. When
+//	                         set, sent as `Authorization: Bearer <token>`
+//	                         and CSRF is skipped.
+//	NUDGEWAY_SESSION_COOKIE  Fallback. Value of the `nudgeway_session`
+//	                         cookie. Only used when NUDGEWAY_API_TOKEN is
+//	                         unset.
+//	NUDGEWAY_CSRF_TOKEN      Fallback. Optional CSRF token for
+//	                         state-changing calls when the session-cookie
+//	                         path is active.
 //
 // Flags:
 //
@@ -84,9 +92,11 @@ func main() {
 	baseURL := getenvDefault("NUDGEWAY_API_URL", "http://127.0.0.1:8080")
 	forwarder := &mcp.Forwarder{
 		BaseURL:       baseURL,
+		APIToken:      os.Getenv("NUDGEWAY_API_TOKEN"),
 		SessionCookie: os.Getenv("NUDGEWAY_SESSION_COOKIE"),
 		CSRFToken:     os.Getenv("NUDGEWAY_CSRF_TOKEN"),
 	}
+	fmt.Fprintf(os.Stderr, "nudgeway-mcp: base=%s auth=%s tools=%d\n", baseURL, forwarder.AuthMode(), len(tools))
 
 	toolIndex := make(map[string]mcp.Tool, len(tools))
 	for _, t := range tools {
