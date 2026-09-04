@@ -1,0 +1,117 @@
+# One-shot local infrastructure for Nudgeway.
+#
+# Native installs (Homebrew / apt / dnf) remain the recommended dev
+# workflow — see docs/install-services.md. This compose file is here for
+# people who prefer a one-command bring-up, or who run Apple containers
+# (macOS 26+) which speaks the Docker Compose spec.
+#
+# Usage:
+#   docker compose up -d          # start MySQL + Redis + Kafka + HBase
+#   docker compose logs -f        # tail logs
+#   docker compose down           # stop (volumes persist)
+#   docker compose down --volumes # stop + wipe data
+#
+# After `up`, edit config/local.yaml to point at 127.0.0.1 with the
+# ports below. Nothing about the Go server or the Vite dev server runs
+# in a container — Nudgeway stays a single native binary you run with
+# `make dev`. This file only replaces the four backing services.
+
+name: nudgeway
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: nudgeway-mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: nudgeway
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --default-authentication-plugin=caching_sha2_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: nudgeway-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Kafka 3 in KRaft mode — no ZooKeeper. Single-broker; fine for local dev.
+  kafka:
+    image: bitnami/kafka:3.7
+    container_name: nudgeway-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft
+      KAFKA_ENABLE_KRAFT: "yes"
+      KAFKA_CFG_PROCESS_ROLES: "broker,controller"
+      KAFKA_CFG_NODE_ID: "1"
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      # Listeners
+      KAFKA_CFG_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_CFG_ADVERTISED_LISTENERS: "PLAINTEXT://127.0.0.1:9092"
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      # Dev conveniences
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka_data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+
+  # HBase 2 standalone (embedded ZooKeeper). No official Apache image
+  # exists; harisekhon/hbase is the widely-used community one.
+  hbase:
+    image: harisekhon/hbase:2.1
+    container_name: nudgeway-hbase
+    restart: unless-stopped
+    hostname: hbase
+    ports:
+      - "2181:2181"    # ZooKeeper
+      - "9090:9090"    # Thrift (optional; enable with THRIFT_START=true)
+      - "16000:16000"  # HMaster RPC
+      - "16010:16010"  # HMaster UI
+      - "16020:16020"  # RegionServer RPC
+      - "16030:16030"  # RegionServer UI
+    environment:
+      HBASE_MANAGES_ZK: "true"
+    volumes:
+      - hbase_data:/hbase-data
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'status' | hbase shell -n >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+volumes:
+  mysql_data:
+  redis_data:
+  kafka_data:
+  hbase_data:

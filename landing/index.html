@@ -905,7 +905,16 @@ migrate -path migrations \
               <span class="text-slate-400">＋</span>
             </summary>
             <p class="mt-3 text-sm text-slate-600">
-              No. Nudgeway is a first-principles platform — canonical domain (org / contact / session / conversation / message / call), pluggable providers, real-time UI. It happens to ship a WhatsApp Business Cloud API adapter first because that's what most teams need most urgently.
+              No. Nudgeway is a first-principles platform — canonical domain (org / contact / session / conversation / message / call), real-time UI, MCP-native. Ships with a WhatsApp Business Cloud API adapter.
+            </p>
+          </details>
+          <details class="card p-5">
+            <summary class="flex items-center justify-between font-semibold">
+              How do I install MySQL / Redis / Kafka / HBase?
+              <span class="text-slate-400">＋</span>
+            </summary>
+            <p class="mt-3 text-sm text-slate-600">
+              <a class="text-emerald-700 underline" href="https://github.com/v-senthil/nudgeway/blob/main/docs/install-services.md">docs/install-services.md</a> covers native install on macOS (Homebrew), Debian/Ubuntu (apt + Apache tarballs), Fedora/RHEL (dnf), and Windows (WSL2). One-liners per OS.
             </p>
           </details>
           <details class="card p-5">
@@ -914,16 +923,7 @@ migrate -path migrations \
               <span class="text-slate-400">＋</span>
             </summary>
             <p class="mt-3 text-sm text-slate-600">
-              No. Dev workflow runs native MySQL / Redis / Kafka / HBase installs. Production is a single Go binary plus those four services. Containerise if you want; nothing requires it.
-            </p>
-          </details>
-          <details class="card p-5">
-            <summary class="flex items-center justify-between font-semibold">
-              Can I add providers other than WhatsApp?
-              <span class="text-slate-400">＋</span>
-            </summary>
-            <p class="mt-3 text-sm text-slate-600">
-              Yes. Implement the port interfaces in <span class="code">internal/ports/</span> (channel, ticketing, bot, AI, calling) inside a new <span class="code">internal/providers/&lt;name&gt;/</span> package, register it, done. The domain and application layers never learn provider strings.
+              No — native is the default dev path. But we ship a <a class="text-emerald-700 underline" href="https://github.com/v-senthil/nudgeway/blob/main/docker-compose.yml"><span class="code">docker-compose.yml</span></a> if you want one-command bring-up. Works with Docker Desktop, Podman, and Apple Containers (macOS 26+). The Go server + Vite still run natively — the compose file only replaces the four backing services.
             </p>
           </details>
           <details class="card p-5">

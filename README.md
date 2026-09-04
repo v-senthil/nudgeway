@@ -22,8 +22,6 @@ Open-source, multi-tenant WhatsApp Business Platform. Provider-agnostic core —
 
 ## Prerequisites
 
-Run these natively on your machine — **no Docker**.
-
 | Service | Version | Notes |
 |---|---|---|
 | **MySQL** | 8.0+ | The transactional source of truth. |
@@ -34,6 +32,11 @@ Run these natively on your machine — **no Docker**.
 | **Node.js** | 20+ | Vite dev server. |
 | **npm** | 10+ | Frontend deps. |
 | **golang-migrate** | latest | Schema migrations. `brew install golang-migrate`. |
+
+**Two ways to get the four backing services running:**
+
+- **Native install** (recommended for day-to-day dev) — Homebrew / apt / dnf / WSL2 one-liners in [`docs/install-services.md`](docs/install-services.md).
+- **Docker Compose** — `docker compose up -d` at the repo root spins up all four via [`docker-compose.yml`](docker-compose.yml). Works with Docker Desktop, Podman, and Apple Containers (macOS 26+). The Go server + Vite still run natively via `make dev`.
 
 Optionally: a public HTTPS tunnel (cloudflared / ngrok) — needed only to expose your local webhook URL to Meta.
 
