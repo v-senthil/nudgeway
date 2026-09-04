@@ -311,10 +311,23 @@ func (s *Service) Series(
 			return danalytics.Series{}, fmt.Errorf("analytics series calls: %w", err)
 		}
 		byDay := map[time.Time]int64{}
+		daysWithAll := map[time.Time]struct{}{}
 		for _, c := range rows {
-			// Only fold the pan-direction "all" row so we don't
-			// double-count the per-direction detail rows.
 			if c.Direction != danalytics.CallDirectionAll {
+				continue
+			}
+			daysWithAll[c.Day] = struct{}{}
+			byDay[c.Day] += int64(c.Total)
+		}
+		// Fallback: if a day has per-direction detail rows but no
+		// pan-direction "all" row (older rollups, or a partial write),
+		// fold the detail rows for that day so the sparkline mirrors
+		// the KPI card fallback.
+		for _, c := range rows {
+			if c.Direction == danalytics.CallDirectionAll {
+				continue
+			}
+			if _, ok := daysWithAll[c.Day]; ok {
 				continue
 			}
 			byDay[c.Day] += int64(c.Total)

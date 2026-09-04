@@ -436,6 +436,5 @@ func (a *Analytics) CallsRange(
 // MySQL DATE columns silently truncate, but explicit is safer for the
 // occasional driver that round-trips the value as a DATETIME.
 func dateOf(t time.Time) time.Time {
-	u := t.UTC()
-	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }

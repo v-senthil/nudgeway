@@ -110,10 +110,16 @@ func (r *AnalyticsRollupRunner) Run(ctx context.Context) error {
 // tick performs one rollup pass. All errors are logged and swallowed —
 // a broken tenant must not block the rest of the org list. The next
 // tick will retry.
+//
+// Uses local time (not UTC) so the window boundaries align with
+// MySQL's CURRENT_TIMESTAMP DEFAULT, which is session-tz-relative.
+// Rolling today + yesterday + tomorrow gives us a safety net across
+// small tz drift (DST, server tz reconfig).
 func (r *AnalyticsRollupRunner) tick(ctx context.Context) {
-	now := time.Now().UTC()
+	now := time.Now()
 	today := dayStart(now)
 	yesterday := today.Add(-24 * time.Hour)
+	tomorrow := today.Add(24 * time.Hour)
 
 	orgs, err := r.orgs.ListOrgIDs(ctx)
 	if err != nil {
@@ -124,19 +130,14 @@ func (r *AnalyticsRollupRunner) tick(ctx context.Context) {
 	}
 
 	for _, orgID := range orgs {
-		if err := r.svc.Rollup(ctx, orgID, yesterday); err != nil {
-			r.log.WarnContext(ctx, "analytics rollup: yesterday",
-				slog.String("org_id", string(orgID)),
-				slog.Any("err", err),
-			)
-			continue
-		}
-		if err := r.svc.Rollup(ctx, orgID, today); err != nil {
-			r.log.WarnContext(ctx, "analytics rollup: today",
-				slog.String("org_id", string(orgID)),
-				slog.Any("err", err),
-			)
-			continue
+		for _, d := range []time.Time{yesterday, today, tomorrow} {
+			if err := r.svc.Rollup(ctx, orgID, d); err != nil {
+				r.log.WarnContext(ctx, "analytics rollup",
+					slog.String("org_id", string(orgID)),
+					slog.Time("day", d),
+					slog.Any("err", err),
+				)
+			}
 		}
 	}
 	if err := r.repo.SaveRollupState(ctx, AnalyticsRollupJobName, today); err != nil {
@@ -156,8 +157,9 @@ func (r *AnalyticsRollupRunner) LastProcessedDay(ctx context.Context) (time.Time
 	return day, nil
 }
 
-// dayStart returns t truncated to UTC midnight.
+// dayStart returns t truncated to midnight in t's own Location. Local
+// time matches how MySQL's CURRENT_TIMESTAMP default inserts data when
+// the server tz isn't UTC.
 func dayStart(t time.Time) time.Time {
-	u := t.UTC()
-	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC)
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
