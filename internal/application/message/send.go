@@ -227,14 +227,36 @@ func (s *SendService) RequestSend(ctx context.Context, req SendRequest) (SendRes
 		Metadata:          map[string]any{"idempotency_key": req.IdempotencyKey},
 	}
 	// Surface text / media_url into Metadata so the REST DTO can render the
-	// bubble without dereferencing HBase (payload storage) later. Inbound
-	// does the same in InboundService — outbound must match.
+	// outbound bubble without a re-fetch. Inbound does the same in
+	// InboundService.
 	if req.Type == string(msgdom.TypeText) && len(req.Payload) > 0 {
 		var t struct {
 			Body string `json:"body"`
 		}
 		if json.Unmarshal(req.Payload, &t) == nil && t.Body != "" {
 			row.Metadata["text"] = t.Body
+		}
+	}
+	if isMediaType(req.Type) && len(req.Payload) > 0 {
+		var mp struct {
+			MediaID  string `json:"media_id"`
+			URL      string `json:"url"`
+			Caption  string `json:"caption"`
+			FileName string `json:"filename"`
+		}
+		if json.Unmarshal(req.Payload, &mp) == nil {
+			if mp.URL != "" {
+				row.Metadata["media_url"] = mp.URL
+			}
+			if mp.MediaID != "" {
+				row.Metadata["media_id"] = mp.MediaID
+			}
+			if mp.Caption != "" {
+				row.Metadata["text"] = mp.Caption
+			}
+			if mp.FileName != "" {
+				row.Metadata["filename"] = mp.FileName
+			}
 		}
 	}
 	if err := s.deps.Messages.Create(ctx, row); err != nil {
@@ -499,6 +521,16 @@ func validatePayload(t msgdom.Type, raw []byte) error {
 		}
 	}
 	return nil
+}
+
+// isMediaType reports whether the canonical Type carries a MediaPayload.
+func isMediaType(t string) bool {
+	switch msgdom.Type(t) {
+	case msgdom.TypeImage, msgdom.TypeVideo, msgdom.TypeAudio,
+		msgdom.TypeDocument, msgdom.TypeSticker:
+		return true
+	}
+	return false
 }
 
 // Retryable is implemented by provider errors that want the send worker to

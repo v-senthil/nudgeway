@@ -94,7 +94,9 @@ export type SendMessageInput =
       type: 'image' | 'video' | 'audio' | 'document';
       media: {
         /** Meta media_id from Media Upload; preferred over url. */
-        id?: string;
+        media_id?: string;
+        /** HBase-served URL; used both as a Meta fallback (`link`) and
+         * as the outbound bubble's render source before Meta echoes back. */
         url?: string;
         caption?: string;
         filename?: string;

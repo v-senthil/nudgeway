@@ -102,12 +102,13 @@ export function Composer({ conversationID, orgID }: Props) {
         conversation_id: conversationID,
         type: kind,
         media: {
-          // Prefer the Meta-native media_id (returned by our upload
-          // endpoint when the provider Media Upload API succeeded); fall
-          // back to the URL so Meta re-fetches from HBase.
+          // Always include the HBase serve URL — used both as the Meta
+          // fallback (`link`) if media_id isn't set AND as the local
+          // bubble's <img src> until Meta echoes back a delivered event.
+          url: attachment.media_url,
           ...(attachment.media_id !== undefined && attachment.media_id !== ''
-            ? { id: attachment.media_id }
-            : { url: attachment.media_url }),
+            ? { media_id: attachment.media_id }
+            : {}),
           ...(hasText ? { caption: trimmed } : {}),
           ...(kind === 'document' && attachment.filename !== undefined
             ? { filename: attachment.filename }
