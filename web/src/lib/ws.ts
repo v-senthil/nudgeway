@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { InboxEvent, isInboxFrame } from './events';
 import type { InboxFrame } from './events';
+import { clearIncomingCallIf, setIncomingCall } from './incoming-call';
 
 type Status = 'idle' | 'connecting' | 'open' | 'closed';
 
@@ -114,9 +115,83 @@ function handleFrame(raw: string): void {
       void qc.invalidateQueries({ queryKey: ['integrations'] });
       break;
     }
+    case InboxEvent.CallInitiated:
+    case InboxEvent.CallRinging: {
+      handleCallRingingFrame(parsed);
+      void qc.invalidateQueries({ queryKey: ['calls'] });
+      const convID = readString(parsed.payload, 'conversation_id', 'ConversationID');
+      if (convID !== null) {
+        void qc.invalidateQueries({ queryKey: ['calls', 'by-conversation', convID] });
+      }
+      break;
+    }
+    case InboxEvent.CallAnswered:
+    case InboxEvent.CallEnded:
+    case InboxEvent.CallEndedDetailed:
+    case InboxEvent.CallFailed:
+    case InboxEvent.CallRecordingCreated: {
+      const callID = readString(parsed.payload, 'call_id', 'CallID');
+      if (callID !== null) {
+        clearIncomingCallIf(callID);
+      }
+      void qc.invalidateQueries({ queryKey: ['calls'] });
+      const convID = readString(parsed.payload, 'conversation_id', 'ConversationID');
+      if (convID !== null) {
+        void qc.invalidateQueries({ queryKey: ['calls', 'by-conversation', convID] });
+      }
+      break;
+    }
     default:
       break;
   }
+}
+
+/**
+ * readString returns the first non-empty string value found under any of
+ * the candidate keys on payload. The canonical event payloads are
+ * marshaled by Go's encoding/json without struct tags — so the field
+ * names arrive PascalCase. Older / third-party frames may use snake_case;
+ * accept both here so a payload-shape drift never silently drops calls.
+ */
+function readString(
+  payload: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  for (const k of keys) {
+    const v = payload[k];
+    if (typeof v === 'string' && v.length > 0) return v;
+  }
+  return null;
+}
+
+/**
+ * handleCallRingingFrame extracts the minimum fields needed to render the
+ * global incoming-call popup and stashes them in the incoming-call store.
+ * Outbound rings and calls that arrive without a resolvable id are
+ * ignored — the popup is strictly for operator-facing inbound calls.
+ */
+function handleCallRingingFrame(frame: InboxFrame): void {
+  const p = frame.payload;
+  const direction = readString(p, 'direction', 'Direction');
+  if (direction !== null && direction !== 'inbound') return;
+  const callID = readString(p, 'call_id', 'CallID');
+  if (callID === null) return;
+  const from = readString(p, 'from', 'From') ?? '';
+  const provider = readString(p, 'provider', 'Provider') ?? '';
+  const integrationID = readString(p, 'integration_id', 'IntegrationID') ?? undefined;
+  const contactName = readString(p, 'contact_name', 'ContactName', 'FromDisplayName') ?? undefined;
+  const conversationID = readString(p, 'conversation_id', 'ConversationID') ?? undefined;
+  const startedAt =
+    readString(p, 'started_at', 'StartedAt', 'timestamp', 'Timestamp') ?? new Date().toISOString();
+  setIncomingCall({
+    id: callID,
+    from,
+    provider,
+    startedAt,
+    ...(contactName !== undefined ? { contactName } : {}),
+    ...(integrationID !== undefined ? { integrationID } : {}),
+    ...(conversationID !== undefined ? { conversationID } : {}),
+  });
 }
 
 function openSocket(): void {

@@ -18,6 +18,9 @@ type ConversationSummary struct {
 	OrgID              organization.ID
 	ContactID          string
 	ContactDisplay     string
+	Type               conversation.Type
+	GroupID            string
+	GroupSubject       string
 	Status             conversation.Status
 	Channel            string
 	LastMessageAt      *time.Time
@@ -48,6 +51,9 @@ func (c *Conversations) ListForOrg(ctx context.Context, orgID organization.ID) (
 		    c.id,
 		    c.contact_id,
 		    COALESCE(ct.display_name, '') AS contact_display,
+		    c.type,
+		    c.group_id,
+		    COALESCE(g.subject, '') AS group_subject,
 		    c.status,
 		    COALESCE(be.channel, '') AS channel,
 		    COALESCE(c.last_message_at,
@@ -67,6 +73,7 @@ func (c *Conversations) ListForOrg(ctx context.Context, orgID organization.ID) (
 		  LEFT JOIN contacts ct         ON ct.id = c.contact_id AND ct.org_id = c.org_id
 		  LEFT JOIN sessions_comm s     ON s.id  = c.session_id AND s.org_id  = c.org_id
 		  LEFT JOIN business_endpoints be ON be.id = s.business_endpoint_id AND be.org_id = s.org_id
+		  LEFT JOIN ` + "`groups`" + ` g ON g.id  = c.group_id   AND g.org_id  = c.org_id
 		  WHERE c.org_id = ?
 		  ORDER BY COALESCE(c.last_message_at,
 		                     (SELECT MAX(m.created_at) FROM messages m
@@ -81,29 +88,47 @@ func (c *Conversations) ListForOrg(ctx context.Context, orgID organization.ID) (
 	out := []ConversationSummary{}
 	for rows.Next() {
 		var (
-			idBytes, contactBytes []byte
-			display, status, ch   string
-			lastAt                sql.NullTime
-			preview               sql.NullString
-			unread                int
-			created               time.Time
+			idBytes                    []byte
+			contactBytes, groupBytes   []byte
+			display, convType, subject string
+			status, ch                 string
+			lastAt                     sql.NullTime
+			preview                    sql.NullString
+			unread                     int
+			created                    time.Time
 		)
-		if err := rows.Scan(&idBytes, &contactBytes, &display, &status, &ch, &lastAt, &preview, &unread, &created); err != nil {
+		if err := rows.Scan(&idBytes, &contactBytes, &display, &convType, &groupBytes, &subject, &status, &ch, &lastAt, &preview, &unread, &created); err != nil {
 			return nil, fmt.Errorf("conversations list scan: %w", err)
 		}
 		id, err := ulidFromBytes(idBytes)
 		if err != nil {
 			return nil, fmt.Errorf("conversations list bad id: %w", err)
 		}
-		cid, err := ulidFromBytes(contactBytes)
-		if err != nil {
-			return nil, fmt.Errorf("conversations list bad contact id: %w", err)
+		var cid string
+		if len(contactBytes) == 16 {
+			cid, err = ulidFromBytes(contactBytes)
+			if err != nil {
+				return nil, fmt.Errorf("conversations list bad contact id: %w", err)
+			}
+		}
+		var gid string
+		if len(groupBytes) == 16 {
+			gid, err = ulidFromBytes(groupBytes)
+			if err != nil {
+				return nil, fmt.Errorf("conversations list bad group id: %w", err)
+			}
+		}
+		if convType == "" {
+			convType = string(conversation.TypeOneToOne)
 		}
 		summary := ConversationSummary{
 			ID:                 conversation.ID(id),
 			OrgID:              orgID,
 			ContactID:          cid,
 			ContactDisplay:     display,
+			Type:               conversation.Type(convType),
+			GroupID:            gid,
+			GroupSubject:       subject,
 			Status:             conversation.Status(status),
 			Channel:            ch,
 			LastMessagePreview: preview.String,

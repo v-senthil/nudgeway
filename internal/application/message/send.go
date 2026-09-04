@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/fullwa/fullwa/internal/domain/contact"
@@ -104,6 +106,13 @@ type SendDeps struct {
 	Identities repository.IdentityRepo
 	// Integrations resolves integration config + decrypts secrets.
 	Integrations IntegrationSecrets
+	// Templates is optional. When non-nil the send path looks up the
+	// template definition on outbound template sends and stamps the
+	// resolved (parameter-substituted) header / body / footer / button
+	// text onto the outbound message's metadata.template.resolved field.
+	// The frontend prefers this over the raw parameter list; missing
+	// lookups are non-fatal (frontend falls back).
+	Templates repository.TemplateRepo
 	// Enqueuer places SendJobPayload on the "message.send" lane.
 	Enqueuer queue.Enqueuer
 	// Publisher publishes canonical events on the in-proc bus.
@@ -237,6 +246,25 @@ func (s *SendService) RequestSend(ctx context.Context, req SendRequest) (SendRes
 			row.Metadata["text"] = t.Body
 		}
 	}
+	// Persist the full template payload so the outbound bubble can render
+	// the template name, language, and parameters without a re-fetch.
+	if req.Type == string(msgdom.TypeTemplate) && len(req.Payload) > 0 {
+		var tpl map[string]any
+		if json.Unmarshal(req.Payload, &tpl) == nil && len(tpl) > 0 {
+			// Best-effort: look up the stored template definition and
+			// interpolate parameter values into the header/body/footer/
+			// button text so the frontend can render an authentic
+			// WhatsApp-style bubble. Failures are non-fatal — the
+			// frontend falls back to the raw parameter list when
+			// "resolved" is missing.
+			if s.deps.Templates != nil {
+				if resolved := s.buildResolvedTemplate(ctx, orgID, integration.ID(ep.IntegrationID), tpl); resolved != nil {
+					tpl["resolved"] = resolved
+				}
+			}
+			row.Metadata["template"] = tpl
+		}
+	}
 	if isMediaType(req.Type) && len(req.Payload) > 0 {
 		var mp struct {
 			MediaID  string `json:"media_id"`
@@ -359,6 +387,8 @@ func (s *SendService) ProcessSend(ctx context.Context, job SendJobPayload) error
 	if v, ok := integ.Config["waba_id"].(string); ok && v != "" {
 		secrets["waba_id"] = v
 	}
+	secrets["_integration_id"] = string(integ.ID)
+	secrets["_org_id"] = string(integ.OrgID)
 	// Resolve provider adapter.
 	provider, err := s.deps.Providers.Channel(ctx, integ.Provider, secrets)
 	if err != nil {
@@ -572,6 +602,272 @@ func isMediaType(t string) bool {
 // needing to import their concrete types.
 type Retryable interface {
 	Retryable() bool
+}
+
+// buildResolvedTemplate looks up the stored template definition matching
+// the outbound send payload's (name, language.code) and interpolates the
+// send-time parameter values into the header / body / footer / button
+// text. It returns a map shaped like:
+//
+//	{
+//	  "header":  "Support of Order No: ON-12345",
+//	  "body":    "Hi Senthil, welcome",
+//	  "footer":  "Reply STOP",
+//	  "buttons": [{"type":"URL","text":"View sale","url":"https://…"}]
+//	}
+//
+// The result is stamped onto row.Metadata["template"]["resolved"] so the
+// frontend can render a WhatsApp-style bubble instead of a bland
+// parameter list. Any lookup or shape mismatch yields nil (best-effort;
+// the frontend falls back to the raw parameter list).
+func (s *SendService) buildResolvedTemplate(
+	ctx context.Context,
+	orgID organization.ID,
+	integrationID integration.ID,
+	tpl map[string]any,
+) map[string]any {
+	name, _ := tpl["name"].(string)
+	if name == "" {
+		return nil
+	}
+	langCode := ""
+	if lang, ok := tpl["language"].(map[string]any); ok {
+		langCode, _ = lang["code"].(string)
+	}
+	if langCode == "" {
+		if lang, ok := tpl["language"].(string); ok {
+			langCode = lang
+		}
+	}
+	if langCode == "" {
+		return nil
+	}
+	def, err := s.deps.Templates.FindByNameLanguage(ctx, orgID, integrationID, name, langCode)
+	if err != nil {
+		s.deps.Logger.Debug("template resolve: definition not found",
+			slog.String("org_id", string(orgID)),
+			slog.String("integration_id", string(integrationID)),
+			slog.String("template_name", name),
+			slog.String("language", langCode),
+			slog.Any("err", err),
+		)
+		return nil
+	}
+
+	// Index the send-time components by type ("header" / "body" / "button")
+	// so we can pull parameters when we walk the definition.
+	sendComps := map[string][]map[string]any{}
+	if raw, ok := tpl["components"].([]any); ok {
+		for _, c := range raw {
+			cm, ok := c.(map[string]any)
+			if !ok {
+				continue
+			}
+			ct, _ := cm["type"].(string)
+			ct = strings.ToLower(ct)
+			if ct == "" {
+				continue
+			}
+			sendComps[ct] = append(sendComps[ct], cm)
+		}
+	}
+
+	// Build the resolved output by walking the definition components in
+	// order and matching each to its send-time counterpart.
+	resolved := map[string]any{}
+	var buttons []map[string]any
+	// A rolling index per type so the Nth button/header/body in the
+	// definition matches the Nth in the payload.
+	nextByType := map[string]int{}
+	for _, dc := range def.Components {
+		typ := strings.ToLower(dc.Type)
+		switch typ {
+		case "header":
+			// Only interpolate TEXT headers — media headers surface a
+			// placeholder label instead.
+			if strings.EqualFold(dc.Format, "TEXT") || dc.Format == "" {
+				params := pickSendParams(sendComps, "header", nextByType)
+				resolved["header"] = substituteTemplate(dc.Text, params, dc.Example)
+			} else {
+				resolved["header"] = "[" + strings.ToLower(dc.Format) + " attachment]"
+			}
+		case "body":
+			params := pickSendParams(sendComps, "body", nextByType)
+			resolved["body"] = substituteTemplate(dc.Text, params, dc.Example)
+		case "footer":
+			// Footer never carries variables in Meta's schema, but keep
+			// the substitution call for symmetry.
+			resolved["footer"] = substituteTemplate(dc.Text, nil, dc.Example)
+		case "buttons":
+			for i, btn := range dc.Buttons {
+				out := map[string]any{}
+				for k, v := range btn {
+					out[k] = v
+				}
+				// Buttons in the payload each declare their own component
+				// with sub_type ("url" / "quick_reply" / "copy_code" / …)
+				// and an index. We match by index when present; otherwise
+				// fall back to positional order.
+				if match := findButtonSendComp(sendComps["button"], i); match != nil {
+					if url, ok := btn["url"].(string); ok && url != "" {
+						out["url"] = substituteButtonURL(url, match)
+					}
+					if txt, ok := btn["text"].(string); ok {
+						out["text"] = txt
+					}
+				}
+				buttons = append(buttons, out)
+			}
+		}
+	}
+	if len(buttons) > 0 {
+		resolved["buttons"] = buttons
+	}
+	return resolved
+}
+
+// pickSendParams returns the next send-time parameter list for the given
+// component type ("header" / "body"). The nextByType map is mutated so
+// successive calls advance through repeated components.
+func pickSendParams(sendComps map[string][]map[string]any, typ string, nextByType map[string]int) []any {
+	list := sendComps[typ]
+	i := nextByType[typ]
+	nextByType[typ] = i + 1
+	if i >= len(list) {
+		return nil
+	}
+	params, _ := list[i]["parameters"].([]any)
+	return params
+}
+
+// findButtonSendComp returns the send-time button component matching the
+// given definition index. Meta's send payload tags each button component
+// with an "index" field; when absent we fall back to positional order.
+func findButtonSendComp(comps []map[string]any, defIndex int) map[string]any {
+	for _, c := range comps {
+		switch idx := c["index"].(type) {
+		case float64:
+			if int(idx) == defIndex {
+				return c
+			}
+		case string:
+			if n, err := strconv.Atoi(idx); err == nil && n == defIndex {
+				return c
+			}
+		}
+	}
+	if defIndex >= 0 && defIndex < len(comps) {
+		return comps[defIndex]
+	}
+	return nil
+}
+
+// substituteButtonURL swaps the first {{1}} placeholder in a button URL
+// with the first text parameter of the send-time button component. URL
+// buttons in Meta's schema only support one dynamic path/query segment.
+func substituteButtonURL(url string, sendBtn map[string]any) string {
+	params, _ := sendBtn["parameters"].([]any)
+	if len(params) == 0 {
+		return url
+	}
+	first, _ := params[0].(map[string]any)
+	val, _ := first["text"].(string)
+	if val == "" {
+		return url
+	}
+	return strings.ReplaceAll(url, "{{1}}", val)
+}
+
+// substituteTemplate replaces {{n}} (1-indexed positional) and
+// {{name}} (named) placeholders in text with the corresponding
+// parameter value. Positional is the primary path — Meta's send payload
+// carries a parameters array whose Nth entry backs {{n+1}}. Named
+// placeholders are resolved via the definition's Example map
+// (body_text_named_params) when the send payload omits them.
+func substituteTemplate(text string, params []any, example map[string]any) string {
+	if text == "" {
+		return ""
+	}
+	// Positional: build a slice of string values from the params array.
+	positional := make([]string, 0, len(params))
+	named := map[string]string{}
+	for _, p := range params {
+		pm, ok := p.(map[string]any)
+		if !ok {
+			positional = append(positional, "")
+			continue
+		}
+		val, _ := pm["text"].(string)
+		if val == "" {
+			// Fall back to type hint for media parameters.
+			if t, _ := pm["type"].(string); t != "" && t != "text" {
+				val = "<" + t + ">"
+			}
+		}
+		positional = append(positional, val)
+		if name, ok := pm["parameter_name"].(string); ok && name != "" {
+			named[name] = val
+		}
+	}
+	// Seed named map from the template's example if not supplied at
+	// send time. Meta stores named-parameter examples under
+	// example.body_text_named_params = [{param_name, example}, …].
+	if example != nil {
+		if list, ok := example["body_text_named_params"].([]any); ok {
+			for _, item := range list {
+				im, ok := item.(map[string]any)
+				if !ok {
+					continue
+				}
+				pn, _ := im["param_name"].(string)
+				if pn == "" {
+					continue
+				}
+				if _, seen := named[pn]; seen {
+					continue
+				}
+				ex, _ := im["example"].(string)
+				named[pn] = ex
+			}
+		}
+	}
+	return interpolatePlaceholders(text, positional, named)
+}
+
+// interpolatePlaceholders walks the string and replaces {{token}} where
+// token is either a 1-based integer index into positional or a name in
+// named. Unknown tokens are left untouched so the operator can spot the
+// mismatch.
+func interpolatePlaceholders(text string, positional []string, named map[string]string) string {
+	var b strings.Builder
+	b.Grow(len(text))
+	i := 0
+	for i < len(text) {
+		if i+1 < len(text) && text[i] == '{' && text[i+1] == '{' {
+			end := strings.Index(text[i+2:], "}}")
+			if end < 0 {
+				b.WriteString(text[i:])
+				break
+			}
+			token := strings.TrimSpace(text[i+2 : i+2+end])
+			replaced := false
+			if n, err := strconv.Atoi(token); err == nil && n >= 1 && n <= len(positional) {
+				b.WriteString(positional[n-1])
+				replaced = true
+			} else if v, ok := named[token]; ok {
+				b.WriteString(v)
+				replaced = true
+			}
+			if !replaced {
+				b.WriteString(text[i : i+2+end+2])
+			}
+			i += 2 + end + 2
+			continue
+		}
+		b.WriteByte(text[i])
+		i++
+	}
+	return b.String()
 }
 
 // isRetryable inspects err via errors.As for anything satisfying Retryable.

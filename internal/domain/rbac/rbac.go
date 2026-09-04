@@ -17,6 +17,9 @@ const (
 	PermContactsRead     Permission = "contacts.read"
 	PermMessagesSend     Permission = "messages.send"
 	PermIntegrationsManage Permission = "integrations.manage"
+	// PermAuditRead gates read access to the audit trail
+	// (GET /api/v1/audit-logs). Writes to audit_logs are internal only.
+	PermAuditRead Permission = "audit.read"
 )
 
 // All returns every declared Permission constant. It is the authoritative
@@ -29,6 +32,14 @@ func All() []Permission {
 		PermContactsRead,
 		PermMessagesSend,
 		PermIntegrationsManage,
+		PermAuditRead,
+		PermTemplatesRead,
+		PermTemplatesManage,
+		PermGroupsRead,
+		PermGroupsManage,
+		PermCallsRead,
+		PermCallsManage,
+		PermAnalyticsRead,
 	}
 }
 

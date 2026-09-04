@@ -5,6 +5,7 @@ import (
 
 	"github.com/fullwa/fullwa/internal/domain/contact"
 	"github.com/fullwa/fullwa/internal/domain/conversation"
+	"github.com/fullwa/fullwa/internal/domain/group"
 	"github.com/fullwa/fullwa/internal/domain/organization"
 	"github.com/fullwa/fullwa/internal/domain/session"
 	"github.com/fullwa/fullwa/internal/domain/user"
@@ -42,4 +43,11 @@ type ConversationRepo interface {
 
 	// ListForContact returns conversations for a contact, newest first.
 	ListForContact(ctx context.Context, orgID organization.ID, contactID contact.ID, filter ConversationListFilter) (ConversationPage, error)
+
+	// EnsureGroupConversation returns the Conversation row for the given
+	// group, creating a fresh Type=group row if none exists yet. Idempotent:
+	// a repeated call with the same (orgID, groupID) returns the existing
+	// row. Implementations enforce uniqueness via a UNIQUE (org_id,
+	// group_id) index on the conversations table.
+	EnsureGroupConversation(ctx context.Context, orgID organization.ID, groupID group.ID) (conversation.Conversation, error)
 }

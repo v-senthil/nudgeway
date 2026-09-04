@@ -1,0 +1,146 @@
+# Analytics v1 — daily rollup dashboard endpoints.
+#
+# This fragment is self-contained: it declares its own tag, path, and
+# schema definitions so it can be spliced into openapi.yaml at the next
+# `make gen-api` pass without ambiguity. The Analytics v1 agent does
+# NOT modify openapi.yaml directly.
+
+tags:
+  - name: analytics
+    description: |
+      Daily rollup aggregates over the canonical `messages` and
+      `conversations` tables. Values are computed by an in-process
+      rollup worker; the read side is served straight from the
+      analytics_* tables.
+
+paths:
+  /api/v1/analytics/overview:
+    get:
+      tags: [analytics]
+      operationId: analyticsOverview
+      summary: Compact dashboard aggregate over a date range.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Inclusive start date (UTC, YYYY-MM-DD).
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          description: Inclusive end date (UTC, YYYY-MM-DD).
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Overview aggregate.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsOverview' }
+        '400':
+          description: Invalid or missing range.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { description: Unauthenticated. }
+        '403': { description: Missing analytics.read. }
+
+  /api/v1/analytics/series:
+    get:
+      tags: [analytics]
+      operationId: analyticsSeries
+      summary: Labelled time series for a line chart.
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          description: |
+            One of `messages_daily`, `delivery_rate`, or
+            `conversations_opened`.
+          schema:
+            type: string
+            enum: [messages_daily, delivery_rate, conversations_opened]
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: provider
+          in: query
+          required: false
+          description: |
+            Restrict to a provider ("whatsapp", ...). Omit to use the
+            pan-provider aggregate row.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Time series for the requested kind.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AnalyticsSeries' }
+        '400':
+          description: Invalid range or unknown kind.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401': { description: Unauthenticated. }
+        '403': { description: Missing analytics.read. }
+
+components:
+  schemas:
+    AnalyticsOverview:
+      type: object
+      required:
+        - messages_total
+        - delivery_rate_pct
+        - response_time_seconds_p50
+        - conversations_opened
+      properties:
+        messages_total:
+          type: integer
+          format: int64
+          description: Total messages in the range, pan-provider.
+        delivery_rate_pct:
+          type: integer
+          format: int64
+          minimum: 0
+          maximum: 100
+          description: |
+            Delivered / sent as a percentage in the 0..100 range. Zero
+            when Sent is zero.
+        response_time_seconds_p50:
+          type: integer
+          format: int64
+          description: |
+            Coarse p50 of the per-day average response time (seconds
+            between an inbound message and the next outbound reply).
+        conversations_opened:
+          type: integer
+          format: int64
+
+    AnalyticsSeries:
+      type: object
+      required: [name, points]
+      properties:
+        name:
+          type: string
+        points:
+          type: array
+          items: { $ref: '#/components/schemas/AnalyticsPoint' }
+
+    AnalyticsPoint:
+      type: object
+      required: [day, value]
+      properties:
+        day:
+          type: string
+          format: date
+        value:
+          type: integer
+          format: int64

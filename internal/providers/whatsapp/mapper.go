@@ -118,10 +118,11 @@ type metaLocationMsg struct {
 type metaContactCard = map[string]any // pass-through — WhatsApp contact cards are wide
 
 type metaInteractiveMsg struct {
-	Type        string             `json:"type"`
-	ButtonReply *metaButtonReply   `json:"button_reply,omitempty"`
-	ListReply   *metaListReply     `json:"list_reply,omitempty"`
-	NFMReply    *json.RawMessage   `json:"nfm_reply,omitempty"` // Flows response
+	Type                string                    `json:"type"`
+	ButtonReply         *metaButtonReply          `json:"button_reply,omitempty"`
+	ListReply           *metaListReply            `json:"list_reply,omitempty"`
+	NFMReply            *json.RawMessage          `json:"nfm_reply,omitempty"` // Flows response
+	CallPermissionReply *metaCallPermissionReply  `json:"call_permission_reply,omitempty"`
 }
 
 type metaButtonReply struct {
@@ -133,6 +134,17 @@ type metaListReply struct {
 	ID          string `json:"id"`
 	Title       string `json:"title"`
 	Description string `json:"description,omitempty"`
+}
+
+// metaCallPermissionReply mirrors Meta's interactive.call_permission_reply
+// payload emitted when a WhatsApp user taps Accept/Decline on a call
+// permission prompt. See ~/Documents/whatsapp_doc_tracker/docs/calling/
+// user-call-permissions.md.
+type metaCallPermissionReply struct {
+	Response            string `json:"response"`
+	ResponseSource      string `json:"response_source,omitempty"`
+	ExpirationTimestamp int64  `json:"expiration_timestamp,omitempty"`
+	IsPermanent         bool   `json:"is_permanent,omitempty"`
 }
 
 type metaButtonMsg struct {
@@ -330,6 +342,14 @@ func interactivePayload(m *metaInteractiveMsg) message.InteractivePayload {
 	if m.ListReply != nil {
 		out.ListReply = &message.InteractiveListReply{
 			ID: m.ListReply.ID, Title: m.ListReply.Title, Description: m.ListReply.Description,
+		}
+	}
+	if m.CallPermissionReply != nil {
+		out.CallPermissionReply = &message.InteractiveCallPermissionReply{
+			Response:            m.CallPermissionReply.Response,
+			ResponseSource:      m.CallPermissionReply.ResponseSource,
+			ExpirationTimestamp: m.CallPermissionReply.ExpirationTimestamp,
+			IsPermanent:         m.CallPermissionReply.IsPermanent,
 		}
 	}
 	return out

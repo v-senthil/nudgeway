@@ -231,6 +231,42 @@ Wire path: `POST /api/v1/messages/{id}/read` or the batch
 `POST /api/v1/conversations/{id}/read` → `ReadService.MarkRead` /
 `MarkConversationRead` → `provider.MarkAsRead` → `client.markAsRead`.
 
+## Media upload (Meta-native media_id)
+
+Meta's `POST /{phone_number_id}/media` (see `whatsapp_doc_tracker/docs/messages/media/upload.md`) returns a first-class `media_id` handle that is preferred over `link` URLs — Meta already has the bytes, so subsequent sends are one round-trip instead of two.
+
+Wire path on `POST /api/v1/attachments`:
+
+1. Handler streams the multipart part into `attachments.Store.Put` — HBase writes `d:content` (bytes) + `m:content_type` (MIME) + `m:size`. Row key is the SHA-256 hex of the bytes (content-addressed dedupe).
+2. Handler then calls the wire-up `MediaUploader`. `cmd/server/main.go`'s `metaMediaUploader` picks the first WhatsApp integration for the org, opens the stored bytes back from the store, and hits `provider.UploadMedia(ctx, contentType, filename, r)`.
+3. `client.uploadMedia` builds the multipart body (`file`, `messaging_product=whatsapp`, `type=<mime>`) and POSTs to `/{phone_number_id}/media` with the tenant's access token. Meta's response `{id: "<media_id>"}` is stashed back on the HBase row under `m:media_id_<provider>_<integration>`.
+4. The 201 response returns both `media_url` and `media_id` (plus `provider`, `size`, `content_type`, `filename`). The composer prefers `media_id`.
+
+Failure is best-effort: if Meta rejects the upload the local blob still exists and the composer falls back to `media_url` (a same-origin `/api/v1/media/<key>` link). Boot logs a WARN when `MediaUploader` is nil (no WhatsApp integration wired), and per-upload failures log at WARN with the request-id so operators can correlate.
+
+## BSUID (business-scoped user IDs)
+
+Meta is migrating from phone-number-based `wa_id` to business-scoped user IDs (BSUID) — format `<CC>.<alnum-up-to-128>`, e.g. `IN.10173928811470384`. See `~/Documents/whatsapp_doc_tracker/docs/business-scoped-user-ids.md` for the full rollout timeline; in the target end state the contacts block will *only* carry `user_id` and `wa_id` will be omitted.
+
+### Inbound
+
+The mapper reads three shapes at once:
+- `contacts[].user_id`, `contacts[].parent_user_id`, `contacts[].profile.username`
+- `messages[].from_user_id`, `messages[].from_parent_user_id`
+- `statuses[].recipient_user_id`
+
+`webhook.go` indexes the contacts block by both `wa_id` and `user_id` so `MessageReceivedPayload` carries `FromUserID`, `FromParentUserID`, `FromUsername` regardless of which key the message uses.
+
+`InboundService.handleReceived` upserts a `bsuid` `ContactIdentity` bound to the same Contact and promotes it to the Contact's `primary_identity_id`. The phone-based identity is retained (customers may still send from either shape during the rollout window).
+
+### Outbound
+
+`SendService.resolveRecipient` iterates the target Contact's identities. Order today: `phone` / `whatsapp` first, `bsuid` as fallback — Meta's *portfolio-side send-by-BSUID* rollout is partial, and a phone number is universally accepted right now. Once the rollout completes the order will flip to BSUID-first. Meta rejects unknown BSUIDs with `Invalid parameter` (code 100); that failure is surfaced as a canonical `MessageFailed`.
+
+### Status callbacks
+
+`MessageStatusPayload.RecipientUserID` is populated from `statuses[].recipient_user_id`. The rest of the pipeline is BSUID-agnostic — it looks the row up by `provider_message_id`, which is what makes `SetProviderMessageID` (stamped at send-success time) load-bearing for the delivered / read tick advance.
+
 ## TODO — not yet supported
 
 - Group messaging (`groups.md`).
@@ -239,7 +275,39 @@ Wire path: `POST /api/v1/messages/{id}/read` or the batch
 - Payments (`payments/`).
 - Business Capability Update and other WABA-level webhooks (`webhooks/reference/*_update.md`).
 - Meta resumable upload API for attachments > 16 MiB (`POST /<phone_number_id>/uploads`).
-- Media upload via `POST /<phone_number_id>/media` (Meta-hosted media IDs) —
-  Phase 1 uses public `link` URLs served from our attachments store.
+- BSUID-first send (once Meta portfolio-side send accepts all BSUIDs universally).
 - NFM (Flows) inbound response typed decoding — currently preserved as raw.
 - Ad referral (`referral`) — preserved in raw for now.
+
+## Observability — Meta API execution logs
+
+Every outbound HTTP call the WhatsApp adapter makes is recorded to the
+`provider_calls` MySQL table for operator debugging. See
+[`docs/domain/provider_call.md`](../domain/provider_call.md) for the entity
+and [`docs/flows/provider-call-recording.md`](../flows/provider-call-recording.md)
+for the sequence.
+
+Recorded operations (from `internal/providers/whatsapp/`):
+
+| Operation | Callsite | Records request body | Records response body |
+|-----------|----------|----------------------|-----------------------|
+| `send_message` | `client.sendMessage` | yes | yes |
+| `mark_as_read` | `client.markAsRead` | yes | yes |
+| `get_media_url` | `client.getMediaURL` | no (GET) | yes |
+| `download_media` | `client.downloadMedia` | no (GET) | **no** — raw bytes are the media itself |
+| `list_templates` | `client.listTemplates` | no (GET) | yes |
+| `create_template` | `client.createTemplate` | yes | yes |
+| `get_template_status` | `client.getTemplateStatus` | no (GET) | yes |
+| `upload_media` | `client.uploadMedia` | synthetic `{filename, content_type, size}` — never the raw multipart bytes | yes |
+
+Every entry carries `status_code`, `latency_ms`, `error_class`,
+`error_message`, and Meta's `fbtrace_id` (from the `x-fb-trace-id` header
+or the error envelope's `fbtrace_id` field). On retries, each attempt
+emits its own entry so the retry history is visible newest-first.
+
+**Never stored:** the `Authorization: Bearer <token>` header. The tracer
+interface at `internal/providers/whatsapp/tracer.go` has no headers field
+on `TraceEvent`; adding one would require growing `Entry.Redact()` first.
+
+**Read surface:** `GET /api/v1/provider-calls` behind
+`integrations.manage`. Frontend viewer: `/settings/provider-calls`.

@@ -179,6 +179,8 @@ func (s *ReadService) markOne(ctx context.Context, orgID organization.ID, msg ms
 	if v, ok := integ.Config["waba_id"].(string); ok && v != "" {
 		secrets["waba_id"] = v
 	}
+	secrets["_integration_id"] = string(integ.ID)
+	secrets["_org_id"] = string(integ.OrgID)
 	provider, err := s.deps.Providers.Channel(ctx, integ.Provider, secrets)
 	if err != nil {
 		return fmt.Errorf("mark read: resolve provider %q: %w", integ.Provider, err)

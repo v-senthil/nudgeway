@@ -14,12 +14,15 @@ type Props = {
 
 function formatTime(iso: string | undefined): string {
   if (iso === undefined) return '';
-  const d = new Date(iso);
+  // Force UTC parsing when the server omits the timezone marker; JS
+  // otherwise treats naive datetimes as local, double-shifting the display.
+  const s = /Z|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : `${iso}Z`;
+  const d = new Date(s);
   if (Number.isNaN(d.getTime())) return '';
   const now = new Date();
   const sameDay = d.toDateString() === now.toDateString();
   if (sameDay) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
   }
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
@@ -46,10 +49,18 @@ export function ConversationList({ selectedID }: Props) {
     const q = query.trim().toLowerCase();
     return items.filter((c) => {
       const name = c.contact_name?.toLowerCase() ?? '';
+      const subject = c.subject?.toLowerCase() ?? '';
       const preview = c.last_message_preview?.toLowerCase() ?? '';
-      return name.includes(q) || preview.includes(q);
+      return name.includes(q) || subject.includes(q) || preview.includes(q);
     });
   }, [conversations.data, query]);
+
+  // titleFor returns the row's display title. Group threads show the group
+  // subject; 1-to-1 threads show the contact name.
+  const titleFor = (c: Conversation): string => {
+    if (c.type === 'group') return c.subject ?? 'Unnamed group';
+    return c.contact_name ?? 'Unknown contact';
+  };
 
   const selectConversation = (id: string) => {
     void navigate({ to: '/inbox', search: { c: id } });
@@ -146,13 +157,28 @@ export function ConversationList({ selectedID }: Props) {
                       (active ? 'bg-emerald-50' : 'hover:bg-slate-50')
                     }
                   >
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-slate-200 text-xs font-semibold text-slate-700">
-                      {initials(c.contact_name)}
+                    <div
+                      className={
+                        'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs font-semibold ' +
+                        (c.type === 'group'
+                          ? 'bg-indigo-100 text-indigo-700'
+                          : 'bg-slate-200 text-slate-700')
+                      }
+                    >
+                      {initials(titleFor(c))}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-baseline justify-between gap-2">
                         <p className={'truncate text-sm ' + (active ? 'font-semibold text-emerald-900' : 'font-medium text-slate-900')}>
-                          {c.contact_name ?? 'Unknown contact'}
+                          {titleFor(c)}
+                          {c.type === 'group' && (
+                            <span
+                              className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700"
+                              aria-label="Group conversation"
+                            >
+                              Group
+                            </span>
+                          )}
                         </p>
                         <span className="flex-shrink-0 text-[11px] text-slate-500">{formatTime(c.last_message_at)}</span>
                       </div>

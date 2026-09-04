@@ -44,6 +44,14 @@ const (
 	TypeReaction    Type = "reaction"
 	TypeButton      Type = "button"  // template quick-reply tap
 	TypeSystem      Type = "system"
+	// TypeCall is the legacy synthetic system message representing a call.
+	// Deprecated: use TypeInfo. Kept so pre-existing rows continue to render;
+	// new call ingest emits TypeInfo, one per status transition.
+	TypeCall        Type = "call"
+	// TypeInfo is a lightweight, centred, non-bubble system message. Used for
+	// per-status call transitions and other timeline annotations. Metadata
+	// carries `kind` (e.g. "call_status") plus kind-specific fields.
+	TypeInfo        Type = "info"
 	TypeUnknown     Type = "unknown" // preserve raw payload in Metadata
 )
 

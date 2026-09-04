@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
@@ -53,6 +54,22 @@ func (p *Provider) WithEndpointResolver(r EndpointResolver) *Provider {
 	return p
 }
 
+// WithTracer sets the Tracer the HTTP client emits execution-log events
+// to and returns the Provider so wire-up can chain. Safe to call at
+// wire-up time; do not call concurrently with in-flight adapter methods.
+//
+// This is the sanctioned wire-up point for the operator-facing execution
+// log — cmd/server closes over providercall.Service.Record and passes it
+// here after constructing the Provider. Tracing stays provider-internal
+// so the channel.Provider port never grows a bookkeeping method.
+func (p *Provider) WithTracer(t Tracer, integrationID, orgID string) *Provider {
+	p.cfg.Tracer = t
+	p.cfg.IntegrationID = integrationID
+	p.cfg.OrgID = orgID
+	p.client = newClient(p.cfg)
+	return p
+}
+
 // Key returns the provider's registry key.
 func (p *Provider) Key() string { return providerKey }
 
@@ -87,9 +104,32 @@ func (p *Provider) SendMessage(ctx context.Context, req channel.SendRequest) (ch
 
 // ParseWebhook implements channel.Provider. Signature verification is the
 // caller's responsibility (call VerifySignature on the raw body first).
+//
+// Meta multiplexes messages and calls onto the same webhook endpoint —
+// changes[].field is either "messages" or "calls". Run both parsers and
+// concatenate the envelopes so downstream dispatch sees both streams from
+// a single POST body. If the call parser errs we still return whatever
+// message envelopes were extracted so a malformed call sub-payload never
+// hides a valid inbound message.
 func (p *Provider) ParseWebhook(ctx context.Context, headers map[string][]string, body []byte) ([]events.Envelope, error) {
 	_ = ctx // parsing is CPU-only; ctx kept for interface parity.
-	return ParseWebhook(body, p.resolver)
+	msgs, err := ParseWebhook(body, p.resolver)
+	if err != nil {
+		return nil, err
+	}
+	calls, cerr := ParseCallWebhook(body, p.resolver)
+	if cerr != nil {
+		// Don't lose valid message envelopes to a call-side parse error.
+		// Log via slog so operators still see call-parse regressions.
+		slog.Default().Warn("whatsapp: parse call webhook",
+			slog.Any("err", cerr),
+		)
+		return msgs, nil
+	}
+	if len(calls) == 0 {
+		return msgs, nil
+	}
+	return append(msgs, calls...), nil
 }
 
 // MarkAsRead flips a received message to "read" on the customer's device

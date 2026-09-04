@@ -22,8 +22,11 @@ import (
 type ConversationSummary struct {
 	ID                 string  `json:"id"`
 	OrgID              string  `json:"org_id"`
-	ContactID          string  `json:"contact_id"`
+	ContactID          string  `json:"contact_id,omitempty"`
 	ContactName        string  `json:"contact_name,omitempty"`
+	Type               string  `json:"type"`
+	GroupID            string  `json:"group_id,omitempty"`
+	Subject            string  `json:"subject,omitempty"`
 	Status             string  `json:"status"`
 	Channel            string  `json:"channel,omitempty"`
 	LastMessageAt      *string `json:"last_message_at,omitempty"`
@@ -102,6 +105,7 @@ type MessageDTO struct {
 	Contacts                 []map[string]any `json:"contacts,omitempty"`
 	Reaction                 map[string]any   `json:"reaction,omitempty"`
 	Interactive              map[string]any   `json:"interactive,omitempty"`
+	Template                 map[string]any   `json:"template,omitempty"`
 	ReplyToProviderMessageID string           `json:"reply_to_provider_message_id,omitempty"`
 	CreatedAt                string           `json:"created_at"`
 	SentAt                   *string          `json:"sent_at,omitempty"`
@@ -299,7 +303,7 @@ func (h *messagesHandler) markMessageRead(w http.ResponseWriter, r *http.Request
 				slog.String("message_id", id),
 				slog.Any("err", err),
 			)
-			writeProblem(w, r, http.StatusBadGateway, "provider_error", "mark-as-read failed")
+			writeProviderProblem(w, r, http.StatusBadGateway, "provider_error", err)
 		}
 		return
 	}
@@ -330,7 +334,7 @@ func (h *messagesHandler) markConversationRead(w http.ResponseWriter, r *http.Re
 			slog.String("conversation_id", convID),
 			slog.Any("err", err),
 		)
-		writeProblem(w, r, http.StatusBadGateway, "provider_error", "mark-as-read partial failure")
+		writeProviderProblem(w, r, http.StatusBadGateway, "provider_error", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -492,6 +496,9 @@ func toMessageDTO(m msgdom.Message) MessageDTO {
 		}
 		if v, ok := m.Metadata["interactive"].(map[string]any); ok {
 			dto.Interactive = v
+		}
+		if v, ok := m.Metadata["template"].(map[string]any); ok {
+			dto.Template = v
 		}
 		if v, ok := m.Metadata["reply_to_wamid"].(string); ok {
 			dto.ReplyToProviderMessageID = v

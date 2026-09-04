@@ -1,0 +1,234 @@
+# WhatsApp Groups — self-contained OpenAPI fragment.
+#
+# Merged into the main openapi.yaml by a later codegen pass; kept as a
+# fragment today so this feature ships without touching the aggregate spec
+# (which is on the parallel-agent deny list).
+#
+# Reference (source of truth for provider surfaces):
+# ~/Documents/whatsapp_doc_tracker/docs/groups/
+openapi: 3.1.0
+info:
+  title: fullWA — Groups
+  version: 0.2.5-groups
+tags:
+  - name: groups
+    description: WhatsApp Business Cloud API groups (list, sync, roster, send).
+
+paths:
+  /api/v1/groups:
+    get:
+      operationId: listGroups
+      tags: [groups]
+      summary: List persisted groups for the caller's org.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - in: query
+          name: integration_id
+          schema: { type: string, description: "ULID; scope to one integration" }
+        - in: query
+          name: q
+          schema: { type: string, description: "case-insensitive subject substring" }
+        - in: query
+          name: cursor
+          schema: { type: string, description: "opaque next-page token" }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        '200':
+          description: Page of groups
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupList' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/groups/sync:
+    post:
+      operationId: syncGroups
+      tags: [groups]
+      summary: Pull the current group roster from the provider and upsert it.
+      security: [{ sessionCookie: [], csrfCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SyncGroupsRequest' }
+      responses:
+        '200':
+          description: Sync result
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SyncGroupsResponse' }
+        '422':
+          description: Provider does not support groups
+        '424':
+          description: Integration missing
+        '502':
+          description: Provider error
+
+  /api/v1/groups/{id}:
+    get:
+      operationId: getGroup
+      tags: [groups]
+      summary: Read one group by ULID.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Group
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Group' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/groups/{id}/members:
+    get:
+      operationId: listGroupMembers
+      tags: [groups]
+      summary: Read the roster of a group.
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Group roster
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GroupMemberList' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/groups/{id}/messages:
+    post:
+      operationId: sendGroupMessage
+      tags: [groups]
+      summary: Send a text / template / media message to a group.
+      security: [{ sessionCookie: [], csrfCookie: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendGroupMessageRequest' }
+      responses:
+        '202':
+          description: Accepted; message queued for outbound send
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendGroupMessageAccepted' }
+        '400': { description: "validation" }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { description: "provider error" }
+
+components:
+  schemas:
+    Group:
+      type: object
+      required: [id, org_id, integration_id, provider_group_id, subject, size, is_admin, created_at, updated_at]
+      properties:
+        id: { type: string, description: "ULID" }
+        org_id: { type: string, description: "ULID" }
+        integration_id: { type: string, description: "ULID" }
+        provider_group_id: { type: string, description: "Meta group id" }
+        subject: { type: string }
+        description: { type: string }
+        size: { type: integer, minimum: 0 }
+        is_admin: { type: boolean, description: "Our business phone number is admin in this group" }
+        metadata:
+          type: object
+          additionalProperties: true
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    GroupList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Group' }
+        next_cursor: { type: string }
+
+    GroupMember:
+      type: object
+      required: [id, group_id, role, joined_at]
+      properties:
+        id: { type: integer, format: int64 }
+        group_id: { type: string }
+        contact_id: { type: string, description: "resolved ULID, if any" }
+        wa_id: { type: string, description: "E.164 without +" }
+        bsuid: { type: string, description: "business-scoped user id" }
+        role:
+          type: string
+          enum: [member, admin, superadmin]
+        joined_at: { type: string, format: date-time }
+        left_at: { type: string, format: date-time, nullable: true }
+
+    GroupMemberList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/GroupMember' }
+
+    SyncGroupsRequest:
+      type: object
+      required: [integration_id]
+      properties:
+        integration_id: { type: string, description: "ULID of the whatsapp integration to sync" }
+
+    SyncGroupsResponse:
+      type: object
+      required: [groups_upserted, members_upserted]
+      properties:
+        groups_upserted: { type: integer, minimum: 0 }
+        members_upserted: { type: integer, minimum: 0 }
+
+    SendGroupMessageRequest:
+      type: object
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [text, template, image, video, audio, document, sticker]
+        text: { type: object, description: "TextPayload (canonical)" }
+        template: { type: object, description: "TemplatePayload" }
+        media: { type: object, description: "MediaPayload — media_id or url" }
+        idempotency_key: { type: string }
+
+    SendGroupMessageAccepted:
+      type: object
+      required: [message_id, status]
+      properties:
+        message_id: { type: string }
+        status: { type: string, enum: [queued] }
+
+  responses:
+    Unauthenticated:
+      description: Session required
+    Forbidden:
+      description: Missing permission
+    NotFound:
+      description: Not found
+
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: fullwa_session
+    csrfCookie:
+      type: apiKey
+      in: header
+      name: X-CSRF-Token

@@ -213,6 +213,50 @@ func (m *Messages) ListByConversation(ctx context.Context, orgID organization.ID
 	return out, nil
 }
 
+// FindByCallID returns the synthetic message row whose metadata.call_id
+// matches callID. Returns ErrNotFound when no such row exists. The lookup
+// uses MySQL's JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.call_id')) — a
+// non-indexed scan by design, since call inline-messages are rare and the
+// query is only ever run once per call webhook event.
+func (m *Messages) FindByCallID(ctx context.Context, orgID organization.ID, callID string) (message.Message, error) {
+	orgBytes, err := ulidToBytes(string(orgID))
+	if err != nil {
+		return message.Message{}, fmt.Errorf("messages org: %w", err)
+	}
+	q := "SELECT " + messageCols + " FROM messages" +
+		" WHERE org_id = ? AND message_type = 'call'" +
+		" AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.call_id')) = ?" +
+		" ORDER BY id DESC LIMIT 1"
+	row := m.db.QueryRowContext(ctx, q, orgBytes, callID)
+	msg, err := scanMessage(row.Scan)
+	if err != nil {
+		return message.Message{}, err
+	}
+	return msg, nil
+}
+
+// FindByCallIDAndStatus returns the info message row for the given
+// (call_id, call_status) tuple. Matches any message_type in ('info','call')
+// so pre-existing legacy `call` rows still dedupe. Non-indexed JSON scan by
+// design — the query runs at most once per call status webhook.
+func (m *Messages) FindByCallIDAndStatus(ctx context.Context, orgID organization.ID, callID, status string) (message.Message, error) {
+	orgBytes, err := ulidToBytes(string(orgID))
+	if err != nil {
+		return message.Message{}, fmt.Errorf("messages org: %w", err)
+	}
+	q := "SELECT " + messageCols + " FROM messages" +
+		" WHERE org_id = ? AND message_type IN ('info','call')" +
+		" AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.call_id')) = ?" +
+		" AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.call_status')) = ?" +
+		" ORDER BY id DESC LIMIT 1"
+	row := m.db.QueryRowContext(ctx, q, orgBytes, callID, status)
+	msg, err := scanMessage(row.Scan)
+	if err != nil {
+		return message.Message{}, err
+	}
+	return msg, nil
+}
+
 // statusTimestampColumn maps a message.Status to the timestamp column it
 // should stamp. Returns "" for statuses without a dedicated timestamp.
 func statusTimestampColumn(s message.Status) (string, error) {

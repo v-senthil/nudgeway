@@ -3,14 +3,16 @@ import { createRoute } from '@tanstack/react-router';
 import { settingsRoute } from './settings';
 import { IntegrationList } from '../features/settings/IntegrationList';
 import { ConnectWhatsAppModal } from '../features/settings/ConnectWhatsAppModal';
+import { SettingsDrawer } from '../features/integrations/SettingsDrawer';
 import { EmptyState } from '../components/EmptyState';
 import { Button } from '../components/Button';
 import { Spinner } from '../components/Spinner';
-import { useIntegrations } from '../lib/integrations';
+import { useIntegrations, type Integration } from '../lib/integrations';
 import { ApiError } from '../lib/api';
 
 function IntegrationsPage() {
   const [connectOpen, setConnectOpen] = useState(false);
+  const [drawerFor, setDrawerFor] = useState<Integration | null>(null);
   const integrations = useIntegrations();
 
   const isPermDenied = integrations.error instanceof ApiError && integrations.error.status === 403;
@@ -92,10 +94,11 @@ function IntegrationsPage() {
       )}
 
       {integrations.data !== undefined && integrations.data.length > 0 && (
-        <IntegrationList items={integrations.data} />
+        <IntegrationList items={integrations.data} onOpenSettings={setDrawerFor} />
       )}
 
       <ConnectWhatsAppModal open={connectOpen} onClose={() => setConnectOpen(false)} />
+      <SettingsDrawer integration={drawerFor} onClose={() => setDrawerFor(null)} />
     </div>
   );
 }

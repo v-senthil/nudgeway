@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import type { Me } from '../../lib/auth';
 import { useLogout } from '../../lib/auth';
 
@@ -58,7 +58,30 @@ export function Header({ me }: Props) {
         <span className="text-sm font-semibold tracking-tight text-slate-900">fullWA</span>
       </div>
 
-      <div className="text-sm font-medium text-slate-600">{me.org_name}</div>
+      <nav aria-label="Primary" className="flex items-center gap-1">
+        <Link
+          to="/inbox"
+          className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          activeProps={{ className: 'rounded-lg px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 font-medium' }}
+        >
+          Inbox
+        </Link>
+        <Link
+          to="/calls"
+          className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          activeProps={{ className: 'rounded-lg px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 font-medium' }}
+        >
+          Calls
+        </Link>
+        <Link
+          to="/analytics"
+          className="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+          activeProps={{ className: 'rounded-lg px-3 py-1.5 text-sm bg-emerald-50 text-emerald-700 font-medium' }}
+        >
+          Analytics
+        </Link>
+        <span className="ml-3 text-sm font-medium text-slate-600">{me.org_name}</span>
+      </nav>
 
       <div className="flex items-center gap-2">
         <button

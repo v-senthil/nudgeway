@@ -19,6 +19,8 @@ export type MessageType =
   | 'template'
   | 'reaction'
   | 'system'
+  | 'call'
+  | 'info'
   | 'unknown';
 
 export type Message = {
@@ -55,18 +57,57 @@ export type Message = {
     id?: string;
     title?: string;
     description?: string;
+    // Populated when kind === 'call_permission_reply' — the customer's
+    // response to a WhatsApp calling permission prompt.
+    response?: 'accept' | 'reject' | string;
+    response_source?: string;
+    expiration_timestamp?: number;
+    /** true when the granted permission is permanent (Nov 2025+ feature);
+     * false or absent for temporary/one-off grants and reject responses. */
+    is_permanent?: boolean;
+  };
+  // template is the Meta template send shape mirrored back on the
+  // outbound message DTO: { name, language: {code}, components: [...] }.
+  // Populated when type === 'template' so the TemplateBubble can render
+  // the human-readable header + parameter bullets.
+  template?: {
+    name?: string;
+    language?: { code?: string } | string;
+    namespace?: string;
+    components?: Array<Record<string, unknown>>;
+    [k: string]: unknown;
   };
   reply_to_provider_message_id?: string;
+  // from_user_id / to_user_id carry the peer identity. For inbound WhatsApp
+  // messages, from_user_id is typically the contact's BSUID.
+  from_user_id?: string;
+  to_user_id?: string;
+  // metadata is a free-form bag the backend uses for typed side-channels.
+  // For type === 'call', it carries { call_id, direction, status,
+  // duration_seconds } so the Thread can render a click-through card.
+  metadata?: Record<string, unknown>;
   created_at: string;
   updated_at?: string;
 };
 
+export type ConversationType = 'one_to_one' | 'group';
+
 export type Conversation = {
   id: string;
   org_id: string;
-  contact_id: string;
+  contact_id?: string;
   contact_name?: string;
   contact_avatar_url?: string;
+  /**
+   * Discriminator: 'one_to_one' (contact-backed) or 'group' (group-backed).
+   * Defaults to 'one_to_one' when the server omits it so pre-migration
+   * fixtures continue to render.
+   */
+  type?: ConversationType;
+  /** Populated when type === 'group'. */
+  group_id?: string;
+  /** Group subject (chat name). Populated when type === 'group'. */
+  subject?: string;
   status: 'open' | 'pending' | 'resolved' | 'closed';
   last_message_at?: string;
   last_message_preview?: string;
@@ -82,6 +123,20 @@ export type Conversation = {
  * The `client_reference_id` is optimistic-UI plumbing echoed back on the
  * accept response so the optimistic row can be reconciled with the server id.
  */
+/** TemplateSendPayload matches the internal message.TemplatePayload shape:
+ * language is a plain string (Meta locale), not the {code:...} object. The
+ * WhatsApp adapter wraps it into the Meta shape before hitting Graph. */
+export type TemplateSendPayload = {
+  name: string;
+  language: string;
+  components?: Array<{
+    type: 'header' | 'body' | 'footer' | 'button';
+    sub_type?: 'url' | 'quick_reply' | 'copy_code' | 'voice_call';
+    index?: number;
+    parameters?: Array<Record<string, unknown>>;
+  }>;
+};
+
 export type SendMessageInput =
   | {
       conversation_id: string;
@@ -101,6 +156,12 @@ export type SendMessageInput =
         caption?: string;
         filename?: string;
       };
+      client_reference_id?: string;
+    }
+  | {
+      conversation_id: string;
+      type: 'template';
+      template: TemplateSendPayload;
       client_reference_id?: string;
     };
 
@@ -211,6 +272,8 @@ export function useSendMessage() {
       }
       if (input.type === 'text') {
         body['text'] = input.text;
+      } else if (input.type === 'template') {
+        body['template'] = input.template;
       } else {
         body['media'] = input.media;
       }

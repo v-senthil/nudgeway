@@ -12,6 +12,13 @@ export const InboxEvent = {
   ConversationCreated: 'conversation.created',
   ConversationUpdated: 'conversation.updated',
   IntegrationStatus: 'integration.status',
+  CallInitiated: 'call.initiated',
+  CallRinging: 'call.ringing',
+  CallAnswered: 'call.answered',
+  CallEnded: 'call.ended',
+  CallEndedDetailed: 'call.ended.detailed',
+  CallFailed: 'call.failed',
+  CallRecordingCreated: 'call.recording_created',
 } as const;
 
 export type InboxEventName = (typeof InboxEvent)[keyof typeof InboxEvent];

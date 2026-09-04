@@ -1,10 +1,62 @@
 # Phase 1 — WhatsApp Inbox MVP
 
-Status: **in progress**. Foundation laid; inbound processing + outbound send shipped; ingress + UI wizard pending.
+Status: **complete** (functionally). Real WhatsApp messages flow in and out through the canonical domain; media round-trips through HBase; status ticks advance live via WebSocket; BSUID rollout supported. See the Phase 1 CLOSE section of [`../../CHANGELOG.md`](../../CHANGELOG.md) for commit-level detail.
 
 ## Goal (from the master plan)
 
 Real WhatsApp messages flow in and out through the canonical domain, visible in a real-time inbox.
+
+## Exit criteria — all met
+
+| Criterion | Evidence |
+|---|---|
+| Two agents in two browsers see an inbound WhatsApp message live | WebSocket bridge + `useInboxSocket` invalidates `['messages', <conversation_id>]` on `message.received` |
+| Send replies from the browser | `POST /api/v1/messages` → Kafka → `SendWorker` → WhatsApp adapter → Meta accepts with a `wamid`, delivered on the customer's phone |
+| Status ticks update in real time | Grey ✓ → grey ✓✓ → blue ✓✓ transitions via `SetProviderMessageID` + `UpdateStatusByProviderMessageID` + WS invalidation |
+| Nothing in `application/` imports Meta types | Verified via `go-arch-lint` + grep guards |
+| Media round-trip works | HBase-backed `attachments.Store`; Meta Media Upload API for outbound → media_id; direct-URL download for inbound → HBase → `<img>` |
+| BSUID handled | `bsuid` identity persisted alongside phone; `MessageReceivedPayload.FromUserID` / `RecipientUserID` populated |
+
+## Highlights of what shipped
+
+### Backend
+- **Wire-up**: `cmd/server/main.go` boots MySQL + Redis + Kafka + HBase + LocalFS fallback + Prometheus metrics. Worker pools (8× each for `webhook.process` + `message.send`) via `franz-go` consumer groups.
+- **Domain**: `Contact`, `Identity`, `Session`, `Conversation`, `Message` with state-machine helpers. `Integration` + `WebhookEvent` types. `ContactIdentity` types include `phone`, `whatsapp`, `bsuid` (BSUID), `email`, `external`, `social`.
+- **Repositories** (MySQL): 8 Phase 1 repos; `Messages` gains `SetProviderMessageID` and `UpdateStatusByProviderMessageID`; `BusinessEndpoints.Upsert`; `Conversations.ListForOrg` for the inbox list.
+- **Attachments** (HBase): `internal/infrastructure/hbase/{client,schema,attachments}.go`. `LocalFS` retained as fallback. Row key = SHA-256; column families `d` (data) + `m` (metadata + per-integration Meta `media_id`).
+- **Crypto**: `internal/infrastructure/crypto` — envelope encryption for integration credentials (AES-GCM per DEK, KEK from `auth.credential_kek_hex`).
+- **Kafka**: `franz-go`-backed producer + consumer implementing `queue.Enqueuer` + `queue.Consumer` ports; publish path is fire-and-forget so REST stays sub-100 ms.
+- **WebSocket**: `internal/infrastructure/websocket/{hub,room,client,bridge}.go`. Bridge subscribes to `MessageReceived / Sent / Delivered / Read / Failed / ConversationCreated / Updated / Assigned / Resolved` and broadcasts JSON frames to the org's connected browsers.
+- **Provider adapter**: `internal/providers/whatsapp` — send/receive/mark-as-read/upload/download/verify-signature/parse-webhook; `channel.Provider` interface + `providers` registry.
+- **Application services**: `SendService` (RequestSend + ProcessSend), `InboundService` (ProcessRaw), `ReadService` (MarkRead + MarkConversationRead), `IntegrationService` (List/Create/Test/Delete).
+- **REST v1**: auth, integrations (CRUD + test), messages (send + list-by-conversation + mark-as-read), conversations (list), attachments (upload + serve), webhooks (Meta ingress + verify handshake).
+- **Dev-mode webhook fallback**: `webhook.Ingress.RequireSignature` gate switches from HMAC to payload-claims match (`phone_number_id` + `waba_id` in `integration.Config`). `FULLWA_REQUIRE_SIGNATURE=1` re-enables HMAC.
+
+### BSUID rollout support
+Meta is migrating from `wa_id` (phone-number-based) to BSUID (business-scoped user id, e.g. `IN.10173928811470384`). Full doc at `~/Documents/whatsapp_doc_tracker/docs/business-scoped-user-ids.md`.
+
+- **Inbound**: mapper reads `contacts[].user_id`, `contacts[].parent_user_id`, `contacts[].profile.username`, `messages[].from_user_id`, `messages[].from_parent_user_id`. Statuses read `recipient_user_id`. `MessageReceivedPayload.FromUserID / FromParentUserID / FromUsername`; `MessageStatusPayload.RecipientUserID`.
+- **Persistence**: `InboundService` upserts a `bsuid` `ContactIdentity` bound to the same Contact; promotes it to the Contact's `primary_identity_id` when the BSUID arrives.
+- **Outbound**: `SendService.resolveRecipient` iterates identities preferring phone/wa_id today, BSUID as a fallback. TODO: promote BSUID to primary once Meta portfolio-side send accepts all BSUIDs universally.
+
+### Frontend
+- **Routes**: `/login`, `/inbox?c=<conversation_id>`, `/settings/integrations`.
+- **Inbox**: 3-pane layout with conversation list (real data, sorted newest-first, live preview), thread with WhatsApp-style newest-at-bottom + auto-scroll, contact panel stub.
+- **Composer**: text + emoji + attach button; file-picker uploads to `/api/v1/attachments`; preview strip; sends `media: {media_id, url, caption?, filename?}` in one call.
+- **TickIcon** (SVG): three-dots (queued/sending), grey ✓ (sent), grey ✓✓ (delivered), blue ✓✓ (read), red ! (failed).
+- **Rendering**: `TextBubble`, `MediaBubble` (image/video/audio/document/sticker), `LocationBubble`, `ContactCardBubble`, `InteractiveBubble`, `UnknownBubble`; reactions overlaid as chip on the target bubble.
+- **Real-time**: `useInboxSocket` opens `/ws/inbox`, invalidates `['messages', <conversation_id>]` on any `message.*` frame.
+- **Auto mark-as-read**: `Thread` fires `MarkConversationRead` on mount / conversation change with 5s throttle per conversation.
+- **Header**: fullWA wordmark, org name, settings gear icon (opens `/settings/integrations`), user avatar dropdown with logout.
+- **Settings**: Integrations page with WhatsApp connect wizard (form → test → save); status badges (Connected / Not connected / Pending / Degraded / Auth failed / Rate limited / Disabled / Unknown).
+
+## Notable follow-ups deferred
+- Contact 360 hydration is stubbed (right pane). Real profile / tags / custom fields / activity timeline lands in Phase 2.
+- Frontend Settings only exposes Integrations. Templates / canned responses / automations / roles / audit ship in Phase 2 / 4.
+- HBase namespace is currently the default; `fullwa:attachments` awaits a gohbase namespace-RPC fix. Table name is `fullwa_attachments` in the default namespace.
+- BSUID promoted-to-primary on send once Meta portfolio-side accepts all BSUIDs (currently phone-first with BSUID fallback).
+- The 30-day / 7-day media-URL expiry (Meta doc) — reconciler + refresh path lands with the archival worker in Phase 4.
+
 
 ## What shipped so far
 

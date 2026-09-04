@@ -11,6 +11,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -31,12 +32,21 @@ import (
 	"github.com/fullwa/fullwa/internal/infrastructure/attachments"
 	fhbase "github.com/fullwa/fullwa/internal/infrastructure/hbase"
 	attachmentsPort "github.com/fullwa/fullwa/internal/ports/attachments"
+	appanalytics "github.com/fullwa/fullwa/internal/application/analytics"
+	appaudit "github.com/fullwa/fullwa/internal/application/audit"
 	appauth "github.com/fullwa/fullwa/internal/application/auth"
+	appcall "github.com/fullwa/fullwa/internal/application/call"
+	appgrp "github.com/fullwa/fullwa/internal/application/group"
 	appintegration "github.com/fullwa/fullwa/internal/application/integration"
+	appsettings "github.com/fullwa/fullwa/internal/application/integrationsettings"
 	appmsg "github.com/fullwa/fullwa/internal/application/message"
+	appproviderc "github.com/fullwa/fullwa/internal/application/providercall"
+	apptmpl "github.com/fullwa/fullwa/internal/application/template"
+	dpc "github.com/fullwa/fullwa/internal/domain/providercall"
 	devents "github.com/fullwa/fullwa/internal/domain/events"
 	dintegration "github.com/fullwa/fullwa/internal/domain/integration"
 	"github.com/fullwa/fullwa/internal/domain/organization"
+	tmpldom "github.com/fullwa/fullwa/internal/domain/template"
 	"github.com/fullwa/fullwa/internal/events"
 	infauth "github.com/fullwa/fullwa/internal/infrastructure/auth"
 	"github.com/fullwa/fullwa/internal/infrastructure/config"
@@ -48,6 +58,7 @@ import (
 	fmysql "github.com/fullwa/fullwa/internal/infrastructure/mysql"
 	fredis "github.com/fullwa/fullwa/internal/infrastructure/redis"
 	fws "github.com/fullwa/fullwa/internal/infrastructure/websocket"
+	"github.com/fullwa/fullwa/internal/ports/calling"
 	"github.com/fullwa/fullwa/internal/ports/channel"
 	"github.com/fullwa/fullwa/internal/ports/queue"
 	"github.com/fullwa/fullwa/internal/providers/whatsapp"
@@ -130,6 +141,13 @@ func run() error {
 	conversations := fmysql.NewConversations(db)
 	messages := fmysql.NewMessages(db)
 	webhookEvents := fmysql.NewWebhookEvents(db)
+	auditRepo := fmysql.NewAudit(db)
+	providerCallRepo := fmysql.NewProviderCalls(db)
+	templatesRepo := fmysql.NewTemplates(db)
+	groupsRepo := fmysql.NewGroups(db)
+	callsRepo := fmysql.NewCalls(db)
+	analyticsRepo := fmysql.NewAnalytics(db)
+	analyticsSourceRepo := fmysql.NewAnalyticsSource(db)
 
 	// --- Kafka (best-effort at boot; server still runs without it) ---------
 	var kProducer *fkafka.Producer
@@ -220,6 +238,17 @@ func run() error {
 	hub := fws.NewHub(logger)
 	fws.RegisterEventBridge(inproc, hub, logger)
 
+	// --- Audit + provider-call execution logs -------------------------------
+	// Applications construct once and share; Record is fire-and-forget.
+	auditSvc := appaudit.New(appaudit.Deps{Repo: auditRepo, Logger: logger})
+	providerCallSvc := appproviderc.NewService(appproviderc.Deps{Repo: providerCallRepo, Logger: logger})
+
+	// waTracer bridges whatsapp.TraceEvent → providercall.Entry so every
+	// outbound Meta call becomes a persisted provider_calls row. The
+	// bridge is provider-agnostic: it stamps Provider="whatsapp" on
+	// entries and lets the application service handle body truncation.
+	waTracer := whatsappTracer{svc: providerCallSvc}
+
 	// --- Providers ----------------------------------------------------------
 	// A single default WhatsApp adapter serves the STATELESS operations
 	// (ParseWebhook + verify signature). SendMessage requires per-integration
@@ -236,21 +265,39 @@ func run() error {
 	// providerRegistry builds a per-integration Provider using decrypted
 	// secrets. Owned here in cmd/server because it is the only package
 	// allowed to import concrete provider adapters.
+	//
+	// Reserved keys `_integration_id` and `_org_id` in the secrets bag
+	// carry wire-up metadata that upstream call sites (send, read,
+	// attachment download, integration test) inject so the tracer can
+	// tag every emitted execution-log row without changing the
+	// ProviderRegistry port signature.
 	provRegistry := providerRegistryFunc(func(_ context.Context, key string, secrets map[string]string) (channel.Provider, error) {
 		if key != "whatsapp" {
 			return nil, fmt.Errorf("provider %q not supported yet", key)
 		}
-		return whatsapp.New(whatsapp.Config{
+		integID := secrets["_integration_id"]
+		orgID := secrets["_org_id"]
+		waP := whatsapp.New(whatsapp.Config{
 			PhoneNumberID: secrets["phone_number_id"],
 			WABAID:        secrets["waba_id"],
 			AccessToken:   secrets["access_token"],
 			AppSecret:     secrets["app_secret"],
-		}), nil
+		}).WithTracer(waTracer, integID, orgID)
+		// Wrap so type assertions like prov.(appgrp.ProviderGroupsClient)
+		// succeed. The wrapper embeds *whatsapp.Provider for the
+		// channel.Provider surface and overrides the group methods to
+		// return the app-level DTO shapes.
+		return &whatsappChannelProvider{Provider: waP}, nil
 	})
 
 	// providerResolver dispatches integration.Service.Test to the adapter
 	// via HealthCheck.
 	provResolver := providerResolverFunc(func(pctx context.Context, i dintegration.Integration, secrets map[string]string) (channel.Provider, error) {
+		if secrets == nil {
+			secrets = map[string]string{}
+		}
+		secrets["_integration_id"] = string(i.ID)
+		secrets["_org_id"] = string(i.OrgID)
 		return provRegistry.Channel(pctx, i.Provider, secrets)
 	})
 
@@ -268,11 +315,23 @@ func run() error {
 		if v, ok := row.Config["waba_id"].(string); ok {
 			secrets["waba_id"] = v
 		}
+		secrets["_integration_id"] = string(row.ID)
+		secrets["_org_id"] = string(row.OrgID)
 		p, err := provRegistry.Channel(dctx, providerKey, secrets)
 		if err != nil {
 			return nil, "", fmt.Errorf("attachment download: resolve provider: %w", err)
 		}
 		waP, ok := p.(*whatsapp.Provider)
+		if !ok {
+			// provRegistry wraps the concrete Provider in
+			// whatsappChannelProvider for the group DTO adapters. Unwrap
+			// so the media-download path (recording + transcript + inbound
+			// message attachments) still works.
+			if w, wok := p.(*whatsappChannelProvider); wok {
+				waP = w.Provider
+				ok = true
+			}
+		}
 		if !ok {
 			return nil, "", fmt.Errorf("attachment download: provider %q does not support media", providerKey)
 		}
@@ -323,6 +382,7 @@ func run() error {
 		Contacts:      contacts,
 		Identities:    identities,
 		Integrations:  integrations,
+		Templates:     templatesRepo,
 		Enqueuer:      enq,
 		Publisher:     pub,
 		Providers:     provRegistry,
@@ -351,6 +411,137 @@ func run() error {
 	})
 
 	authSvc := appauth.NewService(users, sessionStore, perms.AsTyped(), cfg.Auth.SessionTTL)
+
+	// callingRegistry resolves a calling.Provider bound to an integration's
+	// decrypted secrets. Parallels provRegistry above — same whatsapp.Provider
+	// backing store, same tracer wiring for provider_calls telemetry.
+	callingRegistry := callingRegistryFunc(func(_ context.Context, key string, secrets map[string]string) (calling.Provider, error) {
+		if key != "whatsapp" {
+			return nil, fmt.Errorf("calling provider %q not supported", key)
+		}
+		integID := secrets["_integration_id"]
+		orgID := secrets["_org_id"]
+		waP := whatsapp.New(whatsapp.Config{
+			PhoneNumberID: secrets["phone_number_id"],
+			WABAID:        secrets["waba_id"],
+			AccessToken:   secrets["access_token"],
+			AppSecret:     secrets["app_secret"],
+		}).WithTracer(waTracer, integID, orgID)
+		return waP.CallingProvider(), nil
+	})
+
+	// templateProviderRegistry adapts the whatsapp adapter to
+	// apptmpl.ProviderRegistry — bridges the map[string]any component shape
+	// on the wire with the domain []tmpldom.Component shape the application
+	// service exchanges. JSON round-trip keeps unknown provider fields
+	// preserved through the Extra map.
+	templateProviderRegistry := templateRegistryFunc(func(_ context.Context, key string, _ dintegration.Integration, secrets map[string]string) (apptmpl.TemplateProvider, error) {
+		if key != "whatsapp" {
+			return nil, fmt.Errorf("template provider %q not supported", key)
+		}
+		integID := secrets["_integration_id"]
+		orgID := secrets["_org_id"]
+		waP := whatsapp.New(whatsapp.Config{
+			PhoneNumberID: secrets["phone_number_id"],
+			WABAID:        secrets["waba_id"],
+			AccessToken:   secrets["access_token"],
+			AppSecret:     secrets["app_secret"],
+		}).WithTracer(waTracer, integID, orgID)
+		return whatsappTemplateAdapter{p: waP}, nil
+	})
+
+	templateSvc := apptmpl.NewService(apptmpl.Deps{
+		Repo:         templatesRepo,
+		Integrations: integrations,
+		Providers:    templateProviderRegistry,
+		IDs:          idGenerator{},
+		Clock:        systemClock{},
+		Logger:       logger,
+	})
+
+	groupSvc := appgrp.NewService(appgrp.Deps{
+		Repo:         groupsRepo,
+		Integrations: integrations,
+		Providers:    provRegistry,
+		// Send is nil: SendToGroup is not implemented in the message
+		// pipeline yet; List / Get / Sync remain functional. Attempts to
+		// call SendMessage return an explicit "send service not wired".
+		Send:          nil,
+		Conversations: conversations,
+		Clock:         systemClock{},
+		Logger:        logger,
+	})
+
+	callSvc := appcall.New(appcall.Deps{
+		Repo:             callsRepo,
+		Contacts:         contacts,
+		Sessions:         commSessions,
+		Conversations:    conversations,
+		Endpoints:        businessEndpoints,
+		Integrations:     integrations,
+		CallingProviders: callingRegistry,
+		Publisher:        pub,
+		IDs:              idGenerator{},
+		Clock:            systemClock{},
+		Logger:           logger,
+		Attachments:      attachStore,
+		Downloader:       callAttachmentDownloader{fn: attachDownloader},
+		Messages:         messages,
+		MessageIDs:       idGenerator{},
+		Identities:       identities,
+		ContactIDs:       idGenerator{},
+	})
+
+	// Stitch the calling application service into the inbound webhook
+	// dispatch loop so Call* envelopes emitted by the whatsapp adapter's
+	// ParseCallWebhook path reach the DB + get republished for the WS
+	// bridge. The inbound service is nil-safe on this dep; wiring it here
+	// after both services exist keeps the boot order simple.
+	inbound.SetCallInbound(callSvc)
+
+	analyticsSvc := appanalytics.New(appanalytics.Deps{
+		Repo:   analyticsRepo,
+		Raw:    analyticsSourceRepo,
+		Logger: logger,
+	})
+
+	// integrationSettingsResolver builds a settings ProviderClient for the
+	// integration. Mirrors provRegistry — same whatsapp.Provider backing
+	// store, same tracer wiring so provider_calls captures every business
+	// profile / call settings / OBA round-trip.
+	settingsResolver := integrationSettingsResolverFunc(func(_ context.Context, key string, integ dintegration.Integration, secrets map[string]string) (appsettings.ProviderClient, error) {
+		if key != "whatsapp" {
+			return nil, fmt.Errorf("settings provider %q not supported", key)
+		}
+		integID := secrets["_integration_id"]
+		orgID := secrets["_org_id"]
+		waP := whatsapp.New(whatsapp.Config{
+			PhoneNumberID: secrets["phone_number_id"],
+			WABAID:        secrets["waba_id"],
+			AccessToken:   secrets["access_token"],
+			AppSecret:     secrets["app_secret"],
+		}).WithTracer(waTracer, integID, orgID)
+		return whatsappSettingsAdapter{p: waP}, nil
+	})
+
+	// callPermissionAdapter bridges the settings drawer's optional
+	// permission-lookup port to the calling application service. Kept as an
+	// inline closure so integrationsettings stays free of a direct import
+	// on ports/calling.
+	callPermissionAdapter := callPermissionLookupFunc(func(ctx context.Context, orgID organization.ID, id dintegration.ID, waID string) (appsettings.CallPermission, error) {
+		pm, err := callSvc.GetPermission(ctx, orgID, id, waID)
+		if err != nil {
+			return appsettings.CallPermission{}, err
+		}
+		return appsettings.CallPermission{Status: pm.Status, ExpirationTime: pm.ExpirationTime}, nil
+	})
+
+	settingsSvc := appsettings.NewService(appsettings.Deps{
+		Integrations: integrations,
+		Providers:    settingsResolver,
+		Permissions:  callPermissionAdapter,
+		Logger:       logger,
+	})
 
 	// --- Webhook ingress ----------------------------------------------------
 	// DEV MODE: signature verification is currently disabled. Meta's App
@@ -428,6 +619,36 @@ func run() error {
 			PublicBaseURL: publicBaseURL(cfg),
 			Logger:        logger,
 		},
+		Audit: v1.AuditDeps{
+			Service: auditSvc,
+			Logger:  logger,
+		},
+		ProviderCalls: v1.ProviderCallsDeps{
+			Service: providerCallSvc,
+			Logger:  logger,
+		},
+		Templates: v1.TemplateDeps{
+			Service: templateSvc,
+			Logger:  logger,
+		},
+		Groups: v1.GroupsDeps{
+			Service: groupSvc,
+			Logger:  logger,
+		},
+		Calls: v1.CallsDeps{
+			Service: callSvc,
+			Audit:   auditSvc,
+			Logger:  logger,
+		},
+		Analytics: v1.AnalyticsDeps{
+			Service: analyticsSvc,
+			Logger:  logger,
+		},
+		IntegrationSettings: v1.IntegrationSettingsDeps{
+			Service: settingsSvc,
+			Audit:   auditSvc,
+			Logger:  logger,
+		},
 		PermissionResolver: perms,
 		Logger:             logger,
 		SlideEvery:         5 * time.Minute,
@@ -487,6 +708,24 @@ func run() error {
 		}
 		logger.Info("worker pools started", slog.Int("count", len(pools)))
 	}
+
+	// --- Analytics rollup runner -------------------------------------------
+	// The runner ticks every 15 minutes, re-rolling yesterday + today per
+	// org so late-arriving webhook statuses eventually converge. Its loop
+	// blocks on the returned ctx; shutdown cancels the parent ctx which
+	// propagates and exits the goroutine cleanly.
+	analyticsRunner := workers.NewAnalyticsRollupRunner(workers.AnalyticsRollupDeps{
+		Service:  analyticsSvc,
+		Orgs:     orgLister{db: db},
+		Repo:     analyticsRepo,
+		Logger:   logger,
+		Interval: 15 * time.Minute,
+	})
+	go func() {
+		if err := analyticsRunner.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("analytics rollup exited", slog.Any("err", err))
+		}
+	}()
 
 	// --- Listen -------------------------------------------------------------
 	logger.Info("http listen", slog.String("addr", cfg.HTTP.Addr))
@@ -606,11 +845,19 @@ func (u metaMediaUploader) Upload(ctx context.Context, orgID, key, contentType, 
 	if v, ok := row.Config["waba_id"].(string); ok {
 		secrets["waba_id"] = v
 	}
+	secrets["_integration_id"] = string(row.ID)
+	secrets["_org_id"] = string(row.OrgID)
 	p, err := u.providers.Channel(ctx, row.Provider, secrets)
 	if err != nil {
 		return "", "", "", fmt.Errorf("meta upload: resolve provider: %w", err)
 	}
 	waP, ok := p.(*whatsapp.Provider)
+	if !ok {
+		if w, wok := p.(*whatsappChannelProvider); wok {
+			waP = w.Provider
+			ok = true
+		}
+	}
 	if !ok {
 		return "", "", "", fmt.Errorf("meta upload: provider %q does not support upload", row.Provider)
 	}
@@ -638,12 +885,57 @@ func (u metaMediaUploader) Upload(ctx context.Context, orgID, key, contentType, 
 	return row.Provider, string(integ.ID), mediaID, nil
 }
 
+// whatsappTracer bridges whatsapp.Tracer.OnCall into the provider-agnostic
+// providercall.Service.Record. Every outbound Meta HTTP call the adapter
+// makes yields one persisted execution-log row. The bridge is thin on
+// purpose — body truncation, direction defaulting, and error handling live
+// in the application service.
+type whatsappTracer struct{ svc *appproviderc.Service }
+
+// OnCall implements whatsapp.Tracer.
+func (t whatsappTracer) OnCall(ctx context.Context, e whatsapp.TraceEvent) {
+	if t.svc == nil {
+		return
+	}
+	t.svc.Record(ctx, dpc.Entry{
+		OrgID:         e.OrgID,
+		IntegrationID: e.IntegrationID,
+		Provider:      "whatsapp",
+		Operation:     e.Operation,
+		Direction:     dpc.DirectionOutbound,
+		Method:        e.Method,
+		URL:           e.URL,
+		StatusCode:    e.StatusCode,
+		LatencyMs:     e.LatencyMs,
+		RequestBody:   e.RequestBody,
+		ResponseBody:  e.ResponseBody,
+		ErrorClass:    e.ErrClass,
+		ErrorMessage:  e.ErrMessage,
+		TraceID:       e.TraceID,
+		OccurredAt:    time.Now().UTC(),
+	})
+}
+
 // attachmentDownloaderFunc adapts a closure into appmsg.AttachmentDownloader.
 type attachmentDownloaderFunc func(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID, mediaURL string) (io.ReadCloser, string, error)
 
 // Download implements appmsg.AttachmentDownloader.
 func (f attachmentDownloaderFunc) Download(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID, mediaURL string) (io.ReadCloser, string, error) {
 	return f(ctx, providerKey, integrationID, mediaID, mediaURL)
+}
+
+// callAttachmentDownloader adapts the shared attachmentDownloaderFunc onto
+// the appcall.AttachmentDownloader port. The two application services keep
+// independent port types per the dependency rule; the underlying closure
+// is reused so recording + transcript downloads share the same integration
+// lookup and provider registry as inbound message media.
+type callAttachmentDownloader struct {
+	fn attachmentDownloaderFunc
+}
+
+// Download implements appcall.AttachmentDownloader.
+func (c callAttachmentDownloader) Download(ctx context.Context, providerKey string, integrationID dintegration.ID, mediaID, mediaURL string) (io.ReadCloser, string, error) {
+	return c.fn(ctx, providerKey, integrationID, mediaID, mediaURL)
 }
 
 // publicBaseURL returns the URL prefix operators use to build webhook URLs.
@@ -726,6 +1018,16 @@ func (idGenerator) NewMessageID() string { return ulid.Make().String() }
 // NewID mints a ULID for integrations.
 func (idGenerator) NewID() dintegration.ID { return dintegration.ID(ulid.Make().String()) }
 
+// NewCallID mints a ULID for calls.
+func (idGenerator) NewCallID() string { return ulid.Make().String() }
+
+// NewTemplateID mints a ULID for templates.
+func (idGenerator) NewTemplateID() string { return ulid.Make().String() }
+
+// NewContactID mints a ULID for freshly-observed callers when the call
+// service bootstraps a contact off an inbound call webhook.
+func (idGenerator) NewContactID() string { return ulid.Make().String() }
+
 // systemClock is time.Now().UTC() as a Clock port.
 type systemClock struct{}
 
@@ -763,6 +1065,9 @@ func (c conversationsLister) ListConversations(ctx context.Context, orgID string
 			OrgID:              string(r.OrgID),
 			ContactID:          r.ContactID,
 			ContactName:        r.ContactDisplay,
+			Type:               string(r.Type),
+			GroupID:            r.GroupID,
+			Subject:            r.GroupSubject,
 			Status:             string(r.Status),
 			Channel:            r.Channel,
 			LastMessageAt:      lastAt,
@@ -770,6 +1075,439 @@ func (c conversationsLister) ListConversations(ctx context.Context, orgID string
 			UnreadCount:        r.UnreadCount,
 			CreatedAt:          r.CreatedAt.UTC().Format(time.RFC3339),
 		})
+	}
+	return out, nil
+}
+
+// callingRegistryFunc adapts a closure into appcall.CallingProviderRegistry.
+type callingRegistryFunc func(ctx context.Context, key string, secrets map[string]string) (calling.Provider, error)
+
+// Calling implements appcall.CallingProviderRegistry.
+func (f callingRegistryFunc) Calling(ctx context.Context, key string, secrets map[string]string) (calling.Provider, error) {
+	return f(ctx, key, secrets)
+}
+
+// templateRegistryFunc adapts a closure into apptmpl.ProviderRegistry.
+type templateRegistryFunc func(ctx context.Context, key string, integ dintegration.Integration, secrets map[string]string) (apptmpl.TemplateProvider, error)
+
+// Template implements apptmpl.ProviderRegistry.
+func (f templateRegistryFunc) Template(ctx context.Context, key string, integ dintegration.Integration, secrets map[string]string) (apptmpl.TemplateProvider, error) {
+	return f(ctx, key, integ, secrets)
+}
+
+// integrationSettingsResolverFunc adapts a closure into
+// appsettings.Resolver.
+type integrationSettingsResolverFunc func(ctx context.Context, key string, integ dintegration.Integration, secrets map[string]string) (appsettings.ProviderClient, error)
+
+// Settings implements appsettings.Resolver.
+func (f integrationSettingsResolverFunc) Settings(ctx context.Context, key string, integ dintegration.Integration, secrets map[string]string) (appsettings.ProviderClient, error) {
+	return f(ctx, key, integ, secrets)
+}
+
+// callPermissionLookupFunc adapts a closure into
+// appsettings.CallPermissionLookup so the settings drawer can query the
+// calling application service without the settings package importing
+// ports/calling.
+type callPermissionLookupFunc func(ctx context.Context, orgID organization.ID, id dintegration.ID, waID string) (appsettings.CallPermission, error)
+
+// LookupCallPermission implements appsettings.CallPermissionLookup.
+func (f callPermissionLookupFunc) LookupCallPermission(ctx context.Context, orgID organization.ID, id dintegration.ID, waID string) (appsettings.CallPermission, error) {
+	return f(ctx, orgID, id, waID)
+}
+
+// whatsappSettingsAdapter bridges the WhatsApp adapter's provider-native
+// business-profile / call-settings / OBA methods with the
+// provider-neutral appsettings.ProviderClient port. Every method is a
+// one-shot translation between the adapter's shape and the DTO shape;
+// the whatsapp package remains the sole owner of the Meta wire format.
+type whatsappSettingsAdapter struct {
+	p *whatsapp.Provider
+}
+
+// GetBusinessProfile implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) GetBusinessProfile(ctx context.Context) (appsettings.BusinessProfileDTO, error) {
+	bp, err := a.p.GetBusinessProfile(ctx)
+	if err != nil {
+		return appsettings.BusinessProfileDTO{}, err
+	}
+	return appsettings.BusinessProfileDTO{
+		About:             bp.About,
+		Address:           bp.Address,
+		Description:       bp.Description,
+		Email:             bp.Email,
+		ProfilePictureURL: bp.ProfilePictureURL,
+		Vertical:          bp.Vertical,
+		Websites:          bp.Websites,
+	}, nil
+}
+
+// UpdateBusinessProfile implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) UpdateBusinessProfile(ctx context.Context, bp appsettings.BusinessProfileDTO) error {
+	return a.p.UpdateBusinessProfile(ctx, whatsapp.BusinessProfile{
+		About:             bp.About,
+		Address:           bp.Address,
+		Description:       bp.Description,
+		Email:             bp.Email,
+		ProfilePictureURL: bp.ProfilePictureURL,
+		Vertical:          bp.Vertical,
+		Websites:          bp.Websites,
+	})
+}
+
+// GetCallSettings implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) GetCallSettings(ctx context.Context) (appsettings.CallSettingsDTO, error) {
+	cs, err := a.p.GetCallSettings(ctx)
+	if err != nil {
+		return appsettings.CallSettingsDTO{}, err
+	}
+	return toCallSettingsDTO(cs), nil
+}
+
+// UpdateCallSettings implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) UpdateCallSettings(ctx context.Context, cs appsettings.CallSettingsDTO) error {
+	return a.p.UpdateCallSettings(ctx, fromCallSettingsDTO(cs))
+}
+
+// GetOBAStatus implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) GetOBAStatus(ctx context.Context) (appsettings.OBAStatusDTO, error) {
+	s, err := a.p.GetOBAStatus(ctx)
+	if err != nil {
+		return appsettings.OBAStatusDTO{}, err
+	}
+	return appsettings.OBAStatusDTO{OBAStatus: s.OBAStatus, StatusMessage: s.StatusMessage}, nil
+}
+
+// ApplyOBA implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) ApplyOBA(ctx context.Context) (appsettings.OBAStatusDTO, error) {
+	s, err := a.p.ApplyOBA(ctx)
+	if err != nil {
+		return appsettings.OBAStatusDTO{}, err
+	}
+	return appsettings.OBAStatusDTO{OBAStatus: s.OBAStatus, StatusMessage: s.StatusMessage}, nil
+}
+
+// WithdrawOBA implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) WithdrawOBA(ctx context.Context) (appsettings.OBAStatusDTO, error) {
+	s, err := a.p.WithdrawOBA(ctx)
+	if err != nil {
+		return appsettings.OBAStatusDTO{}, err
+	}
+	return appsettings.OBAStatusDTO{OBAStatus: s.OBAStatus, StatusMessage: s.StatusMessage}, nil
+}
+
+// GetUsername implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) GetUsername(ctx context.Context) (appsettings.UsernameDTO, error) {
+	u, err := a.p.GetUsername(ctx)
+	if err != nil {
+		return appsettings.UsernameDTO{}, err
+	}
+	return appsettings.UsernameDTO{Username: u.Username, Status: u.Status}, nil
+}
+
+// SetUsername implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) SetUsername(ctx context.Context, username, transferAction string) (appsettings.UsernameDTO, error) {
+	u, err := a.p.SetUsername(ctx, username, transferAction)
+	if err != nil {
+		return appsettings.UsernameDTO{}, err
+	}
+	return appsettings.UsernameDTO{Username: u.Username, Status: u.Status}, nil
+}
+
+// DeleteUsername implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) DeleteUsername(ctx context.Context) error {
+	return a.p.DeleteUsername(ctx)
+}
+
+// GetUsernameSuggestions implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) GetUsernameSuggestions(ctx context.Context) ([]string, error) {
+	return a.p.GetUsernameSuggestions(ctx)
+}
+
+// GetPhoneNumber implements appsettings.ProviderClient.
+func (a whatsappSettingsAdapter) GetPhoneNumber(ctx context.Context) (appsettings.PhoneNumberDTO, error) {
+	pn, err := a.p.GetPhoneNumber(ctx)
+	if err != nil {
+		return appsettings.PhoneNumberDTO{}, err
+	}
+	return appsettings.PhoneNumberDTO{
+		ID:                        pn.ID,
+		DisplayPhoneNumber:        pn.DisplayPhoneNumber,
+		VerifiedName:              pn.VerifiedName,
+		Status:                    pn.Status,
+		QualityRating:             pn.QualityRating,
+		CountryCode:               pn.CountryCode,
+		CountryDialCode:           pn.CountryDialCode,
+		CodeVerificationStatus:    pn.CodeVerificationStatus,
+		AccountMode:               pn.AccountMode,
+		HostPlatform:              pn.HostPlatform,
+		MessagingLimitTier:        pn.MessagingLimitTier,
+		IsOfficialBusinessAccount: pn.IsOfficialBusinessAccount,
+	}, nil
+}
+
+// toCallSettingsDTO copies whatsapp.CallSettings into the neutral DTO.
+func toCallSettingsDTO(cs whatsapp.CallSettings) appsettings.CallSettingsDTO {
+	dto := appsettings.CallSettingsDTO{
+		Status:                   cs.Status,
+		CallIconVisibility:       cs.CallIconVisibility,
+		CallbackPermissionStatus: cs.CallbackPermissionStatus,
+	}
+	if cs.CallHours != nil {
+		hours := make([]appsettings.WeeklyHoursDTO, 0, len(cs.CallHours.WeeklyOperatingHours))
+		for _, w := range cs.CallHours.WeeklyOperatingHours {
+			hours = append(hours, appsettings.WeeklyHoursDTO{
+				DayOfWeek: w.DayOfWeek,
+				OpenTime:  w.OpenTime,
+				CloseTime: w.CloseTime,
+			})
+		}
+		dto.CallHours = &appsettings.CallHoursDTO{
+			Status:               cs.CallHours.Status,
+			TimezoneID:           cs.CallHours.TimezoneID,
+			WeeklyOperatingHours: hours,
+		}
+	}
+	return dto
+}
+
+// fromCallSettingsDTO is the inverse of toCallSettingsDTO.
+func fromCallSettingsDTO(dto appsettings.CallSettingsDTO) whatsapp.CallSettings {
+	cs := whatsapp.CallSettings{
+		Status:                   dto.Status,
+		CallIconVisibility:       dto.CallIconVisibility,
+		CallbackPermissionStatus: dto.CallbackPermissionStatus,
+	}
+	if dto.CallHours != nil {
+		hours := make([]whatsapp.WeeklyHours, 0, len(dto.CallHours.WeeklyOperatingHours))
+		for _, w := range dto.CallHours.WeeklyOperatingHours {
+			hours = append(hours, whatsapp.WeeklyHours{
+				DayOfWeek: w.DayOfWeek,
+				OpenTime:  w.OpenTime,
+				CloseTime: w.CloseTime,
+			})
+		}
+		cs.CallHours = &whatsapp.CallHours{
+			Status:               dto.CallHours.Status,
+			TimezoneID:           dto.CallHours.TimezoneID,
+			WeeklyOperatingHours: hours,
+		}
+	}
+	return cs
+}
+
+// whatsappChannelProvider embeds *whatsapp.Provider so it satisfies the
+// channel.Provider port via promotion, then overrides the group-family
+// methods to return app-level DTO shapes. That lets the group service's
+// prov.(appgrp.ProviderGroupsClient) type assertion succeed without
+// pushing whatsapp package types into application/group.
+type whatsappChannelProvider struct {
+	*whatsapp.Provider
+}
+
+// ListGroups implements appgrp.ProviderGroupsClient.
+func (w *whatsappChannelProvider) ListGroups(ctx context.Context) ([]appgrp.ProviderGroupSummary, error) {
+	items, err := w.Provider.ListGroups(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]appgrp.ProviderGroupSummary, 0, len(items))
+	for _, g := range items {
+		out = append(out, appgrp.ProviderGroupSummary{
+			ProviderGroupID: g.ProviderGroupID,
+			Subject:         g.Subject,
+			CreatedAtUnix:   g.CreatedAtUnix,
+		})
+	}
+	return out, nil
+}
+
+// GetGroup implements appgrp.ProviderGroupsClient.
+func (w *whatsappChannelProvider) GetGroup(ctx context.Context, providerGroupID string) (appgrp.ProviderGroupDetail, error) {
+	d, err := w.Provider.GetGroup(ctx, providerGroupID)
+	if err != nil {
+		return appgrp.ProviderGroupDetail{}, err
+	}
+	participants := make([]appgrp.ProviderGroupMember, 0, len(d.Participants))
+	for _, m := range d.Participants {
+		participants = append(participants, appgrp.ProviderGroupMember{
+			WaID:  m.WaID,
+			BSUID: m.BSUID,
+			Role:  m.Role,
+		})
+	}
+	return appgrp.ProviderGroupDetail{
+		ProviderGroupID:       d.ProviderGroupID,
+		Subject:               d.Subject,
+		Description:           d.Description,
+		CreationTimestampUnix: d.CreationTimestampUnix,
+		Suspended:             d.Suspended,
+		JoinApprovalMode:      d.JoinApprovalMode,
+		TotalParticipantCount: d.TotalParticipantCount,
+		Participants:          participants,
+	}, nil
+}
+
+// ListGroupMembers implements appgrp.ProviderGroupsClient.
+func (w *whatsappChannelProvider) ListGroupMembers(ctx context.Context, providerGroupID string) ([]appgrp.ProviderGroupMember, error) {
+	items, err := w.Provider.ListGroupMembers(ctx, providerGroupID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]appgrp.ProviderGroupMember, 0, len(items))
+	for _, m := range items {
+		out = append(out, appgrp.ProviderGroupMember{
+			WaID:  m.WaID,
+			BSUID: m.BSUID,
+			Role:  m.Role,
+		})
+	}
+	return out, nil
+}
+
+// CreateGroup implements appgrp.ProviderGroupsClient.
+func (w *whatsappChannelProvider) CreateGroup(ctx context.Context, req appgrp.ProviderCreateGroupRequest) (appgrp.ProviderCreateGroupResult, error) {
+	res, err := w.Provider.CreateGroup(ctx, whatsapp.CreateGroupRequest{
+		Subject:          req.Subject,
+		Description:      req.Description,
+		JoinApprovalMode: req.JoinApprovalMode,
+	})
+	if err != nil {
+		return appgrp.ProviderCreateGroupResult{}, err
+	}
+	return appgrp.ProviderCreateGroupResult{ProviderGroupID: res.ProviderGroupID}, nil
+}
+
+// whatsappTemplateAdapter bridges the WhatsApp adapter's provider-native
+// template shapes with the provider-neutral apptmpl.TemplateProvider port.
+// The Component vocabulary is folded through JSON so provider-specific
+// fields (buttons, cards, headers) round-trip via tmpldom.Component's
+// Extra map without a per-field bridge.
+type whatsappTemplateAdapter struct {
+	p *whatsapp.Provider
+}
+
+// ListTemplates implements apptmpl.TemplateProvider.
+func (a whatsappTemplateAdapter) ListTemplates(ctx context.Context) ([]apptmpl.ProviderTemplateSummary, error) {
+	items, err := a.p.ListTemplates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]apptmpl.ProviderTemplateSummary, 0, len(items))
+	for _, it := range items {
+		out = append(out, apptmpl.ProviderTemplateSummary{
+			ID:         it.ID,
+			Name:       it.Name,
+			Language:   it.Language,
+			Status:     it.Status,
+			Category:   it.Category,
+			Components: componentsFromMaps(it.Components),
+		})
+	}
+	return out, nil
+}
+
+// CreateTemplate implements apptmpl.TemplateProvider.
+func (a whatsappTemplateAdapter) CreateTemplate(ctx context.Context, req apptmpl.ProviderCreateRequest) (apptmpl.ProviderCreateResult, error) {
+	res, err := a.p.CreateTemplate(ctx, whatsapp.TemplateCreateRequest{
+		Name:                req.Name,
+		Language:            req.Language,
+		Category:            req.Category,
+		Components:          componentsToMaps(req.Components),
+		AllowCategoryChange: req.AllowCategoryChange,
+	})
+	if err != nil {
+		return apptmpl.ProviderCreateResult{}, err
+	}
+	return apptmpl.ProviderCreateResult{
+		ProviderTemplateID: res.ID,
+		Status:             res.Status,
+		Category:           res.Category,
+	}, nil
+}
+
+// GetTemplateStatus implements apptmpl.TemplateProvider.
+func (a whatsappTemplateAdapter) GetTemplateStatus(ctx context.Context, providerTemplateID string) (apptmpl.ProviderTemplateSummary, error) {
+	st, err := a.p.GetTemplateStatus(ctx, providerTemplateID)
+	if err != nil {
+		return apptmpl.ProviderTemplateSummary{}, err
+	}
+	return apptmpl.ProviderTemplateSummary{
+		ID:       st.ID,
+		Name:     st.Name,
+		Language: st.Language,
+		Status:   st.Status,
+		Category: st.Category,
+	}, nil
+}
+
+// componentsToMaps folds domain Components into the []map[string]any shape
+// the WhatsApp create endpoint expects. JSON round-trip preserves every
+// named field plus the Extra bag.
+func componentsToMaps(cs []tmpldom.Component) []map[string]any {
+	out := make([]map[string]any, 0, len(cs))
+	for _, c := range cs {
+		b, err := json.Marshal(c)
+		if err != nil {
+			continue
+		}
+		m := map[string]any{}
+		if err := json.Unmarshal(b, &m); err != nil {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+// componentsFromMaps folds a provider list-response's Components (raw
+// map[string]any) into the domain Component shape. Unknown keys are
+// preserved in Extra via the JSON round-trip.
+func componentsFromMaps(ms []map[string]any) []tmpldom.Component {
+	out := make([]tmpldom.Component, 0, len(ms))
+	for _, m := range ms {
+		b, err := json.Marshal(m)
+		if err != nil {
+			continue
+		}
+		var c tmpldom.Component
+		if err := json.Unmarshal(b, &c); err != nil {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// orgLister satisfies workers.OrgLister by scanning the organizations
+// table. Kept in cmd/server so the application layer never learns about
+// the shape of the table.
+type orgLister struct{ db *sql.DB }
+
+// ListOrgIDs implements workers.OrgLister. The organizations.id column is
+// VARBINARY(16) — raw ULID bytes — so we decode to the canonical string
+// form before handing it back; downstream repos parse ULID text, not
+// bytes.
+func (o orgLister) ListOrgIDs(ctx context.Context) ([]organization.ID, error) {
+	rows, err := o.db.QueryContext(ctx, "SELECT id FROM organizations")
+	if err != nil {
+		return nil, fmt.Errorf("list org ids: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []organization.ID
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return nil, fmt.Errorf("scan org id: %w", err)
+		}
+		if len(raw) != 16 {
+			return nil, fmt.Errorf("scan org id: expected 16 bytes, got %d", len(raw))
+		}
+		var id ulid.ULID
+		copy(id[:], raw)
+		out = append(out, organization.ID(id.String()))
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate org ids: %w", err)
 	}
 	return out, nil
 }

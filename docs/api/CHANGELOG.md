@@ -2,6 +2,15 @@
 
 Every change to `internal/api/openapi/openapi.yaml` gets an entry here.
 
+## 0.2.4-phase2 — 2026-09-04
+
+- Added `GET /api/v1/audit-logs` — paginated read of the tenant audit trail. Auth + `audit.read`. Query params: `resource_type`, `resource_id`, `action`, `actor_user_id`, `since` (RFC3339), `until` (RFC3339), `cursor`, `limit` (1..200, default 50). Response is `{items, next_cursor}` newest-first.
+- Added schemas `AuditLog`, `AuditLogList`, `AuditLogFilter`.
+- Added `audit` OpenAPI tag.
+- Added `GET /api/v1/provider-calls` — operator-facing execution log for every outbound HTTP call the provider adapters made (WhatsApp `send_message`, `mark_as_read`, `get_media_url`, `download_media`, `list_templates`, `create_template`, `get_template_status`, `upload_media`). Auth + `integrations.manage`. Query params: `integration_id`, `operation`, `status_min`, `status_max`, `since`, `until`, `cursor`, `limit` (1..200, default 50). Response is `{items, next_cursor}` newest-first, with base64-encoded request / response bodies (truncated at 64 KiB; empty for `download_media` response body).
+- Added schemas `ProviderCall`, `ProviderCallList`.
+- Added `provider-calls` OpenAPI tag.
+
 ## 0.2.2-phase1 — 2026-09-04
 
 - Added `GET /api/v1/media/{key}` — streams a stored media blob keyed by SHA-256 hex. Auth-gated (`sessionCookie`), response served as `application/octet-stream` with the persisted `Content-Type`, `Cache-Control: private, max-age=86400`. Errors: `401`, `404` (unknown key).

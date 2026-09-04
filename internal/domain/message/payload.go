@@ -52,13 +52,32 @@ type InteractiveListReply struct {
 	Description string `json:"description,omitempty"`
 }
 
+// InteractiveCallPermissionReply mirrors a Meta interactive.call_permission_reply
+// event — emitted when a WhatsApp user accepts / rejects a call permission
+// prompt so the business can place a WhatsApp Business Calling API call.
+type InteractiveCallPermissionReply struct {
+	// Response is "accept" or "reject".
+	Response string `json:"response"`
+	// ResponseSource identifies how the reply was produced (e.g. "user_action").
+	ResponseSource string `json:"response_source,omitempty"`
+	// ExpirationTimestamp is the unix seconds at which the granted permission
+	// expires. Zero when Meta did not include one (permanent permissions
+	// or reject responses).
+	ExpirationTimestamp int64 `json:"expiration_timestamp,omitempty"`
+	// IsPermanent is true when the user granted permanent call permission
+	// (introduced Nov 2025). Meta omits ExpirationTimestamp for permanent
+	// grants; temporary grants carry expiration_timestamp and is_permanent=false.
+	IsPermanent bool `json:"is_permanent,omitempty"`
+}
+
 // InteractivePayload captures the canonical form of an interactive message
 // (either inbound reply or outbound prompt).
 type InteractivePayload struct {
-	Kind        string                  `json:"kind"` // "button_reply" | "list_reply" | "cta_url" | "flow" | ...
-	ButtonReply *InteractiveButtonReply `json:"button_reply,omitempty"`
-	ListReply   *InteractiveListReply   `json:"list_reply,omitempty"`
-	Raw         map[string]any          `json:"raw,omitempty"` // outbound compositions we don't fully model yet
+	Kind                string                          `json:"kind"` // "button_reply" | "list_reply" | "cta_url" | "flow" | "call_permission_reply" | ...
+	ButtonReply         *InteractiveButtonReply         `json:"button_reply,omitempty"`
+	ListReply           *InteractiveListReply           `json:"list_reply,omitempty"`
+	CallPermissionReply *InteractiveCallPermissionReply `json:"call_permission_reply,omitempty"`
+	Raw                 map[string]any                  `json:"raw,omitempty"` // outbound compositions we don't fully model yet
 }
 
 // LocationPayload carries a shared location.

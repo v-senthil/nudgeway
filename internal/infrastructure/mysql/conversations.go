@@ -11,6 +11,7 @@ import (
 
 	"github.com/fullwa/fullwa/internal/domain/contact"
 	"github.com/fullwa/fullwa/internal/domain/conversation"
+	dgroup "github.com/fullwa/fullwa/internal/domain/group"
 	"github.com/fullwa/fullwa/internal/domain/organization"
 	"github.com/fullwa/fullwa/internal/domain/session"
 	dusr "github.com/fullwa/fullwa/internal/domain/user"
@@ -59,8 +60,8 @@ func (c *Conversations) FindOrCreateOpen(
 	}
 	newID := newULID()
 	const insertQ = `INSERT INTO conversations
-	    (id, org_id, session_id, contact_id, status, priority, unread_count, ai_state, bot_state, tags)
-	  VALUES (?, ?, ?, ?, 'open', 'normal', 0, '', '', JSON_ARRAY())`
+	    (id, org_id, session_id, contact_id, type, status, priority, unread_count, ai_state, bot_state, tags)
+	  VALUES (?, ?, ?, ?, 'one_to_one', 'open', 'normal', 0, '', '', JSON_ARRAY())`
 	if _, err := c.db.ExecContext(ctx, insertQ, newID[:], orgBytes, sidBytes, ctBytes); err != nil {
 		return conversation.Conversation{}, fmt.Errorf("conversations insert: %w", err)
 	}
@@ -206,14 +207,55 @@ func (c *Conversations) ListForContact(ctx context.Context, orgID organization.I
 	return out, nil
 }
 
+// EnsureGroupConversation returns the Conversation row for the group,
+// creating a fresh Type=group row if none exists. Idempotent: repeat calls
+// with the same (orgID, groupID) return the existing row.
+func (c *Conversations) EnsureGroupConversation(
+	ctx context.Context,
+	orgID organization.ID,
+	groupID dgroup.ID,
+) (conversation.Conversation, error) {
+	orgBytes, err := ulidToBytes(string(orgID))
+	if err != nil {
+		return conversation.Conversation{}, fmt.Errorf("conversations org: %w", err)
+	}
+	gidBytes, err := ulidToBytes(string(groupID))
+	if err != nil {
+		return conversation.Conversation{}, fmt.Errorf("conversations group: %w", err)
+	}
+	const selectQ = `SELECT ` + conversationCols + `
+	                 FROM conversations
+	                 WHERE org_id = ? AND group_id = ? LIMIT 1`
+	row := c.db.QueryRowContext(ctx, selectQ, orgBytes, gidBytes)
+	got, err := scanConversation(row.Scan)
+	if err == nil {
+		return got, nil
+	}
+	if !errors.Is(err, ErrNotFound) {
+		return conversation.Conversation{}, err
+	}
+	newID := newULID()
+	const insertQ = `INSERT INTO conversations
+	    (id, org_id, session_id, contact_id, type, group_id, status, priority, unread_count, ai_state, bot_state, tags)
+	  VALUES (?, ?, NULL, NULL, 'group', ?, 'open', 'normal', 0, '', '', JSON_ARRAY())`
+	if _, err := c.db.ExecContext(ctx, insertQ, newID[:], orgBytes, gidBytes); err != nil {
+		return conversation.Conversation{}, fmt.Errorf("conversations group insert: %w", err)
+	}
+	const readBackQ = `SELECT ` + conversationCols + ` FROM conversations WHERE id = ? LIMIT 1`
+	row = c.db.QueryRowContext(ctx, readBackQ, newID[:])
+	return scanConversation(row.Scan)
+}
+
 // conversationCols is the canonical SELECT column list used everywhere.
-const conversationCols = `id, org_id, session_id, contact_id, status, assigned_user_id, assigned_team_id, priority, unread_count, last_message_at, sla_due_at, ai_state, bot_state, tags, created_at, resolved_at`
+const conversationCols = `id, org_id, session_id, contact_id, type, group_id, status, assigned_user_id, assigned_team_id, priority, unread_count, last_message_at, sla_due_at, ai_state, bot_state, tags, created_at, resolved_at`
 
 // scanConversation decodes a row into conversation.Conversation.
 func scanConversation(scan func(dest ...any) error) (conversation.Conversation, error) {
 	var (
-		id, org, sid, cid   []byte
+		id, org             []byte
+		sid, cid, gid       []byte
 		aUser, aTeam        []byte
+		convType            string
 		status              string
 		priority            string
 		unread              int
@@ -222,7 +264,7 @@ func scanConversation(scan func(dest ...any) error) (conversation.Conversation, 
 		tagsBytes           []byte
 		created             time.Time
 	)
-	if err := scan(&id, &org, &sid, &cid, &status, &aUser, &aTeam, &priority, &unread, &lastMsg, &sla, &aiState, &botState, &tagsBytes, &created, &resAt); err != nil {
+	if err := scan(&id, &org, &sid, &cid, &convType, &gid, &status, &aUser, &aTeam, &priority, &unread, &lastMsg, &sla, &aiState, &botState, &tagsBytes, &created, &resAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return conversation.Conversation{}, ErrNotFound
 		}
@@ -236,25 +278,42 @@ func scanConversation(scan func(dest ...any) error) (conversation.Conversation, 
 	if err != nil {
 		return conversation.Conversation{}, fmt.Errorf("conversations bad org: %w", err)
 	}
-	sidStr, err := ulidFromBytes(sid)
-	if err != nil {
-		return conversation.Conversation{}, fmt.Errorf("conversations bad session: %w", err)
+	var sidStr, cidStr string
+	if len(sid) == 16 {
+		sidStr, err = ulidFromBytes(sid)
+		if err != nil {
+			return conversation.Conversation{}, fmt.Errorf("conversations bad session: %w", err)
+		}
 	}
-	cidStr, err := ulidFromBytes(cid)
-	if err != nil {
-		return conversation.Conversation{}, fmt.Errorf("conversations bad contact: %w", err)
+	if len(cid) == 16 {
+		cidStr, err = ulidFromBytes(cid)
+		if err != nil {
+			return conversation.Conversation{}, fmt.Errorf("conversations bad contact: %w", err)
+		}
 	}
 	out := conversation.Conversation{
 		ID:          conversation.ID(idStr),
 		OrgID:       organization.ID(orgStr),
 		SessionID:   session.ID(sidStr),
 		ContactID:   contact.ID(cidStr),
+		Type:        conversation.Type(convType),
 		Status:      conversation.Status(status),
 		Priority:    conversation.Priority(priority),
 		UnreadCount: unread,
 		AIState:     aiState,
 		BotState:    botState,
 		CreatedAt:   created,
+	}
+	if out.Type == "" {
+		out.Type = conversation.TypeOneToOne
+	}
+	if len(gid) == 16 {
+		s, err := ulidFromBytes(gid)
+		if err != nil {
+			return conversation.Conversation{}, fmt.Errorf("conversations bad group: %w", err)
+		}
+		g := dgroup.ID(s)
+		out.GroupID = &g
 	}
 	if len(aUser) == 16 {
 		s, err := ulidFromBytes(aUser)

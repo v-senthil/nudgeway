@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/fullwa/fullwa/internal/domain/contact"
+	"github.com/fullwa/fullwa/internal/domain/group"
 	"github.com/fullwa/fullwa/internal/domain/organization"
 	"github.com/fullwa/fullwa/internal/domain/session"
 	"github.com/fullwa/fullwa/internal/domain/user"
@@ -18,6 +19,23 @@ type ID string
 
 // TeamID identifies an assignable agent team.
 type TeamID string
+
+// Type distinguishes a 1-to-1 conversation from a group conversation. The
+// two share the same lifecycle + assignment semantics; they differ only in
+// which foreign key column is populated (contact_id vs group_id) and in how
+// the inbox UI labels + composes messages against them.
+type Type string
+
+// Type values.
+const (
+	// TypeOneToOne is the default: a thread bound to one Contact through a
+	// Session. Both ContactID and SessionID are populated.
+	TypeOneToOne Type = "one_to_one"
+
+	// TypeGroup is a group thread: bound to a Group row via GroupID.
+	// ContactID and SessionID are empty on group-typed conversations.
+	TypeGroup Type = "group"
+)
 
 // Status enumerates Conversation lifecycle states.
 type Status string
@@ -41,24 +59,33 @@ const (
 	PriorityUrgent Priority = "urgent"
 )
 
-// Conversation is a customer-service thread inside a Session.
+// Conversation is a customer-service thread. Historically 1-to-1 (contact +
+// session); Type=group threads carry a GroupID instead and leave SessionID /
+// ContactID empty.
+//
+// SessionID + ContactID stay as value types (empty string = absent for
+// group-typed rows) to avoid a wide pointer refactor across the send /
+// inbound / repo paths. Callers that need to render or query group threads
+// should branch on Type.
 type Conversation struct {
-	ID              ID
-	OrgID           organization.ID
-	SessionID       session.ID
-	ContactID       contact.ID
-	Status          Status
-	AssignedUserID  *user.ID
-	AssignedTeamID  *TeamID
-	Priority        Priority
-	UnreadCount     int
-	LastMessageAt   *time.Time
-	SLADueAt        *time.Time
-	AIState         string
-	BotState        string
-	Tags            []string
-	CreatedAt       time.Time
-	ResolvedAt      *time.Time
+	ID             ID
+	OrgID          organization.ID
+	SessionID      session.ID       // empty for Type=group
+	ContactID      contact.ID       // empty for Type=group
+	Type           Type             // "one_to_one" (default) or "group"
+	GroupID        *group.ID        // set iff Type=group
+	Status         Status
+	AssignedUserID *user.ID
+	AssignedTeamID *TeamID
+	Priority       Priority
+	UnreadCount    int
+	LastMessageAt  *time.Time
+	SLADueAt       *time.Time
+	AIState        string
+	BotState       string
+	Tags           []string
+	CreatedAt      time.Time
+	ResolvedAt     *time.Time
 }
 
 // ErrInvalidTransition is returned for illegal Status transitions.

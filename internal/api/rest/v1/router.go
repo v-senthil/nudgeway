@@ -33,6 +33,28 @@ type Deps struct {
 	// silently omitted — inbound media persistence is disabled in this
 	// deploy.
 	Attachments AttachmentsDeps
+	// Audit exposes GET /api/v1/audit-logs. Route is silently omitted when
+	// Audit.Service is nil.
+	Audit AuditDeps
+	// ProviderCalls exposes GET /api/v1/provider-calls. Route is silently
+	// omitted when ProviderCalls.Service is nil.
+	ProviderCalls ProviderCallsDeps
+	// Templates exposes /api/v1/templates. Route is silently omitted when
+	// Templates.Service is nil.
+	Templates TemplateDeps
+	// Groups exposes /api/v1/groups. Route is silently omitted when
+	// Groups.Service is nil.
+	Groups GroupsDeps
+	// Calls exposes /api/v1/calls. Route is silently omitted when
+	// Calls.Service is nil.
+	Calls CallsDeps
+	// Analytics exposes /api/v1/analytics/*. Route is silently omitted
+	// when Analytics.Service is nil.
+	Analytics AnalyticsDeps
+	// IntegrationSettings exposes the per-integration settings drawer
+	// endpoints (business profile, call settings, OBA status). Route is
+	// silently omitted when IntegrationSettings.Service is nil.
+	IntegrationSettings IntegrationSettingsDeps
 }
 
 // Registrar is the minimal surface Mount needs to install patterns. It is
@@ -124,6 +146,36 @@ func Mount(mux Registrar, deps Deps) {
 	// bytes for a stored blob keyed by SHA-256. Route is silently omitted
 	// when Attachments.Store is nil.
 	mountMedia(mux, authedGET, deps.Attachments)
+
+	// Audit log list — GET /api/v1/audit-logs (auth + audit.read). Route
+	// is silently omitted when deps.Audit.Service is nil.
+	mountAudit(mux, authedGET, deps.Audit)
+
+	// Meta API execution logs — GET /api/v1/provider-calls (auth +
+	// integrations.manage). Route is silently omitted when
+	// deps.ProviderCalls.Service is nil.
+	mountProviderCalls(mux, base, deps.ProviderCalls)
+
+	// Templates CRUD + submit + sync — /api/v1/templates* (auth + RBAC).
+	// Silently omitted when deps.Templates.Service is nil.
+	mountTemplates(mux, base, authed, deps.Templates)
+
+	// Groups — /api/v1/groups* (auth + RBAC). Silently omitted when
+	// deps.Groups.Service is nil.
+	mountGroups(mux, base, authed, deps.Groups)
+
+	// Calls — /api/v1/calls* (auth + RBAC). Silently omitted when
+	// deps.Calls.Service is nil.
+	mountCalls(mux, base, authed, deps.Calls)
+
+	// Analytics — /api/v1/analytics/* (auth + analytics.read). Silently
+	// omitted when deps.Analytics.Service is nil.
+	mountAnalytics(mux, authedGET, deps.Analytics)
+
+	// Integration settings drawer — /api/v1/integrations/{id}/business-profile,
+	// /call-settings, /oba-status* (auth + integrations.manage). Silently
+	// omitted when deps.IntegrationSettings.Service is nil.
+	mountIntegrationSettings(mux, base, authed, deps.IntegrationSettings)
 
 	// /ws/inbox — WebSocket real-time endpoint. Reuses the same session-auth
 	// middleware chain as REST so the upgrade sees a Principal on the

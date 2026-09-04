@@ -8,6 +8,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { addInboxListener } from '../../lib/ws';
 import { InboxEvent } from '../../lib/events';
 import { ComposerAttach } from './renderers/ComposerAttach';
+import { TemplatePicker } from './TemplatePicker';
+import type { TemplateSendPayload } from '../../lib/messages';
 
 type Props = {
   conversationID: string;
@@ -25,6 +27,7 @@ export function Composer({ conversationID, orgID }: Props) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [attachment, setAttachment] = useState<UploadResult | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const send = useSendMessage();
   const upload = useUploadAttachment();
   const qc = useQueryClient();
@@ -181,6 +184,56 @@ export function Composer({ conversationID, orgID }: Props) {
     }
   };
 
+  const handleSendTemplate = async (payload: TemplateSendPayload) => {
+    setError(null);
+    const clientRef = makeClientRef();
+    const now = new Date().toISOString();
+    const input: SendMessageInput = {
+      conversation_id: conversationID,
+      type: 'template',
+      template: payload,
+      client_reference_id: clientRef,
+    };
+    // Optimistic bubble — render the template name until Meta echoes back.
+    const optimistic: Message = {
+      id: clientRef,
+      org_id: orgID,
+      conversation_id: conversationID,
+      direction: 'outbound',
+      type: 'template',
+      status: 'sending',
+      text: `[template: ${payload.name}]`,
+      client_reference_id: clientRef,
+      created_at: now,
+    };
+    qc.setQueryData<Message[] | undefined>(['messages', conversationID], (prev) => {
+      if (prev === undefined) return [optimistic];
+      return [...prev, optimistic];
+    });
+    try {
+      const res = await send.mutateAsync(input);
+      qc.setQueryData<Message[] | undefined>(['messages', conversationID], (prev) => {
+        if (prev === undefined) return prev;
+        return prev.map((m) =>
+          m.client_reference_id === clientRef ? { ...m, id: res.id, status: res.status } : m,
+        );
+      });
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.problem.detail ?? err.problem.title ?? 'Failed to send'
+          : 'Failed to send';
+      setError(msg);
+      qc.setQueryData<Message[] | undefined>(['messages', conversationID], (prev) => {
+        if (prev === undefined) return prev;
+        return prev.map((m) =>
+          m.client_reference_id === clientRef ? { ...m, status: 'failed' } : m,
+        );
+      });
+      throw err;
+    }
+  };
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -229,6 +282,15 @@ export function Composer({ conversationID, orgID }: Props) {
           className="min-h-[44px] flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm placeholder:text-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200"
         />
         <Button
+          variant="secondary"
+          onClick={() => setTemplatePickerOpen(true)}
+          disabled={send.isPending}
+          aria-label="Send template"
+          title="Send an approved template"
+        >
+          Templates
+        </Button>
+        <Button
           variant="primary"
           onClick={() => void handleSend()}
           loading={send.isPending || uploading}
@@ -238,6 +300,12 @@ export function Composer({ conversationID, orgID }: Props) {
           Send
         </Button>
       </div>
+      {templatePickerOpen && (
+        <TemplatePicker
+          onSend={handleSendTemplate}
+          onClose={() => setTemplatePickerOpen(false)}
+        />
+      )}
     </div>
   );
 }

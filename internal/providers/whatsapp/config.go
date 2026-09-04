@@ -43,6 +43,31 @@ type Config struct {
 
 	// HTTPClient overrides the internally-constructed default client.
 	HTTPClient *http.Client
+
+	// Tracer receives one TraceEvent per outbound HTTP call. Optional —
+	// nil is treated as NopTracer so tests never crash. Wire-up in
+	// cmd/server closes it over the providercall.Service so every call
+	// lands in the operator-facing execution log.
+	Tracer Tracer
+
+	// IntegrationID tags every emitted TraceEvent with the ULID of the
+	// owning integration row. Optional in tests; set at wire-up so the
+	// operator UI can filter by integration.
+	IntegrationID string
+
+	// OrgID tags every emitted TraceEvent with the tenant ULID. Optional
+	// in tests; set at wire-up so the tracer can persist org-scoped
+	// entries.
+	OrgID string
+}
+
+// tracer returns the effective Tracer, falling back to NopTracer when the
+// caller left the field nil.
+func (c Config) tracer() Tracer {
+	if c.Tracer == nil {
+		return NopTracer{}
+	}
+	return c.Tracer
 }
 
 // version returns the effective Graph API version.

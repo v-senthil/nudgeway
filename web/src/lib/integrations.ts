@@ -17,6 +17,9 @@ export type Integration = {
   provider: string;
   name: string;
   status: IntegrationStatus;
+  /** Server serializes non-secret provider config under `config`.
+   * Phone Number ID + WABA ID live in there for the WhatsApp adapter. */
+  config?: Record<string, unknown>;
   phone_number_id?: string;
   waba_id?: string;
   webhook_url?: string;
@@ -24,6 +27,22 @@ export type Integration = {
   created_at: string;
   updated_at?: string;
 };
+
+/** integrationPhoneNumberID returns the WhatsApp phone_number_id from
+ * either the flat legacy shape or the nested config bag. */
+export function integrationPhoneNumberID(i: Integration): string | undefined {
+  if (i.phone_number_id !== undefined && i.phone_number_id !== '') return i.phone_number_id;
+  const v = i.config?.phone_number_id;
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
+
+/** integrationWABAID returns the WhatsApp WABA id from either the flat
+ * legacy shape or the nested config bag. */
+export function integrationWABAID(i: Integration): string | undefined {
+  if (i.waba_id !== undefined && i.waba_id !== '') return i.waba_id;
+  const v = i.config?.waba_id;
+  return typeof v === 'string' && v !== '' ? v : undefined;
+}
 
 export type CreateIntegrationInput = {
   name: string;

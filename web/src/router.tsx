@@ -4,6 +4,12 @@ import { loginRoute } from './routes/login';
 import { inboxRoute } from './routes/inbox';
 import { settingsRoute } from './routes/settings';
 import { settingsIntegrationsRoute, settingsIndexRoute } from './routes/settings.integrations';
+import { settingsAuditRoute } from './routes/settings.audit';
+import { settingsProviderCallsRoute } from './routes/settings/provider-calls';
+import { settingsTemplatesRoute } from './routes/settings.templates';
+import { settingsGroupsRoute } from './routes/settings.groups';
+import { callsRoute } from './routes/calls';
+import { analyticsRoute } from './routes/analytics';
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -17,7 +23,16 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   inboxRoute,
-  settingsRoute.addChildren([settingsIndexRoute, settingsIntegrationsRoute]),
+  callsRoute,
+  analyticsRoute,
+  settingsRoute.addChildren([
+    settingsIndexRoute,
+    settingsIntegrationsRoute,
+    settingsAuditRoute,
+    settingsProviderCallsRoute,
+    settingsTemplatesRoute,
+    settingsGroupsRoute,
+  ]),
 ]);
 
 export const router = createRouter({

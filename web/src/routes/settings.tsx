@@ -10,6 +10,10 @@ const sections: Array<{ label: string; to?: string; disabled?: boolean }> = [
   { label: 'Organization', disabled: true },
   { label: 'Users & roles', disabled: true },
   { label: 'Integrations', to: '/settings/integrations' },
+  { label: 'Templates', to: '/settings/templates' },
+  { label: 'Groups', to: '/settings/groups' },
+  { label: 'Audit log', to: '/settings/audit' },
+  { label: 'Meta API logs', to: '/settings/provider-calls' },
   { label: 'Billing', disabled: true },
   { label: 'API keys', disabled: true },
 ];
@@ -37,14 +41,14 @@ function SettingsShell() {
   }
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header me={me.data} />
       <div className="flex flex-1 overflow-hidden">
         <nav
           aria-label="Settings sections"
-          className="flex w-[240px] flex-shrink-0 flex-col border-r border-slate-200 bg-white px-3 py-4"
+          className="flex w-[240px] flex-shrink-0 flex-col border-r border-slate-200 bg-white px-3 pb-4"
         >
-          <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <p className="px-3 pb-2 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Settings
           </p>
           <ul className="space-y-0.5">

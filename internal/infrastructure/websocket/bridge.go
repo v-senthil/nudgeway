@@ -22,6 +22,13 @@ var bridgedTypes = []devents.Type{
 	devents.ConversationUpdated,
 	devents.ConversationAssigned,
 	devents.ConversationResolved,
+	devents.CallInitiated,
+	devents.CallRinging,
+	devents.CallAnswered,
+	devents.CallEnded,
+	devents.CallEndedDetailed,
+	devents.CallFailed,
+	devents.CallRecordingCreated,
 }
 
 // wireFrame is the JSON envelope shipped to browsers. It intentionally

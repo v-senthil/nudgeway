@@ -37,8 +37,9 @@ import (
 // UNIQUE(org, provider_message_id) index on messages plus the
 // UNIQUE(integration_id, external_event_id) index on webhook_events.
 type InboundService struct {
-	deps           Deps
-	mediaWarnOnce  sync.Once
+	deps          Deps
+	mediaWarnOnce sync.Once
+	callWarnOnce  sync.Once
 }
 
 // NewInboundService constructs an InboundService with the injected deps.
@@ -48,6 +49,15 @@ func NewInboundService(deps Deps) *InboundService {
 		deps.Now = func() time.Time { return time.Now().UTC() }
 	}
 	return &InboundService{deps: deps}
+}
+
+// SetCallInbound wires the CallInbound port after construction. Kept as a
+// setter so cmd/server can construct the InboundService before the
+// application/call Service (which depends on separate infra) and stitch
+// the two together once both exist. Not safe to call concurrently with
+// ProcessRaw.
+func (s *InboundService) SetCallInbound(ci CallInbound) {
+	s.deps.CallInbound = ci
 }
 
 // ProcessRaw is the worker entry point. providerKey is the registry key of
@@ -146,6 +156,8 @@ func (s *InboundService) handleEnvelope(
 			return Permanent(fmt.Errorf("%w: %s payload=%T", ErrUnknownEnvelope, env.Type, env.Payload))
 		}
 		return s.handleStatus(ctx, orgID, env, payload)
+	case events.CallInitiated, events.CallRinging, events.CallAnswered, events.CallEnded, events.CallEndedDetailed, events.CallFailed, events.CallRecordingCreated:
+		return s.handleCall(ctx, env)
 	default:
 		// Unknown envelope types are non-fatal — we simply don't have a
 		// handler yet. Log via error return classified permanent so we
@@ -382,6 +394,18 @@ func (s *InboundService) handleInbound(
 			if it.ListReply.Description != "" {
 				interactive["description"] = it.ListReply.Description
 			}
+		} else if it.CallPermissionReply != nil {
+			// Surface Meta's interactive.call_permission_reply so the
+			// InteractiveBubble renders a labelled Accept/Decline row
+			// rather than "(no title)".
+			interactive["response"] = it.CallPermissionReply.Response
+			if it.CallPermissionReply.ResponseSource != "" {
+				interactive["response_source"] = it.CallPermissionReply.ResponseSource
+			}
+			if it.CallPermissionReply.ExpirationTimestamp != 0 {
+				interactive["expiration_timestamp"] = it.CallPermissionReply.ExpirationTimestamp
+			}
+			interactive["is_permanent"] = it.CallPermissionReply.IsPermanent
 		}
 		msg.Metadata["interactive"] = interactive
 	}
@@ -434,6 +458,25 @@ func (s *InboundService) handleStatus(
 	}
 	if err := s.deps.Bus.Publish(ctx, env); err != nil {
 		return fmt.Errorf("inbound: publish %s: %w", env.Type, err)
+	}
+	return nil
+}
+
+// handleCall dispatches a Call* envelope to the CallInbound port. When the
+// dep is nil we log-once at WARN and drop the envelope so the message
+// stream continues to flow (the raw body is already in webhook_events for
+// replay once the calling pipeline is wired).
+func (s *InboundService) handleCall(ctx context.Context, env events.Envelope) error {
+	if s.deps.CallInbound == nil {
+		s.callWarnOnce.Do(func() {
+			slog.Default().Warn("inbound call dispatch disabled — CallInbound dep is nil",
+				slog.String("event_type", string(env.Type)),
+			)
+		})
+		return nil
+	}
+	if err := s.deps.CallInbound.ProcessInboundEvent(ctx, env); err != nil {
+		return fmt.Errorf("inbound: process call event %s: %w", env.Type, err)
 	}
 	return nil
 }

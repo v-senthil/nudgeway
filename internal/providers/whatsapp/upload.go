@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/textproto"
 	"strings"
+	"time"
 )
 
 // maxMediaUploadBytes caps a media upload at 16 MiB. Meta's own limits
@@ -86,8 +87,22 @@ func (c *client) uploadMedia(ctx context.Context, contentType, filename string, 
 	}
 
 	url := fmt.Sprintf("%s/%s/%s/media", c.cfg.baseURL(), c.cfg.version(), c.cfg.PhoneNumberID)
+	// TraceEvent.RequestBody for upload_media carries a synthetic
+	// summary (filename + content-type + byte count) rather than the raw
+	// multipart bytes — the raw payload is the media asset itself and
+	// duplicating it in the exec log is pure waste.
+	traceReq := fmt.Appendf(nil,
+		`{"filename":%q,"content_type":%q,"size":%d}`,
+		filename, contentType, fileBuf.Len(),
+	)
+	start := time.Now()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, body)
 	if err != nil {
+		c.trace(ctx, TraceEvent{
+			Operation: "upload_media", Method: http.MethodPost, URL: url,
+			RequestBody: traceReq, LatencyMs: msSince(start),
+			ErrClass: "permanent", ErrMessage: err.Error(),
+		})
 		return "", fmt.Errorf("whatsapp: uploadMedia: build request: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+c.cfg.AccessToken)
@@ -95,16 +110,49 @@ func (c *client) uploadMedia(ctx context.Context, contentType, filename string, 
 
 	res, err := c.cfg.httpClient().Do(req)
 	if err != nil {
+		c.trace(ctx, TraceEvent{
+			Operation: "upload_media", Method: http.MethodPost, URL: url,
+			RequestBody: traceReq, LatencyMs: msSince(start),
+			ErrClass: string(ClassTransient), ErrMessage: err.Error(),
+		})
 		return "", &APIError{Class: ClassTransient, Message: err.Error()}
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 8<<20))
 	if err != nil {
+		c.trace(ctx, TraceEvent{
+			Operation: "upload_media", Method: http.MethodPost, URL: url,
+			RequestBody: traceReq, StatusCode: res.StatusCode,
+			LatencyMs: msSince(start),
+			ErrClass:  "transient", ErrMessage: err.Error(),
+			TraceID: res.Header.Get("x-fb-trace-id"),
+		})
 		return "", fmt.Errorf("whatsapp: uploadMedia: read body: %w", err)
 	}
 	if res.StatusCode >= 400 {
-		return "", parseErrorResponse(res.StatusCode, raw, res.Header.Get("x-fb-trace-id"))
+		apiErr := parseErrorResponse(res.StatusCode, raw, res.Header.Get("x-fb-trace-id"))
+		errClass, errMsg, traceID := "", "", res.Header.Get("x-fb-trace-id")
+		if a := AsAPIError(apiErr); a != nil {
+			errClass = string(a.Class)
+			errMsg = a.Message
+			if a.TraceID != "" {
+				traceID = a.TraceID
+			}
+		}
+		c.trace(ctx, TraceEvent{
+			Operation: "upload_media", Method: http.MethodPost, URL: url,
+			RequestBody: traceReq, ResponseBody: raw,
+			StatusCode: res.StatusCode, LatencyMs: msSince(start),
+			ErrClass: errClass, ErrMessage: errMsg, TraceID: traceID,
+		})
+		return "", apiErr
 	}
+	c.trace(ctx, TraceEvent{
+		Operation: "upload_media", Method: http.MethodPost, URL: url,
+		RequestBody: traceReq, ResponseBody: raw,
+		StatusCode: res.StatusCode, LatencyMs: msSince(start),
+		TraceID: res.Header.Get("x-fb-trace-id"),
+	})
 	var out uploadMediaResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return "", fmt.Errorf("whatsapp: uploadMedia: decode response: %w", err)

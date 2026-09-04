@@ -2,8 +2,11 @@ package whatsapp
 
 import "github.com/fullwa/fullwa/internal/ports/channel"
 
-// Capabilities reports what this adapter supports. Groups + Calls stay off
-// until dedicated phases (calls are Phase 3).
+// Capabilities reports what this adapter supports. Groups + Calls came online
+// with Phase 2's Templates / Groups / Calling rounds. Calling capabilities
+// (initiate / answer / reject / terminate / recording / transcription) are
+// reported separately by CallingCapabilities() and via the CallingProvider()
+// wrapper's calling.Capabilities method.
 func (p *Provider) Capabilities() channel.Capabilities {
 	return channel.Capabilities{
 		SendText:        true,
@@ -11,8 +14,8 @@ func (p *Provider) Capabilities() channel.Capabilities {
 		SendTemplate:    true,
 		ReceiveMessages: true,
 		Templates:       true,
-		Groups:          false,
-		Calls:           false,
+		Groups:          true,
+		Calls:           true,
 		Flows:           true,
 	}
 }

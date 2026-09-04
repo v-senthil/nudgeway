@@ -5,6 +5,7 @@ import (
 	"io"
 	"time"
 
+	"github.com/fullwa/fullwa/internal/domain/events"
 	"github.com/fullwa/fullwa/internal/domain/integration"
 	"github.com/fullwa/fullwa/internal/domain/message"
 	"github.com/fullwa/fullwa/internal/domain/organization"
@@ -13,6 +14,22 @@ import (
 	"github.com/fullwa/fullwa/internal/ports/eventbus"
 	"github.com/fullwa/fullwa/internal/ports/repository"
 )
+
+// CallInbound receives Call* envelopes routed from the inbound webhook
+// dispatch loop. The concrete implementation lives in the application/call
+// package (Service.ProcessInboundEvent). Declaring it as a narrow port here
+// keeps the message package free of a direct dependency on the call
+// package — cmd/server wires the concrete Service in at boot.
+//
+// A nil CallInbound is allowed: the inbound loop skips call envelopes with
+// a one-shot boot WARN when it isn't wired, mirroring how the media
+// downloader is treated.
+type CallInbound interface {
+	// ProcessInboundEvent handles a webhook-derived Call* envelope. It is
+	// expected to upsert the corresponding call row and republish the
+	// enriched envelope so downstream subscribers see the resolved CallID.
+	ProcessInboundEvent(ctx context.Context, envelope events.Envelope) error
+}
 
 // AttachmentDownloader resolves a provider-native media handle to a byte
 // stream + content-type. The InboundService uses it to pull media from
@@ -123,4 +140,8 @@ type Deps struct {
 	// Optional in the same way as Attachments — both must be non-nil for
 	// media to be persisted and served through /api/v1/media/{key}.
 	Downloader AttachmentDownloader
+	// CallInbound handles Call* envelopes emitted by the provider parser.
+	// Optional: when nil the inbound loop skips call envelopes with a
+	// one-shot boot WARN so operators know the calling pipeline is off.
+	CallInbound CallInbound
 }

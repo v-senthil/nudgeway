@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: fullWA API
-  version: 0.2.3-phase1
+  version: 0.2.4-phase2
   summary: Multi-tenant customer communication platform API.
   description: |
     Every request is scoped to an organization determined from the
@@ -30,6 +30,10 @@ tags:
     description: Provider integrations (WhatsApp, Zoho, …).
   - name: webhooks
     description: Provider webhook ingress endpoints.
+  - name: provider-calls
+    description: Operator-facing execution log of every outbound HTTP call the provider adapters make.
+  - name: audit
+    description: Append-only audit trail of tenant mutations.
 
 paths:
   /healthz:
@@ -780,6 +784,176 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /api/v1/audit-logs:
+    get:
+      tags: [audit]
+      operationId: getAuditLogs
+      summary: List audit trail entries for the current org.
+      description: |
+        Returns append-only audit log rows newest-first, filtered by any
+        combination of `resource_type`, `resource_id`, `action`,
+        `actor_user_id`, `since`, and `until`. Requires the
+        `audit.read` permission. Pagination uses an opaque `cursor` echoed
+        from the previous response's `next_cursor`; absent `next_cursor`
+        means the caller reached the end.
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: resource_type
+          required: false
+          schema: { type: string }
+          description: Filter by resource kind (integration, message, conversation, attachment, session).
+        - in: query
+          name: resource_id
+          required: false
+          schema: { type: string }
+          description: Filter by resource identifier. Requires resource_type to hit the composite index.
+        - in: query
+          name: action
+          required: false
+          schema: { type: string }
+          description: Filter by verb (e.g. integration.created, message.sent).
+        - in: query
+          name: actor_user_id
+          required: false
+          schema: { type: string }
+          description: Filter by the ULID of the operator who performed the action.
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+          description: Include entries with occurred_at >= this timestamp (RFC3339).
+        - in: query
+          name: until
+          required: false
+          schema: { type: string, format: date-time }
+          description: Include entries with occurred_at < this timestamp (RFC3339).
+        - in: query
+          name: cursor
+          required: false
+          schema: { type: string }
+          description: Opaque cursor returned by a prior page.
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: A page of audit log entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditLogList' }
+        '400':
+          description: Bad request — invalid filter or cursor.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing audit.read permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/provider-calls:
+    get:
+      tags: [provider-calls]
+      operationId: listProviderCalls
+      summary: List Meta / provider execution log entries.
+      description: |
+        Returns the operator-facing execution log of every outbound HTTP
+        call the provider adapters made to a third-party API, newest-first.
+        This is the canonical debugging surface — every WhatsApp send /
+        media / template call is recorded here, along with its request
+        body, response body, status code, latency, and error class.
+
+        Filter by any combination of `integration_id`, `operation`
+        (`send_message`, `mark_as_read`, `get_media_url`, `download_media`,
+        `list_templates`, `create_template`, `get_template_status`,
+        `upload_media`), `status_min` / `status_max` (bounds the HTTP
+        status code), `since` / `until` (RFC 3339 timestamps).
+
+        Pagination is cursor-based; echo `next_cursor` back as `cursor` on
+        the next call. Absent `next_cursor` means the caller reached the
+        end. Requires the `integrations.manage` permission (read + manage
+        share the same key today).
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: query
+          name: integration_id
+          required: false
+          schema: { type: string }
+          description: Filter to a single integration ULID.
+        - in: query
+          name: operation
+          required: false
+          schema: { type: string }
+          description: Filter by adapter operation name.
+        - in: query
+          name: status_min
+          required: false
+          schema: { type: integer, minimum: 0, maximum: 599 }
+          description: Lower bound (inclusive) on HTTP status code.
+        - in: query
+          name: status_max
+          required: false
+          schema: { type: integer, minimum: 0, maximum: 599 }
+          description: Upper bound (inclusive) on HTTP status code.
+        - in: query
+          name: since
+          required: false
+          schema: { type: string, format: date-time }
+          description: Only rows at or after this timestamp.
+        - in: query
+          name: until
+          required: false
+          schema: { type: string, format: date-time }
+          description: Only rows strictly before this timestamp.
+        - in: query
+          name: cursor
+          required: false
+          schema: { type: string }
+          description: Opaque cursor from the previous response's next_cursor.
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: A page of provider-call entries.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProviderCallList' }
+        '400':
+          description: Bad request (invalid cursor / filter).
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '401':
+          description: Not authenticated.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '403':
+          description: Missing integrations.manage permission.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
 components:
   securitySchemes:
     sessionCookie:
@@ -1160,6 +1334,157 @@ components:
         ok: { type: boolean }
         message: { type: string }
         checked_at: { type: string, format: date-time }
+
+    AuditLog:
+      type: object
+      description: |
+        A single append-only entry in the tenant audit trail. Written from
+        every mutation path (integration lifecycle, message send / read,
+        attachment upload, login / logout). Metadata is a free-form
+        JSON object interpreted by the emitting caller.
+      required: [id, org_id, action, resource_type, occurred_at]
+      properties:
+        id:
+          type: string
+          description: BIGINT primary key rendered as a decimal string.
+        org_id:
+          type: string
+          description: Owning tenant ULID.
+        actor_user_id:
+          type: string
+          description: Operator ULID. Empty for system-driven actions.
+        action:
+          type: string
+          description: Verb identifying the mutation.
+          examples: ['integration.created', 'message.sent', 'user.logged_in']
+        resource_type:
+          type: string
+          examples: ['integration', 'message', 'conversation', 'attachment', 'session']
+        resource_id:
+          type: string
+          description: Affected entity identifier; empty for bulk actions.
+        ip:
+          type: string
+          description: Client IP address (IPv4 dotted or IPv6).
+        metadata:
+          type: object
+          additionalProperties: true
+        occurred_at:
+          type: string
+          format: date-time
+
+    AuditLogList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AuditLog' }
+        next_cursor:
+          type: string
+          description: Opaque continuation token; absent when the caller reached the end.
+
+    AuditLogFilter:
+      type: object
+      description: |
+        Reified filter shape mirroring the GET /audit-logs query
+        parameters. Present as a schema so codegen surfaces a strongly
+        typed builder for the frontend hook.
+      properties:
+        resource_type: { type: string }
+        resource_id: { type: string }
+        action: { type: string }
+        actor_user_id: { type: string }
+        since: { type: string, format: date-time }
+        until: { type: string, format: date-time }
+        cursor: { type: string }
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+
+    ProviderCall:
+      type: object
+      description: |
+        One entry in the operator-facing execution log — the record of a
+        single outbound HTTP call the provider adapters made to a
+        third-party API.
+      required: [id, org_id, provider, operation, direction, method, url, status_code, latency_ms, occurred_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Internal auto-increment identifier.
+        org_id:
+          type: string
+          description: Tenant ULID.
+        integration_id:
+          type: string
+          description: Owning integration ULID. Absent when a very-early failure prevented the integration row from being loaded.
+        provider:
+          type: string
+          description: Registry key of the calling adapter (e.g. `whatsapp`).
+        operation:
+          type: string
+          description: |
+            Adapter operation name — one of `send_message`, `mark_as_read`,
+            `get_media_url`, `download_media`, `list_templates`,
+            `create_template`, `get_template_status`, `upload_media`.
+        direction:
+          type: string
+          enum: [outbound, inbound]
+          description: Only `outbound` is written today.
+        method:
+          type: string
+          description: HTTP verb.
+        url:
+          type: string
+          description: Fully-qualified request URL (no secrets).
+        status_code:
+          type: integer
+          description: HTTP status. Zero when the request never completed.
+        latency_ms:
+          type: integer
+          format: int64
+          description: Wall-clock duration of the request in milliseconds.
+        request_body:
+          type: string
+          description: Base64-encoded request body (truncated at 64 KiB). Empty for GETs.
+        response_body:
+          type: string
+          description: Base64-encoded response body (truncated at 64 KiB). Empty for `download_media`.
+        request_body_text:
+          type: string
+          description: Best-effort UTF-8 rendering of the request body — populated when the bytes are probably text (e.g. JSON).
+        response_body_text:
+          type: string
+          description: Best-effort UTF-8 rendering of the response body.
+        error_class:
+          type: string
+          description: Failure classification (`transient`, `rate_limited`, `auth`, `permanent`, `unknown`). Empty on success.
+        error_message:
+          type: string
+          description: Short human-readable failure message.
+        trace_id:
+          type: string
+          description: Provider trace identifier (Meta's `fbtrace_id`).
+        correlation_id:
+          type: string
+          description: Correlation ID stitching the entry to the originating request / job.
+        occurred_at:
+          type: string
+          format: date-time
+
+    ProviderCallList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ProviderCall' }
+        next_cursor:
+          type: string
+          description: Opaque token to echo back as `cursor` on the next request; absent when the caller reached the end.
 
     Problem:
       type: object

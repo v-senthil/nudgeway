@@ -46,4 +46,19 @@ type MessageRepo interface {
 	// ListByConversation returns metadata rows for a conversation newest
 	// first. Payloads are fetched separately by conversation view code.
 	ListByConversation(ctx context.Context, orgID organization.ID, convID conversation.ID, filter MessageListFilter) (MessagePage, error)
+
+	// FindByCallID returns the synthetic "call" message row that references
+	// the given call id in its metadata (metadata.call_id). Used by the call
+	// ingest pipeline to dedupe repeated webhook deliveries — a repeat call
+	// event must not insert a second inline message. Implementations return
+	// the infrastructure-layer not-found sentinel when no such row exists.
+	FindByCallID(ctx context.Context, orgID organization.ID, callID string) (message.Message, error)
+
+	// FindByCallIDAndStatus returns the info message row for the given
+	// (call_id, call_status) tuple, used by the call ingest pipeline to
+	// dedupe per-status transitions (one info row per status). The lookup
+	// keys on metadata.call_id + metadata.call_status. Implementations
+	// return the infrastructure-layer not-found sentinel when no such row
+	// exists.
+	FindByCallIDAndStatus(ctx context.Context, orgID organization.ID, callID, status string) (message.Message, error)
 }

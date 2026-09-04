@@ -2,15 +2,21 @@ import { useState } from 'react';
 import { Button } from '../../components/Button';
 import { IntegrationStatusBadge } from './IntegrationStatusBadge';
 import { DeleteConfirmModal } from './DeleteConfirmModal';
-import { useDeleteIntegration, useTestIntegration } from '../../lib/integrations';
+import {
+  integrationPhoneNumberID,
+  integrationWABAID,
+  useDeleteIntegration,
+  useTestIntegration,
+} from '../../lib/integrations';
 import type { Integration } from '../../lib/integrations';
 import { ApiError } from '../../lib/api';
 
 type Props = {
   items: Integration[];
+  onOpenSettings?: (it: Integration) => void;
 };
 
-export function IntegrationList({ items }: Props) {
+export function IntegrationList({ items, onOpenSettings }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Integration | null>(null);
   const [testResult, setTestResult] = useState<{ id: string; ok: boolean; message: string } | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -65,9 +71,33 @@ export function IntegrationList({ items }: Props) {
             <tr key={it.id} className="text-sm">
               <td className="px-4 py-3 font-medium text-slate-900">
                 {it.name}
-                {it.phone_number_id !== undefined && (
-                  <p className="text-xs text-slate-500">Phone ID: {it.phone_number_id}</p>
-                )}
+                {(() => {
+                  const pnid = integrationPhoneNumberID(it);
+                  const waba = integrationWABAID(it);
+                  if (pnid === undefined && waba === undefined) return null;
+                  return (
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {pnid !== undefined && (
+                        <span
+                          title={`Phone Number ID: ${pnid}`}
+                          className="inline-flex max-w-[14rem] items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] text-slate-500 ring-1 ring-inset ring-slate-200"
+                        >
+                          <span className="font-sans font-medium text-slate-400">PHONE</span>
+                          <span className="truncate">{pnid}</span>
+                        </span>
+                      )}
+                      {waba !== undefined && (
+                        <span
+                          title={`WABA ID: ${waba}`}
+                          className="inline-flex max-w-[14rem] items-center gap-1 rounded-md bg-slate-50 px-1.5 py-0.5 font-mono text-[11px] text-slate-500 ring-1 ring-inset ring-slate-200"
+                        >
+                          <span className="font-sans font-medium text-slate-400">WABA</span>
+                          <span className="truncate">{waba}</span>
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </td>
               <td className="px-4 py-3 text-slate-600 capitalize">{it.provider}</td>
               <td className="px-4 py-3">
@@ -84,7 +114,7 @@ export function IntegrationList({ items }: Props) {
                 )}
               </td>
               <td className="px-4 py-3 text-right">
-                <div className="inline-flex gap-2">
+                <div className="inline-flex items-center gap-2">
                   <Button
                     variant="secondary"
                     onClick={() => void runTest(it.id)}
@@ -93,6 +123,28 @@ export function IntegrationList({ items }: Props) {
                   >
                     Test
                   </Button>
+                  {onOpenSettings !== undefined && (
+                    <button
+                      type="button"
+                      aria-label={`Open settings for ${it.name}`}
+                      onClick={() => onOpenSettings(it)}
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="h-5 w-5"
+                      >
+                        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15 19.4a1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
+                      </svg>
+                    </button>
+                  )}
                   <Button
                     variant="ghost"
                     onClick={() => setPendingDelete(it)}
