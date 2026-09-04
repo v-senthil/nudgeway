@@ -84,6 +84,21 @@ func (h *metaAnalyticsHandler) parseTimeRange(w http.ResponseWriter, r *http.Req
 	return since.Unix(), until.Unix(), true
 }
 
+// normalizeMessagingGranularity maps Meta's cross-surface DAILY/MONTHLY
+// vocabulary onto the messaging analytics surface, which requires
+// HALF_HOUR|DAY|MONTH. Every other surface accepts DAILY/MONTHLY, so
+// only messaging needs the translation.
+func normalizeMessagingGranularity(g string) string {
+	switch strings.ToUpper(strings.TrimSpace(g)) {
+	case "DAILY":
+		return "DAY"
+	case "MONTHLY":
+		return "MONTH"
+	default:
+		return g
+	}
+}
+
 // parseFlexibleDate accepts full RFC 3339 (`2026-09-05T12:34:56Z`) or
 // bare `YYYY-MM-DD`. Bare dates go UTC midnight; when `endOfDay` is
 // true they resolve to 23:59:59 so an inclusive `since=X&until=X`
@@ -181,7 +196,7 @@ func (h *metaAnalyticsHandler) messaging(w http.ResponseWriter, r *http.Request)
 	req := appmetaanalytics.MessagingAnalyticsRequest{
 		Start:        since,
 		End:          until,
-		Granularity:  h.granularity(r, "DAY"),
+		Granularity:  normalizeMessagingGranularity(h.granularity(r, "DAY")),
 		PhoneNumbers: csvParam(r, "phone_numbers"),
 		ProductTypes: csvIntParam(r, "product_types"),
 		CountryCodes: csvParam(r, "country_codes"),

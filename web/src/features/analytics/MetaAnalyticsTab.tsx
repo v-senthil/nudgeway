@@ -419,19 +419,56 @@ function PricingSection({
     [series],
   );
 
-  // Roll pricing rows up to one entry per (category, type, tier). The
-  // volume + cost columns sum across the selected time window.
-  const rows = useMemo(() => {
+  // Meta returns two shapes: the newer minimal one is just
+  // {start, end, volume, cost}; the classic breakdown adds
+  // category/type/tier. Detect which by scanning the sample.
+  const hasBreakdown = useMemo(
+    () =>
+      points.some(
+        (p) =>
+          (p.pricing_category !== undefined && p.pricing_category !== '') ||
+          (p.pricing_type !== undefined && p.pricing_type !== '') ||
+          (p.tier !== undefined && p.tier !== ''),
+      ),
+    [points],
+  );
+
+  const currency =
+    points.find((p) => p.currency !== undefined && p.currency !== '')?.currency ?? 'USD';
+
+  const totals = useMemo(() => {
+    let volume = 0;
+    let cost = 0;
+    for (const p of points) {
+      volume += p.volume ?? 0;
+      cost += p.cost ?? 0;
+    }
+    const perMessage = volume > 0 ? cost / volume : 0;
+    return { volume, cost, perMessage };
+  }, [points]);
+
+  // Per-day roll-up for the fallback view (used when Meta returns the
+  // minimal shape). Groups by start-of-bucket day in local time.
+  const perDayRows = useMemo(() => {
+    const map = new Map<string, { day: string; volume: number; cost: number }>();
+    for (const p of points) {
+      const day = epochToISODay(p.start);
+      const existing = map.get(day);
+      if (existing === undefined) {
+        map.set(day, { day, volume: p.volume ?? 0, cost: p.cost ?? 0 });
+      } else {
+        existing.volume += p.volume ?? 0;
+        existing.cost += p.cost ?? 0;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => (a.day < b.day ? -1 : 1));
+  }, [points]);
+
+  // Breakdown roll-up (Meta's richer shape).
+  const breakdownRows = useMemo(() => {
     const map = new Map<
       string,
-      {
-        pricing_category: string;
-        pricing_type: string;
-        tier: string;
-        volume: number;
-        cost: number;
-        currency?: string;
-      }
+      { pricing_category: string; pricing_type: string; tier: string; volume: number; cost: number }
     >();
     for (const p of points) {
       const category = p.pricing_category ?? '—';
@@ -446,14 +483,10 @@ function PricingSection({
           tier,
           volume: p.volume ?? 0,
           cost: p.cost ?? 0,
-          ...(p.currency !== undefined ? { currency: p.currency } : {}),
         });
       } else {
         existing.volume += p.volume ?? 0;
         existing.cost += p.cost ?? 0;
-        if (existing.currency === undefined && p.currency !== undefined) {
-          existing.currency = p.currency;
-        }
       }
     }
     return Array.from(map.values()).sort((a, b) => b.cost - a.cost);
@@ -468,42 +501,80 @@ function PricingSection({
       <SectionError err={q.error} />
       {q.isPending && q.data === undefined ? (
         <SectionSpinner label="Loading pricing" />
+      ) : points.length === 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-6 text-center text-sm text-slate-400 shadow-sm">
+          No data in the selected range.
+        </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-              <tr>
-                <th className="px-4 py-2 text-left font-medium">Category</th>
-                <th className="px-4 py-2 text-left font-medium">Type</th>
-                <th className="px-4 py-2 text-left font-medium">Tier</th>
-                <th className="px-4 py-2 text-right font-medium">Volume</th>
-                <th className="px-4 py-2 text-right font-medium">Cost</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
-                    No data in the selected range.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((row) => (
-                  <tr key={`${row.pricing_category}-${row.pricing_type}-${row.tier}`}>
-                    <td className="px-4 py-2 text-slate-700">{row.pricing_category}</td>
-                    <td className="px-4 py-2 text-slate-700">{row.pricing_type}</td>
-                    <td className="px-4 py-2 text-slate-700">{row.tier}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                      {formatInt(row.volume)}
-                    </td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-900">
-                      {formatCurrency(row.cost, row.currency)}
-                    </td>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <KpiCard title="Total volume" value={formatInt(totals.volume)} footnote="billable messages" />
+            <KpiCard
+              title="Total cost"
+              value={formatCurrency(totals.cost, currency)}
+            />
+            <KpiCard
+              title="Cost per message"
+              value={formatCurrency(totals.perMessage, currency)}
+              footnote="cost ÷ volume"
+            />
+          </div>
+
+          {hasBreakdown ? (
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-medium">Category</th>
+                    <th className="px-4 py-2 text-left font-medium">Type</th>
+                    <th className="px-4 py-2 text-left font-medium">Tier</th>
+                    <th className="px-4 py-2 text-right font-medium">Volume</th>
+                    <th className="px-4 py-2 text-right font-medium">Cost</th>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {breakdownRows.map((row) => (
+                    <tr key={`${row.pricing_category}-${row.pricing_type}-${row.tier}`}>
+                      <td className="px-4 py-2 text-slate-700">{row.pricing_category}</td>
+                      <td className="px-4 py-2 text-slate-700">{row.pricing_type}</td>
+                      <td className="px-4 py-2 text-slate-700">{row.tier}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-900">
+                        {formatInt(row.volume)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-900">
+                        {formatCurrency(row.cost, currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
+                <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-medium">Day</th>
+                    <th className="px-4 py-2 text-right font-medium">Volume</th>
+                    <th className="px-4 py-2 text-right font-medium">Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {perDayRows.map((row) => (
+                    <tr key={row.day}>
+                      <td className="px-4 py-2 text-slate-700">{row.day}</td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-900">
+                        {formatInt(row.volume)}
+                      </td>
+                      <td className="px-4 py-2 text-right tabular-nums text-slate-900">
+                        {formatCurrency(row.cost, currency)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </section>
