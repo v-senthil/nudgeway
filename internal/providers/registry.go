@@ -25,7 +25,7 @@ const (
 // Descriptor is what an adapter registers with the registry at init time.
 type Descriptor struct {
 	Kind Kind
-	Key  string // stable identifier: "whatsapp", "zoho_desk", "openai", ...
+	Key  string // stable identifier: "whatsapp", "openai", ...
 	Name string // human-readable
 }
 

@@ -40,7 +40,7 @@ First-touch AI agent that answers common questions, then hands off to a human wh
 
 - Anthropic (Claude) adapter first
 - OpenAI adapter next
-- Google AI + Zoho Zia later
+
 - Human-handoff state machine: AI_ACTIVE ↔ HUMAN_ACTIVE ↔ AI_PAUSED, preserves full conversation context
 - Agents see everything the bot said + the confidence trace that triggered handoff
 - Configurable per integration or per conversation
@@ -58,7 +58,7 @@ Bring your existing bot to Nudgeway without rewriting it.
 
 Turn conversations into support tickets in your existing help desk.
 
-- Zoho Desk first (highest customer demand)
+
 - Freshdesk + Zendesk to follow
 - Auto-open a ticket when a conversation is created (or on a rule)
 - Two-way sync: ticket status + notes flow both directions

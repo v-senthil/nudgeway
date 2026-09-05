@@ -1,9 +1,9 @@
 # Domain — Integration + WebhookEvent
 
 The `integration` domain package models the tenant-scoped configuration
-for a concrete provider instance (a specific WhatsApp phone number, a
-Zoho Desk portal, an OpenAI key, etc.) and the raw webhook deliveries
-those integrations produce.
+for a concrete provider instance (a specific WhatsApp phone number, an
+OpenAI key, etc.) and the raw webhook deliveries those integrations
+produce.
 
 ## Types
 
@@ -16,7 +16,7 @@ Fields:
 | `ID` | `integration.ID` | ULID string, stored as `VARBINARY(16)` |
 | `OrgID` | `organization.ID` | tenant boundary |
 | `Type` | `integration.Type` | `channel`, `ticketing`, `bot`, `ai`, `calling` |
-| `Provider` | `string` | registry key: `whatsapp`, `zoho_desk`, ... |
+| `Provider` | `string` | registry key: `whatsapp`, ... |
 | `Name` | `string` | tenant-chosen display label |
 | `Status` | `integration.Status` | `connected`, `disconnected`, `degraded`, `auth_failed`, `rate_limited` |
 | `Config` | `map[string]any` | non-secret settings; JSON column |

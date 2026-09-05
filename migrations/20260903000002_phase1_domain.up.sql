@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS integrations (
   id                VARBINARY(16) NOT NULL,
   org_id            VARBINARY(16) NOT NULL,
   type              VARCHAR(32)   NOT NULL,             -- 'channel' | 'ticketing' | 'bot' | 'ai' | 'calling'
-  provider          VARCHAR(64)   NOT NULL,             -- 'whatsapp' | 'zoho_desk' | ...
+  provider          VARCHAR(64)   NOT NULL,             -- 'whatsapp' | ''...
   name              VARCHAR(255)  NOT NULL,
   status            ENUM('pending','active','error','disabled') NOT NULL DEFAULT 'pending',
   config            JSON          NOT NULL,

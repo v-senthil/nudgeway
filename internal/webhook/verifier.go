@@ -11,7 +11,7 @@ import (
 // header, malformed signature, or mismatch.
 //
 // This interface is the sole surface the generic ingress layer uses to
-// authenticate deliveries — nothing about Meta / Twilio / Zoho vocabulary
+// authenticate deliveries — nothing about OpenAI vocabulary
 // leaks past it.
 type SignatureVerifier interface {
 	// VerifySignature validates the request-level signature carried in

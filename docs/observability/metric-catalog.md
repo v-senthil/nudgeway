@@ -30,7 +30,7 @@ cardinality — stick to the fixed labels documented here.
 ### `nudgeway_provider_calls_total`
 
 - **Kind:** counter
-- **Labels:** `provider` (e.g. `whatsapp`, `zoho_desk`), `operation` (e.g. `send_message`, `download_media`), `outcome` (`ok`, `error`, `rate_limited`, `auth`)
+- **Labels:** `provider` (e.g. `whatsapp`), `operation` (e.g. `send_message`, `download_media`), `outcome` (`ok`, `error`, `rate_limited`, `auth`)
 - **Unit:** calls
 - **Trigger:** every outbound call to a third-party API from an adapter under `internal/providers/*`. Recorded after the call completes (success or failure).
 

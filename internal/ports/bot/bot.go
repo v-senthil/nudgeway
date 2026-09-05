@@ -1,4 +1,4 @@
-// Package bot is the port for bot/AI-agent providers (Azure Bot, Zoho Zia,
+// Package bot is the port for bot/AI-agent providers (Azure Bot,
 // Dialogflow, OpenAI, Anthropic, Google AI, Custom).
 package bot
 

@@ -27,7 +27,7 @@ tags:
   - name: messages
     description: Send and read messages.
   - name: integrations
-    description: Provider integrations (WhatsApp, Zoho, …).
+    description: Provider integrations (WhatsApp).
   - name: webhooks
     description: Provider webhook ingress endpoints.
   - name: provider-calls
@@ -3600,7 +3600,7 @@ components:
           enum: [channel, ticketing, bot, ai, calling]
         provider:
           type: string
-          examples: ['whatsapp', 'zoho_desk']
+          examples: ['whatsapp']
         name: { type: string }
         status:
           type: string

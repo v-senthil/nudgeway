@@ -61,5 +61,5 @@ a loop. Backfill is safe to interrupt because every day is idempotent.
 
 The `analytics` package imports zero provider SDKs. Provider names
 appear only as opaque strings in the `provider` column — the same code
-path handles WhatsApp today and Twilio / Zoho Desk tomorrow with no
+path handles WhatsApp today and additional providers tomorrow with no
 domain changes.

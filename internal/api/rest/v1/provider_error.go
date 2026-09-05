@@ -78,7 +78,7 @@ func writeProblemExtras(w http.ResponseWriter, r *http.Request, status int, titl
 }
 
 // writeProviderProblem is the common exit for handlers that hit a
-// provider (Meta / Zoho / OpenAI / ...). It reduces the wrapped error to
+// provider (OpenAI / ...). It reduces the wrapped error to
 // its human-readable message + the provider's diagnostic extras. Falls
 // back to plain writeProblem when the error isn't a provider error.
 func writeProviderProblem(w http.ResponseWriter, r *http.Request, status int, title string, err error) {

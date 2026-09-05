@@ -8,7 +8,7 @@ trigger: User asks about connecting WhatsApp, adding a phone number, testing an 
 
 ## Overview
 
-An **Integration** is one connection to a provider (WhatsApp today; Zoho / OpenAI / others in the roadmap). For WhatsApp, one integration = one Meta Phone Number ID. Config (non-secret) and Secrets (encrypted with per-org KEK/DEK) are stored separately.
+An **Integration** is one connection to a provider (WhatsApp today; more adapters land as they ship). For WhatsApp, one integration = one Meta Phone Number ID. Config (non-secret) and Secrets (encrypted with per-org KEK/DEK) are stored separately.
 
 ## MCP tools
 

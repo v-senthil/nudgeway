@@ -60,7 +60,7 @@ sequenceDiagram
 
 Key properties (as shipped in Phase 1 Task 2):
 
-- The HTTP handler never types a Meta / Twilio / Zoho struct — those live inside the adapter package. The handler only knows the port surface: `SignatureVerifier.VerifySignature` at ingress, `channel.Provider.ParseWebhook` at the worker.
+- The HTTP handler never types a OpenAI struct — those live inside the adapter package. The handler only knows the port surface: `SignatureVerifier.VerifySignature` at ingress, `channel.Provider.ParseWebhook` at the worker.
 - **Signature verification runs before any parsing.** A forged body cannot reach the parser.
 - **Body cap: 1 MiB** via `http.MaxBytesReader`. Larger requests get 413 problem+json.
 - Idempotency is enforced at two layers:

@@ -39,7 +39,7 @@ type Identity struct {
 	OrgID           organization.ID
 	ContactID       contact.ID
 	Type            Type
-	Provider        string // e.g. "whatsapp", "zoho_desk", "email"
+	Provider        string // e.g. "whatsapp", "email"
 	Value           string // original as received
 	NormalizedValue string // canonical form used for dedupe
 	Verified        bool

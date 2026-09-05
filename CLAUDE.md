@@ -17,7 +17,7 @@ This file is the AI operating manual for every future Claude Code (or other agen
 1. **Canonical domain → Persist → Event → Async processing → Provider adapter → Result → Event → Real-time UI.** This is the shape of every feature.
 2. **Contact ≠ Session ≠ Conversation ≠ Message ≠ Ticket.** All are separate first-class entities.
 3. **Never hold a DB transaction while calling an external API.** Persist, commit, then enqueue.
-4. **No provider leakage into core domain packages.** Meta / Zoho / OpenAI / Anthropic / etc. live *only* inside `internal/providers/*`.
+4. **No provider leakage into core domain packages.** OpenAI / Anthropic / etc. live *only* inside `internal/providers/*`.
 5. **Multi-tenancy is enforced at every query layer.** Never trust `organization_id` from the client.
 6. **Idempotency on every webhook + every external send.**
 7. **Persist authoritative state before async processing.**
@@ -107,7 +107,7 @@ Where to add tests:
 - `web/src/**/*.test.ts(x)` for Vitest.
 - `e2e/*.spec.ts` for Playwright.
 
-**Do not mock the database.** Integration tests hit real MySQL / Redis / HBase. Third-party HTTP (Meta, Zoho, OpenAI) is mocked via `httptest` + fixtures.
+**Do not mock the database.** Integration tests hit real MySQL / Redis / HBase. Third-party HTTP (Meta, OpenAI) is mocked via `httptest` + fixtures.
 
 ---
 
@@ -170,7 +170,7 @@ Ordering guarantee: per-`conversation_id` ordering is enforced by consumer-group
 ## 11. Anti-patterns (CI blocks these)
 
 - `if provider == "whatsapp"` (or any provider string) inside `internal/domain/*` or `internal/application/*`.
-- Importing Meta / Zoho / OpenAI / Anthropic SDKs anywhere outside `internal/providers/*`.
+- Importing OpenAI / Anthropic SDKs anywhere outside `internal/providers/*`.
 - Importing `database/sql`, `github.com/redis/go-redis`, or `github.com/tsuna/gohbase` inside `internal/domain/*` or `internal/application/*`.
 - `context.Background()` inside a request handler or worker (must propagate the incoming ctx).
 - Unbounded `go func(){}` anywhere except `internal/workers/pool.go`.

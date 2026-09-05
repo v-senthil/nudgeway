@@ -163,7 +163,7 @@ For local development the webhook accepts payloads that match the configured `ph
 | `internal/domain/` | Pure Go domain model. Zero infra / provider imports. |
 | `internal/application/` | Use-cases. Orchestrates domain + ports. |
 | `internal/ports/` | Interfaces the application depends on. |
-| `internal/providers/` | The **only** place third-party SDKs (Meta / Zoho / OpenAI / ...) live. |
+| `internal/providers/` | The **only** place third-party SDKs (Meta / OpenAI / ...) live. |
 | `internal/infrastructure/` | MySQL / Redis / Kafka / HBase / WebSocket / auth / observability implementations. |
 | `internal/webhook/` | Provider-agnostic webhook ingress. |
 | `internal/workers/` | Background consumers (webhook process, message send, analytics rollup). |

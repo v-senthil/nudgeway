@@ -10,7 +10,7 @@ Non-secret config (Phone Number ID, WABA ID) is stored alongside the integration
 |---|---|---|
 | WhatsApp | Channel | Meta WhatsApp Business Cloud API |
 
-Other providers (Zoho Desk, OpenAI, ...) are on the roadmap.
+Other providers (OpenAI, ...) are on the roadmap.
 
 ## Status pill
 

@@ -1,5 +1,5 @@
 // Package integration contains use-cases for tenant provider integrations
-// (WhatsApp, Zoho Desk, ...). It never imports concrete provider packages;
+// (WhatsApp). It never imports concrete provider packages;
 // dispatching to a specific adapter goes through the `providers` registry
 // and the `channel.Provider` port.
 package integration

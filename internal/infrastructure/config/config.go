@@ -57,7 +57,7 @@ type WorkersConfig struct {
 	// WebhookProcess drives the inbound webhook worker (queue lane
 	// "webhook.process").
 	WebhookProcess WorkerConfig
-	// TicketSync is reserved for the Zoho Desk sync worker landing in Phase 2.
+	// TicketSync is reserved for the ticketing sync worker landing later.
 	TicketSync WorkerConfig
 	// CampaignJob is reserved for the campaign dispatcher landing in Phase 2.
 	CampaignJob WorkerConfig

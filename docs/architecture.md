@@ -64,7 +64,7 @@ Enforced by `.go-arch-lint.yml` in CI.
       ▼                               ▼
 ┌──────────────────┐          ┌──────────────────┐
 │ infrastructure/  │          │ providers/       │
-│  MySQL, Redis,   │          │  WhatsApp, Zoho, │
+│  MySQL, Redis,   │          │  WhatsApp, │
 │  HBase, WS, auth │          │  OpenAI, …       │
 └──────────────────┘          └──────────────────┘
 ```
@@ -85,7 +85,7 @@ Enforced by `.go-arch-lint.yml` in CI.
                        worker            worker              worker
                               │                 │                  │
                               ▼                 ▼                  ▼
-                     WhatsApp adapter  Zoho Desk adapter    OpenAI adapter
+                     WhatsApp adapter                              OpenAI adapter
 ```
 
 Persist authoritative state first, then publish. Retries + idempotency at every external hop.

@@ -1,4 +1,4 @@
-// Package ticketing is the port for ticketing providers (Zoho Desk,
+// Package ticketing is the port for ticketing providers (
 // Freshdesk, Zendesk, Salesforce, ServiceNow, …).
 package ticketing
 

@@ -1,4 +1,4 @@
 // Package ticket models platform-owned tickets. External ticketing providers
-// (Zoho Desk, Freshdesk, Zendesk) are mapped via ExternalTicketMapping —
+// ( Freshdesk, Zendesk) are mapped via ExternalTicketMapping —
 // the platform is never a slave to their IDs.
 package ticket

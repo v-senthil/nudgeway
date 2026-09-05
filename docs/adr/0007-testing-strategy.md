@@ -19,5 +19,5 @@ Provider-agnostic platforms live and die by their tests. Adapters are the risk s
 ## Consequences
 
 - Real infra required for integration tests — matches the deployment model (no Docker either).
-- Provider tests document Meta/Zoho/etc.'s wire format inline, so regressions surface immediately.
+- Provider tests document Meta/etc.'s wire format inline, so regressions surface immediately.
 - Contract tests keep the spec honest.

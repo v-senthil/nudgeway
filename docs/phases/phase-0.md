@@ -20,7 +20,7 @@ Repo is real. Local dev works against the developer's native MySQL + Redis (no D
   - `internal/domain/{organization,user,rbac,contact,identity,session,conversation,message,ticket,template,campaign,automation,ai,call,integration,events}`
   - `internal/application/{contact,conversation,message,ticket,campaign,automation,ai}`
   - `internal/ports/{repository,queue,eventbus,attachments,channel,ticketing,bot,aiport,calling}`
-  - `internal/providers/{whatsapp,zoho_desk,openai,anthropic,zoho_zia}`
+  - `internal/providers/{whatsapp,openai,anthropic}`
   - `internal/infrastructure/{mysql,redis,hbase,websocket,http,auth,logging,metrics,tracing}`
   - `internal/{events,workers,scheduler,webhook,api/{rest/v1,ws,openapi}}`
   - `web/` (Vite + React + TS + Tailwind)

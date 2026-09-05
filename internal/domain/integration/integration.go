@@ -20,7 +20,7 @@ type Type string
 const (
 	// TypeChannel is a customer-communication channel (WhatsApp, SMS, ...).
 	TypeChannel Type = "channel"
-	// TypeTicketing is a support/CRM ticketing backend (Zoho Desk, ...).
+	// TypeTicketing is a support/CRM ticketing backend ( ...).
 	TypeTicketing Type = "ticketing"
 	// TypeBot is a conversational bot backend.
 	TypeBot Type = "bot"
@@ -62,7 +62,7 @@ type Integration struct {
 	ID             ID
 	OrgID          organization.ID
 	Type           Type
-	Provider       string // registry key, e.g. "whatsapp", "zoho_desk"
+	Provider       string // registry key, e.g. "whatsapp"
 	Name           string
 	Status         Status
 	Config         map[string]any
