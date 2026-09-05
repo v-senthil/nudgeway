@@ -13,8 +13,8 @@ jobs:
     name: backend (go)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           # Pin explicitly to match go.mod's `go 1.27.1`. Using 'stable'
           # here can drift under us and cause golangci-lint / go-arch-lint
@@ -45,8 +45,8 @@ jobs:
     name: openapi (spectral)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: '22' }
       - name: Spectral lint
         run: npx --yes @stoplight/spectral-cli lint internal/api/openapi/openapi.yaml --ruleset .spectral.yaml
@@ -57,8 +57,8 @@ jobs:
     defaults:
       run: { working-directory: web }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: '22' }
       - name: install
         run: npm install
