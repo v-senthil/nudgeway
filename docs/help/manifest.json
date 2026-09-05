@@ -103,6 +103,13 @@
         { "id": "audit-log", "title": "Audit log" },
         { "id": "provider-calls", "title": "Meta API execution log" }
       ]
+    },
+    {
+      "id": "roadmap",
+      "title": "What's next",
+      "pages": [
+        { "id": "overview", "title": "Roadmap overview" }
+      ]
     }
   ]
 }

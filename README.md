@@ -1,7 +1,6 @@
 # Nudgeway
 
-Open-source, multi-tenant WhatsApp Business Platform. Provider-agnostic core — WhatsApp today, Zoho / OpenAI / Anthropic / Freshdesk / others plug in as adapters.
-
+Open-source, multi-tenant WhatsApp Business Platform. Provider-agnostic core.
 - **Backend:** Go modular monolith, single binary. MySQL + Redis + Kafka + HBase, all local + native.
 - **Frontend:** React 18 + TypeScript + Vite + TanStack Router/Query + Tailwind.
 - **Real-time:** WebSocket inbox + live incoming-call popup with WebRTC accept.

@@ -256,6 +256,7 @@
         <nav class="hidden md:flex items-center gap-6 text-sm text-slate-600">
           <a href="#features" class="hover:text-slateInk">Features</a>
           <a href="#ai" class="hover:text-slateInk">AI + MCP</a>
+          <a href="#roadmap" class="hover:text-slateInk">Roadmap</a>
           <a href="./help.html" class="hover:text-slateInk">Help</a>
           <a href="./api.html" class="hover:text-slateInk">API</a>
           <a href="#quickstart" class="hover:text-slateInk">Quick start</a>
@@ -782,6 +783,93 @@
           >
             MCP setup guide
           </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Roadmap / coming soon -->
+    <section id="roadmap" class="py-20">
+      <div class="max-w-6xl mx-auto px-5">
+        <div class="max-w-2xl">
+          <span class="chip bg-amber-100 text-amber-800">Roadmap</span>
+          <h2 class="mt-3 text-3xl sm:text-4xl font-extrabold tracking-tight">Coming next.</h2>
+          <p class="mt-3 text-slate-600">
+            These aren't shipped yet. They're on the near-term roadmap and land as the code lands. Watch the repo, or read the <a class="text-emerald-700 underline" href="./help.html#/roadmap/overview">roadmap page</a> for detail.
+          </p>
+        </div>
+
+        <div class="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Broadcast campaigns</div>
+            <p class="mt-1.5 text-sm text-slate-600">Audience builder over contacts + template picker + scheduling + per-org rate-limit + pause / resume / stats.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Click-to-WhatsApp Ads</div>
+            <p class="mt-1.5 text-sm text-slate-600">CTWA attribution — capture the ad payload on the first inbound, thread it through session + conversation, expose it on the contact profile.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">WhatsApp Flows</div>
+            <p class="mt-1.5 text-sm text-slate-600">Publish interactive forms (checkout, appointment booking, lead capture) built in the Flow Builder; render responses inline in the inbox thread.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Conversational AI bots</div>
+            <p class="mt-1.5 text-sm text-slate-600">First-touch agent with human-handoff state machine. Anthropic and OpenAI adapters land first, then Google AI + Zoho Zia.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Third-party bot providers</div>
+            <p class="mt-1.5 text-sm text-slate-600">Dialogflow and Azure Bot as drop-in adapters — bring your existing bot, keep the Nudgeway inbox as the operator surface.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Ticketing adapters</div>
+            <p class="mt-1.5 text-sm text-slate-600">Zoho Desk first; Freshdesk + Zendesk to follow. Auto-open tickets from inbound messages; two-way sync of status + notes.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Automation engine</div>
+            <p class="mt-1.5 text-sm text-slate-600">Trigger → condition → action rules (auto-reply, tag, assign, open ticket, invoke AI). Runs against the canonical event bus.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Additional channels</div>
+            <p class="mt-1.5 text-sm text-slate-600">Telegram, Instagram DM, and Messenger as channel adapters — same canonical domain, same inbox.</p>
+          </div>
+
+          <div class="rounded-xl border border-dashed border-slate-300 bg-white p-5">
+            <div class="flex items-center gap-2">
+              <span class="chip bg-slate-100 text-slate-500">Coming soon</span>
+            </div>
+            <div class="mt-3 font-semibold text-slate-900">Plugin marketplace</div>
+            <p class="mt-1.5 text-sm text-slate-600">Community-authored provider adapters + automation actions, discoverable from Settings. Ships after the automation engine + plugin loader.</p>
+          </div>
         </div>
       </div>
     </section>
