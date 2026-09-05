@@ -12,41 +12,34 @@ jobs:
   backend:
     name: backend (go)
     runs-on: ubuntu-latest
-    # Services are installed natively on the runner (no Docker in the dev/CI workflow).
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
-          MYSQL_DATABASE: nudgeway
-        ports: ['3306:3306']
-        options: >-
-          --health-cmd="mysqladmin ping --silent"
-          --health-interval=10s --health-timeout=5s --health-retries=10
-      redis:
-        image: redis:7
-        ports: ['6379:6379']
-        options: >-
-          --health-cmd="redis-cli ping"
-          --health-interval=10s --health-timeout=5s --health-retries=10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: 'stable', cache: true }
-      - name: Install dev tools
-        run: |
-          go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-          go install github.com/fe3dback/go-arch-lint@latest
+        with:
+          # Pin explicitly to match go.mod's `go 1.27.1`. Using 'stable'
+          # here can drift under us and cause golangci-lint / go-arch-lint
+          # to fail with 'export data version too new'.
+          go-version-file: go.mod
+          cache: true
       - name: go vet
         run: go vet ./...
+      - name: go build
+        run: go build ./...
+      # Unit tests only (no build tag). Integration tests are opt-in via
+      # `-tags integration` and require live MySQL/Redis/Kafka/HBase +
+      # a docs/testdata seed; not run here.
+      - name: unit tests
+        run: go test -race -short ./...
       - name: golangci-lint
-        run: $(go env GOPATH)/bin/golangci-lint run ./...
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --timeout=5m
       - name: go-arch-lint
-        run: $(go env GOPATH)/bin/go-arch-lint check --project-path .
-      - name: unit tests + coverage
         run: |
-          go test -race -coverprofile=coverage.out -covermode=atomic ./...
-          go tool cover -func=coverage.out | tail -1
+          curl -sSfL https://raw.githubusercontent.com/fe3dback/go-arch-lint/master/install.sh \
+            | sh -s -- -b "$(go env GOPATH)/bin" latest
+          "$(go env GOPATH)/bin/go-arch-lint" check --project-path .
 
   openapi:
     name: openapi (spectral)
