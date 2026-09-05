@@ -4475,7 +4475,7 @@ components:
         phone_number:          { type: string }
         country:               { type: string }
         conversation_type:     { type: string }
-        conversation_direction:{ type: string }
+        conversation_direction: { type: string }
         conversation_category: { type: string }
         cost:                  { type: number, format: double }
 

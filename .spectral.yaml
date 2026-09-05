@@ -2,18 +2,40 @@
 extends:
   - spectral:oas
 rules:
+  # Built-in spectral:oas rules we care about
   oas3-api-servers: warn
   operation-tag-defined: error
   operation-operationId: error
   operation-operationId-unique: error
   operation-description: warn
-  operation-summary: error
-  operation-tags: error
   info-contact: off
   contact-properties: off
   path-declarations-must-exist: error
   path-keys-no-trailing-slash: error
   no-$ref-siblings: error
+
+  # Custom: every operation must carry a human-readable summary.
+  # (Was named `operation-summary` in older spectral:oas releases; dropped
+  # from the built-in ruleset, so we redefine it inline.)
+  operation-summary-required:
+    description: Every operation must have a `summary`.
+    severity: error
+    given: "$.paths[*][get,put,post,delete,patch,head,options,trace]"
+    then:
+      field: summary
+      function: truthy
+
+  # Custom: every operation must carry at least one tag.
+  operation-tags-required:
+    description: Every operation must be tagged with at least one tag.
+    severity: error
+    given: "$.paths[*][get,put,post,delete,patch,head,options,trace]"
+    then:
+      field: tags
+      function: length
+      functionOptions:
+        min: 1
+
   # Custom: every 4xx/5xx response must reference the shared Problem schema.
   problem-details-for-errors:
     description: 4xx and 5xx responses must use application/problem+json referencing #/components/schemas/Problem
